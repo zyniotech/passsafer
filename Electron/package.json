@@ -65,7 +65,7 @@
     },
     "mac": {
       "target": "dmg",
-      "icon": "../logos/locked.ico"
+      "icon": "../logos/locked2.ico"
     },
     "dmg": {
       "contents": [
