@@ -218,28 +218,21 @@ function setupEventListeners() {
 function setupAutoUpdate() {
     if (window.api && window.api.onUpdateAvailable) {
         window.api.onUpdateAvailable((info) => {
+            showToast(`Update v${info.version} wird im Hintergrund heruntergeladen...`, 'info');
+        });
+
+        window.api.onUpdateDownloaded(() => {
             const banner = document.getElementById('update-banner');
             const text = document.getElementById('update-text');
             const downloadBtn = document.getElementById('update-download-btn');
             const installBtn = document.getElementById('update-install-btn');
             
-            text.textContent = `New version available! (v${info.version})`;
+            text.textContent = 'Update ist bereit! Bitte starte die App neu.';
             banner.classList.remove('hidden');
-            downloadBtn.classList.remove('hidden');
-            installBtn.classList.add('hidden');
-            downloadBtn.disabled = false;
-            downloadBtn.textContent = 'Download';
-        });
-
-        window.api.onUpdateDownloaded(() => {
-            const text = document.getElementById('update-text');
-            const downloadBtn = document.getElementById('update-download-btn');
-            const installBtn = document.getElementById('update-install-btn');
-            
-            text.textContent = 'Update downloaded and ready to install!';
             downloadBtn.classList.add('hidden');
             installBtn.classList.remove('hidden');
-            showToast('Update downloaded!', 'success');
+            installBtn.textContent = 'Jetzt neustarten';
+            showToast('Update erfolgreich geladen!', 'success');
         });
 
         document.getElementById('update-download-btn').addEventListener('click', async (e) => {

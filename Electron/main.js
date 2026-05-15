@@ -849,7 +849,7 @@ function checkForUpdates() {
     try {
         const { autoUpdater } = require('electron-updater');
 
-        autoUpdater.autoDownload = false; // Let user decide
+        autoUpdater.autoDownload = true; // Automatically download in background
         autoUpdater.autoInstallOnAppQuit = true;
 
         autoUpdater.on('update-available', (info) => {

@@ -1,6 +1,6 @@
 {
   "name": "passsafer-electron",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "Secure Password Manager with Encryption",
   "main": "main.js",
   "scripts": {
