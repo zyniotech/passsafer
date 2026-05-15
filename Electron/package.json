@@ -1,0 +1,91 @@
+{
+  "name": "passsafer-electron",
+  "version": "1.6.1",
+  "description": "Secure Password Manager with Encryption",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "keywords": [
+    "password",
+    "manager",
+    "security",
+    "encryption"
+  ],
+  "author": "PassSafer",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  },
+  "build": {
+    "appId": "com.passsafer.app",
+    "productName": "PassSafer",
+    "directories": {
+      "output": "dist"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "zyniotech",
+      "repo": "passsafer"
+    },
+    "files": [
+      "**/*",
+      "../logos/**/*",
+      "!video_mock.js",
+      "!video_index.html"
+    ],
+    "extraResources": [
+      {
+        "from": "../logos",
+        "to": "logos",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "../logos/locked.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "installerIcon": "../logos/locked.ico",
+      "uninstallerIcon": "../logos/locked.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "../logos/locked.ico"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 410,
+          "y": 150,
+          "type": "link",
+          "path": "/Applications"
+        },
+        {
+          "x": 130,
+          "y": 150,
+          "type": "file"
+        }
+      ]
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "../logos/locked_linux.png",
+      "category": "Utility"
+    }
+  }
+}

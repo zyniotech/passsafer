@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PassSafer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="screen hidden">
+        <div class="auth-container">
+            <div class="auth-header">
+
+
+                <h1 class="app-title">PassSafer</h1>
+                <h2>Login</h2>
+            </div>
+            <div class="auth-form">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="login-username" placeholder="Username" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>Master Password</label>
+                    <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                    <label>PIN (6 digits)</label>
+                    <input type="password" id="login-pin" placeholder="000000" maxlength="6" autocomplete="off">
+                </div>
+                <div class="button-group">
+                    <button class="button primary" id="login-btn">Login</button>
+                    <button class="button secondary" id="show-register-btn">Register</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Screen -->
+    <div id="register-screen" class="screen hidden">
+        <div class="auth-container">
+            <div class="auth-header">
+                <h1 class="app-title">PassSafer</h1>
+                <h2>Registration</h2>
+            </div>
+            <div class="auth-form">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="register-username" placeholder="Username" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>Master Password (min. 10 chars)</label>
+                    <input type="password" id="register-password" placeholder="Password" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label>Repeat Password</label>
+                    <input type="password" id="register-password-repeat" placeholder="Repeat Password"
+                        autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label>PIN (6 digits)</label>
+                    <input type="password" id="register-pin" placeholder="000000" maxlength="6" autocomplete="off">
+                </div>
+                <div class="button-group">
+                    <button class="button primary" id="register-btn">Register</button>
+                    <button class="button secondary" id="show-login-btn">Back</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Screen -->
+    <div id="main-screen" class="screen hidden">
+        <!-- Header -->
+        <header class="app-header">
+            <button class="icon-button" id="settings-btn" title="Settings">
+                <img src="../logos/settings.png" alt="Settings">
+            </button>
+            <h1 class="header-title" id="header-title">Passwords</h1>
+            <button class="icon-button" id="add-password-btn" title="Add Password">
+                <img src="../logos/plus.png" alt="Add">
+            </button>
+        </header>
+
+        <!-- Auto Update Banner -->
+        <div id="update-banner" class="update-banner hidden">
+            <div class="update-info">
+                <span class="update-icon">🚀</span>
+                <span id="update-text">New version available!</span>
+            </div>
+            <div class="update-actions">
+                <button id="update-download-btn" class="button small primary">Download</button>
+                <button id="update-install-btn" class="button small success hidden">Install & Restart</button>
+                <button id="update-dismiss-btn" class="icon-button close-btn">✕</button>
+            </div>
+        </div>
+
+        <!-- Search and Folder Controls -->
+        <div id="main-controls" class="main-controls">
+            <div class="search-container">
+                <img src="../logos/search.png" alt="Search" class="search-icon">
+                <input type="text" id="search-input" placeholder="Search passwords or folders...">
+            </div>
+            <button class="button primary folder-btn" id="create-folder-btn">
+                <img src="../logos/folder.png" alt="Folder" class="btn-icon">
+                Create Folder
+            </button>
+        </div>
+
+        <!-- Back button (hidden by default) -->
+        <div id="back-container" class="back-container hidden">
+            <button class="button secondary" id="back-btn">
+                <img src="../logos/left.png" alt="Back">
+            </button>
+        </div>
+
+        <!-- Password/Folder List -->
+        <div id="password-list" class="password-list">
+            <div class="empty-state">
+                <p>No passwords saved.</p>
+                <p class="hint">Click + to add a password.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Detail Screen -->
+    <div id="detail-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" id="detail-title">Details</h1>
+            <button class="icon-button close-btn" id="close-detail-btn">✕</button>
+        </header>
+        <div class="detail-content">
+            <div class="detail-section">
+                <label>Application</label>
+                <h3 id="detail-app"></h3>
+            </div>
+            <div class="detail-section">
+                <label>Username</label>
+                <div class="detail-row">
+                    <p id="detail-username"></p>
+                    <button class="button icon-only-modern" id="copy-username-btn" title="Copy Username">
+                        <img src="../logos/copy.png" alt="Copy">
+                    </button>
+                </div>
+            </div>
+            <div class="detail-section">
+                <label>Password</label>
+                <div class="detail-row">
+                    <p id="detail-password">••••••••</p>
+                    <div class="button-group-inline" style="gap: 10px;">
+                        <button class="button icon-only-modern" id="toggle-password-btn" title="Show Password">
+                            <img src="../logos/eye.png" alt="Show">
+                        </button>
+                        <button class="button icon-only-modern" id="copy-password-btn" title="Copy Password">
+                            <img src="../logos/copy.png" alt="Copy">
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="detail-section" id="notes-section">
+                <label>Notes</label>
+                <p id="detail-notes"></p>
+            </div>
+            <div class="detail-section" id="file-section" style="display: none;">
+                <label>Files</label>
+                <div id="detail-file-list" class="file-list"></div>
+            </div>
+            <div class="detail-section">
+                <label>Folder</label>
+                <div class="detail-row">
+                    <!-- Custom Select Structure -->
+                    <div class="custom-select-container" id="custom-folder-select-container">
+                        <div class="select-selected" id="custom-folder-trigger">Select Folder</div>
+                        <div class="select-items select-hide" id="custom-folder-options">
+                            <!-- Options will be populated by JS -->
+                        </div>
+                        <input type="hidden" id="folder-select" value="">
+                    </div>
+                    <button class="button small primary" id="save-folder-btn">Save</button>
+                </div>
+            </div>
+            <div class="detail-actions">
+                <button class="button primary" id="edit-password-btn">
+                    <img src="../logos/pencil.png" alt="Edit" class="btn-icon">
+                    Edit
+                </button>
+                <button class="button danger" id="delete-password-btn">
+                    <img src="../logos/trash.png" alt="Delete" class="btn-icon">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Password Screen -->
+    <div id="edit-password-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" id="edit-title">Add Password</h1>
+            <button class="icon-button close-btn" id="close-edit-btn">✕</button>
+        </header>
+        <div class="form-container">
+            <div class="form-group">
+                <label>Application *</label>
+                <input type="text" id="edit-app" placeholder="e.g. Gmail">
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="edit-username" placeholder="Username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <div class="detail-row"
+                    style="background: transparent; border: none; padding: 0; gap: 8px; justify-content: flex-start;">
+                    <input type="text" id="edit-password" placeholder="Password" style="flex:1;">
+                    <button class="button icon-only-modern" id="generate-password-btn" type="button"
+                        title="Generate strong password">
+                        <img src="../logos/reload.png" alt="Generate">
+                    </button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea id="edit-notes" placeholder="Optional notes" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Files (max. 5)</label>
+                <div class="file-upload-row">
+                    <button class="icon-button" id="upload-file-btn" type="button" title="Upload File">
+                        <img src="../logos/upload.png" alt="Upload">
+                    </button>
+                    <span id="edit-file-hint" class="file-name-display">No files selected</span>
+                </div>
+                <div id="edit-file-list" class="file-list"></div>
+            </div>
+            <div class="button-group">
+                <button class="button primary" id="save-password-btn">Save</button>
+                <button class="button secondary" id="cancel-edit-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create/Edit Folder Screen -->
+    <div id="folder-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" id="folder-title">Create Folder</h1>
+            <button class="icon-button close-btn" id="close-folder-btn">✕</button>
+        </header>
+        <div class="form-container">
+            <div class="form-group">
+                <label>Folder Name *</label>
+                <input type="text" id="folder-name" placeholder="e.g. Work, Private...">
+            </div>
+            <div class="button-group">
+                <button class="button primary" id="save-folder-btn-main">Save</button>
+                <button class="button danger hidden" id="delete-folder-btn">Delete Folder</button>
+                <button class="button secondary" id="cancel-folder-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Screen -->
+    <div id="settings-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title">Settings</h1>
+            <button class="icon-button close-btn" id="close-settings-btn">✕</button>
+        </header>
+        <div class="settings-content">
+            <button class="settings-option" id="change-pin-btn">
+                <img src="../logos/settings.png" alt="Settings" class="btn-icon">
+                <span>Change PIN</span>
+            </button>
+            <button class="settings-option" id="change-password-btn">
+                <img src="../logos/settings.png" alt="Settings" class="btn-icon">
+                <span>Change Master Password</span>
+            </button>
+            <button class="settings-option" id="show-export-btn">
+                <img src="../logos/export.png" alt="Export" class="btn-icon">
+                <span>Export Passwords</span>
+            </button>
+            <button class="settings-option" id="show-import-btn">
+                <img src="../logos/import.png" alt="Import" class="btn-icon">
+                <span>Import Passwords</span>
+            </button>
+            <button class="settings-option" id="logout-btn">
+                <img src="../logos/left.png" alt="Logout" class="btn-icon">
+                <span>Logout</span>
+            </button>
+            <button class="settings-option danger-option" id="delete-account-btn">
+                <img src="../logos/trash.png" alt="Delete" class="btn-icon">
+                <span>Delete Account</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Export Screen -->
+    <div id="export-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title">Export</h1>
+            <button class="icon-button close-btn" id="close-export-btn">✕</button>
+        </header>
+        <div class="form-container">
+            <div class="form-group">
+                <label>Set Export Password</label>
+                <input type="password" id="export-password" placeholder="Password for export file">
+            </div>
+            <div class="form-group">
+                <p class="hint">This password is required to import the data again.</p>
+            </div>
+            <div class="button-group">
+                <button class="button primary" id="do-export-btn">Export</button>
+                <button class="button secondary" id="cancel-export-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Screen -->
+    <div id="import-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title">Import</h1>
+            <button class="icon-button close-btn" id="close-import-btn">✕</button>
+        </header>
+        <div class="form-container">
+            <div class="form-group">
+                <label>Select File</label>
+                <div class="file-input-wrapper">
+                    <button class="button secondary" id="select-import-file-btn">Select File...</button>
+                    <span id="import-file-path" class="file-path">No file selected</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Import Password</label>
+                <input type="password" id="import-password" placeholder="Password of export file">
+            </div>
+            <div class="button-group">
+                <button class="button primary" id="do-import-btn">Import</button>
+                <button class="button secondary" id="cancel-import-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change PIN Screen -->
+    <div id="change-pin-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title">Change PIN</h1>
+            <button class="icon-button close-btn" id="close-change-pin-btn">✕</button>
+        </header>
+        <div class="form-container">
+            <h3>Confirmation</h3>
+            <div class="form-group">
+                <label>Master Password</label>
+                <input type="password" id="confirm-master-pwd-pin" placeholder="Current Master Password">
+            </div>
+            <div class="form-group">
+                <label>Current PIN</label>
+                <input type="password" id="confirm-current-pin" placeholder="000000" maxlength="6">
+            </div>
+            <h3>New PIN</h3>
+            <div class="form-group">
+                <label>New PIN (6 digits)</label>
+                <input type="password" id="new-pin" placeholder="000000" maxlength="6">
+            </div>
+            <div class="form-group">
+                <label>Repeat PIN</label>
+                <input type="password" id="new-pin-repeat" placeholder="000000" maxlength="6">
+            </div>
+            <div class="button-group">
+                <button class="button primary" id="save-new-pin-btn">Change PIN</button>
+                <button class="button secondary" id="cancel-change-pin-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Screen -->
+    <div id="change-password-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title">Change Master Password</h1>
+            <button class="icon-button close-btn" id="close-change-password-btn">✕</button>
+        </header>
+        <div class="form-container">
+            <h3>Confirmation</h3>
+            <div class="form-group">
+                <label>Current Master Password</label>
+                <input type="password" id="confirm-current-pwd" placeholder="Current Password">
+            </div>
+            <div class="form-group">
+                <label>PIN</label>
+                <input type="password" id="confirm-pin-pwd" placeholder="000000" maxlength="6">
+            </div>
+            <h3>New Master Password</h3>
+            <div class="form-group">
+                <label>New Master Password (min. 10 chars)</label>
+                <input type="password" id="new-master-pwd" placeholder="New Password">
+            </div>
+            <div class="form-group">
+                <label>Repeat Password</label>
+                <input type="password" id="new-master-pwd-repeat" placeholder="Repeat Password">
+            </div>
+            <div class="button-group">
+                <button class="button primary" id="save-new-password-btn">Change Password</button>
+                <button class="button secondary" id="cancel-change-password-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Account Screen -->
+    <div id="delete-account-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" style="color: var(--color-danger);">Delete Account</h1>
+            <button class="icon-button close-btn" id="close-delete-account-btn">✕</button>
+        </header>
+        <div class="form-container">
+            <div class="form-group">
+                <p style="color: var(--color-danger); margin-bottom: 20px; font-weight: bold;">
+                    ⚠️ Warning: This action cannot be undone. All your passwords and data will be permanently deleted.
+                </p>
+                <label>Confirm Master Password</label>
+                <input type="password" id="delete-account-password" placeholder="Master Password">
+            </div>
+            <div class="form-group">
+                <label>Confirm PIN (6 digits)</label>
+                <input type="password" id="delete-account-pin" placeholder="000000" maxlength="6">
+            </div>
+            <div class="button-group">
+                <button class="button danger" id="confirm-delete-account-btn">Permanently Delete Account</button>
+                <button class="button secondary" id="cancel-delete-account-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmation-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 class="modal-title" id="modal-title">Confirmation</h3>
+            <p class="modal-description" id="modal-desc">Are you sure?</p>
+            <div class="modal-actions">
+                <button class="button primary" id="modal-confirm-btn">Confirm</button>
+                <button class="button secondary" id="modal-cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+
+</html>
