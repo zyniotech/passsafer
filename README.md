@@ -19,7 +19,7 @@
 ## 💻 Installation & Usage
 
 ### Official Downloads
-You can download the latest pre-compiled and signed binaries directly from our [Download Page](https://zyniotech.github.io/passsafer/download.html) or from the [GitHub Releases](https://github.com/zyniotech/passsafer/releases).
+You can download the latest pre-compiled and signed binaries directly from our [Download Page]((https://zynio-tech.web.app/download)) or from the [GitHub Releases](https://github.com/zyniotech/passsafer/releases).
 
 ### Local Development Setup
 
