@@ -57,22 +57,6 @@ To run and build the application from source code locally:
 
 ---
 
-## 📜 Code signing policy
-
-Free code signing provided by SignPath.io, certificate by SignPath Foundation.
-
-### Build and Signing Origin
-To guarantee the authenticity, safety, and integrity of PassSafer, only installer binaries built directly from this official GitHub repository on trusted GitHub Actions runner groups from protected branches (e.g., `main` or release tags) are submitted to SignPath for automatic signing. Individual local builds or builds from forks cannot be signed using the official SignPath Foundation certificate.
-
-### Team Roles & Code Review Policy
-As a dedicated solo-developer open-source project, the repository is maintained and reviewed under the following configuration:
-*   **Authors:** zyniotech (https://github.com/zyniotech)
-*   **Reviewers:** zyniotech (https://github.com/zyniotech)
-*   **Release approver:** zyniotech (https://github.com/zyniotech)
-
-All production releases and builds are automatically triggered, verified, and audited via public GitHub Actions logs to ensure full cryptographic transparency.
-
----
 
 ## ⚖️ License
 
