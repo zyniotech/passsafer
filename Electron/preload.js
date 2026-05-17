@@ -17,16 +17,13 @@ contextBridge.exposeInMainWorld('api', {
     showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
     showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
 
-    // License System
-    activateLicense: (key) => ipcRenderer.invoke('activate-license', key),
-    importLicenseFile: () => ipcRenderer.invoke('import-license-file'),
-    checkLicenseStatus: () => ipcRenderer.invoke('check-license-status'),
+    // Utilities
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
-    showLicenseInput: () => ipcRenderer.invoke('show-license-input'),
 
     // Auto-Update
     downloadUpdate: () => ipcRenderer.invoke('download-update'),
     installUpdate: () => ipcRenderer.invoke('install-update'),
+    manualCheckUpdates: () => ipcRenderer.invoke('manual-check-updates'),
     onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (e, info) => callback(info)),
     onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', () => callback())
 });

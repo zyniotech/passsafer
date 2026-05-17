@@ -16,24 +16,24 @@
 
 
                 <h1 class="app-title">PassSafer</h1>
-                <h2>Login</h2>
+                <h2 data-i18n="login_title">Login</h2>
             </div>
             <div class="auth-form">
                 <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" id="login-username" placeholder="Username" autocomplete="username">
+                    <label data-i18n="label_username">Username</label>
+                    <input type="text" id="login-username" data-i18n="placeholder_username" placeholder="Username" autocomplete="username">
                 </div>
                 <div class="form-group">
-                    <label>Master Password</label>
-                    <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
+                    <label data-i18n="label_master_password">Master Password</label>
+                    <input type="password" id="login-password" data-i18n="placeholder_password" placeholder="Password" autocomplete="current-password">
                 </div>
                 <div class="form-group">
-                    <label>PIN (6 digits)</label>
+                    <label data-i18n="label_pin">PIN (6 digits)</label>
                     <input type="password" id="login-pin" placeholder="000000" maxlength="6" autocomplete="off">
                 </div>
                 <div class="button-group">
-                    <button class="button primary" id="login-btn">Login</button>
-                    <button class="button secondary" id="show-register-btn">Register</button>
+                    <button class="button primary" id="login-btn" data-i18n="login_title">Login</button>
+                    <button class="button secondary" id="show-register-btn" data-i18n="register_title">Register</button>
                 </div>
             </div>
         </div>
@@ -44,7 +44,7 @@
         <div class="auth-container">
             <div class="auth-header">
                 <h1 class="app-title">PassSafer</h1>
-                <h2>Registration</h2>
+                <h2 data-i18n="register_title">Registration</h2>
             </div>
             <div class="auth-form">
                 <div class="form-group">
@@ -65,8 +65,8 @@
                     <input type="password" id="register-pin" placeholder="000000" maxlength="6" autocomplete="off">
                 </div>
                 <div class="button-group">
-                    <button class="button primary" id="register-btn">Register</button>
-                    <button class="button secondary" id="show-login-btn">Back</button>
+                    <button class="button primary" id="register-btn" data-i18n="register_title">Register</button>
+                    <button class="button secondary" id="show-login-btn" data-i18n="btn_back">Back</button>
                 </div>
             </div>
         </div>
@@ -76,11 +76,11 @@
     <div id="main-screen" class="screen hidden">
         <!-- Header -->
         <header class="app-header">
-            <button class="icon-button" id="settings-btn" title="Settings">
+            <button class="icon-button" id="settings-btn" data-i18n="title_settings" title="Settings">
                 <img src="../logos/settings.png" alt="Settings">
             </button>
-            <h1 class="header-title" id="header-title">Passwords</h1>
-            <button class="icon-button" id="add-password-btn" title="Add Password">
+            <h1 class="header-title" id="header-title" data-i18n="header_passwords">Passwords</h1>
+            <button class="icon-button" id="add-password-btn" data-i18n="title_add" title="Add Password">
                 <img src="../logos/plus.png" alt="Add">
             </button>
         </header>
@@ -99,14 +99,13 @@
         </div>
 
         <!-- Search and Folder Controls -->
-        <div id="main-controls" class="main-controls">
+        <div class="main-controls" id="main-controls">
             <div class="search-container">
                 <img src="../logos/search.png" alt="Search" class="search-icon">
-                <input type="text" id="search-input" placeholder="Search passwords or folders...">
+                <input type="text" id="search-input" data-i18n="placeholder_search" placeholder="Search passwords or folders...">
             </div>
-            <button class="button primary folder-btn" id="create-folder-btn">
-                <img src="../logos/folder.png" alt="Folder" class="btn-icon">
-                Create Folder
+            <button class="button primary folder-btn" id="create-folder-btn" data-i18n="btn_create_folder" title="Create Folder">
+                <img src="../logos/folder.png" alt="Folder">
             </button>
         </div>
 
@@ -129,67 +128,76 @@
     <!-- Password Detail Screen -->
     <div id="detail-screen" class="screen hidden">
         <header class="app-header">
-            <h1 class="header-title" id="detail-title">Details</h1>
+            <h1 class="header-title" id="detail-title" data-i18n="btn_details">Details</h1>
             <button class="icon-button close-btn" id="close-detail-btn">✕</button>
         </header>
         <div class="detail-content">
             <div class="detail-section">
-                <label>Application</label>
+                <label data-i18n="label_application">Application</label>
                 <h3 id="detail-app"></h3>
             </div>
-            <div class="detail-section">
-                <label>Username</label>
+            <div class="detail-section" id="link-section">
+                <label data-i18n="label_link">Link / URL</label>
                 <div class="detail-row">
-                    <p id="detail-username"></p>
-                    <button class="button icon-only-modern" id="copy-username-btn" title="Copy Username">
+                    <a href="#" id="detail-link" target="_blank" style="color: var(--color-accent); text-decoration: none; word-break: break-all;"></a>
+                    <button class="button icon-only-modern" id="copy-link-btn" data-i18n="title_copy_link" title="Copy Link">
                         <img src="../logos/copy.png" alt="Copy">
                     </button>
                 </div>
             </div>
             <div class="detail-section">
-                <label>Password</label>
+                <label data-i18n="label_username">Username</label>
+                <div class="detail-row">
+                    <p id="detail-username"></p>
+                    <button class="button icon-only-modern" id="copy-username-btn" data-i18n="title_copy_username" title="Copy Username">
+                        <img src="../logos/copy.png" alt="Copy">
+                    </button>
+                </div>
+            </div>
+            <div class="detail-section">
+                <label data-i18n="label_password">Password</label>
                 <div class="detail-row">
                     <p id="detail-password">••••••••</p>
                     <div class="button-group-inline" style="gap: 10px;">
-                        <button class="button icon-only-modern" id="toggle-password-btn" title="Show Password">
+                        <button class="button icon-only-modern" id="toggle-password-btn" data-i18n="title_show_password" title="Show Password">
                             <img src="../logos/eye.png" alt="Show">
                         </button>
-                        <button class="button icon-only-modern" id="copy-password-btn" title="Copy Password">
+                        <button class="button icon-only-modern" id="copy-password-btn" data-i18n="title_copy_password" title="Copy Password">
                             <img src="../logos/copy.png" alt="Copy">
                         </button>
                     </div>
                 </div>
             </div>
             <div class="detail-section" id="notes-section">
-                <label>Notes</label>
+                <label data-i18n="label_notes">Notes</label>
                 <p id="detail-notes"></p>
             </div>
             <div class="detail-section" id="file-section" style="display: none;">
-                <label>Files</label>
+                <label data-i18n="label_files">Files</label>
                 <div id="detail-file-list" class="file-list"></div>
             </div>
             <div class="detail-section">
-                <label>Folder</label>
+                <label data-i18n="label_folder">Folder</label>
                 <div class="detail-row">
                     <!-- Custom Select Structure -->
                     <div class="custom-select-container" id="custom-folder-select-container">
-                        <div class="select-selected" id="custom-folder-trigger">Select Folder</div>
+                        <div class="select-selected" id="custom-folder-trigger" data-i18n="select_folder_placeholder">Select Folder</div>
                         <div class="select-items select-hide" id="custom-folder-options">
                             <!-- Options will be populated by JS -->
                         </div>
                         <input type="hidden" id="folder-select" value="">
                     </div>
-                    <button class="button small primary" id="save-folder-btn">Save</button>
+                    <button class="button small primary" id="save-folder-btn" data-i18n="btn_save">Save</button>
                 </div>
             </div>
             <div class="detail-actions">
                 <button class="button primary" id="edit-password-btn">
                     <img src="../logos/pencil.png" alt="Edit" class="btn-icon">
-                    Edit
+                    <span data-i18n="btn_edit">Edit</span>
                 </button>
                 <button class="button danger" id="delete-password-btn">
                     <img src="../logos/trash.png" alt="Delete" class="btn-icon">
-                    Delete
+                    <span data-i18n="btn_delete">Delete</span>
                 </button>
             </div>
         </div>
@@ -205,6 +213,10 @@
             <div class="form-group">
                 <label>Application *</label>
                 <input type="text" id="edit-app" placeholder="e.g. Gmail">
+            </div>
+            <div class="form-group">
+                <label>Link / URL</label>
+                <input type="url" id="edit-link" placeholder="https://example.com">
             </div>
             <div class="form-group">
                 <label>Username</label>
@@ -268,50 +280,79 @@
             <button class="icon-button close-btn" id="close-settings-btn">✕</button>
         </header>
         <div class="settings-content">
-            <button class="settings-option" id="change-pin-btn">
-                <img src="../logos/settings.png" alt="Settings" class="btn-icon">
-                <span>Change PIN</span>
-            </button>
-            <button class="settings-option" id="change-password-btn">
-                <img src="../logos/settings.png" alt="Settings" class="btn-icon">
-                <span>Change Master Password</span>
-            </button>
-            <button class="settings-option" id="show-export-btn">
-                <img src="../logos/export.png" alt="Export" class="btn-icon">
-                <span>Export Passwords</span>
-            </button>
-            <button class="settings-option" id="show-import-btn">
-                <img src="../logos/import.png" alt="Import" class="btn-icon">
-                <span>Import Passwords</span>
-            </button>
-            <button class="settings-option" id="logout-btn">
-                <img src="../logos/left.png" alt="Logout" class="btn-icon">
-                <span>Logout</span>
-            </button>
-            <button class="settings-option danger-option" id="delete-account-btn">
-                <img src="../logos/trash.png" alt="Delete" class="btn-icon">
-                <span>Delete Account</span>
-            </button>
+            <div class="settings-section">
+                <h3 class="settings-section-title" data-i18n="settings_security">Security</h3>
+                <button class="settings-option" id="change-pin-btn">
+                    <img src="../logos/settings.png" alt="Settings" class="btn-icon">
+                    <span data-i18n="settings_change_pin">Change PIN</span>
+                </button>
+                <button class="settings-option" id="change-password-btn">
+                    <img src="../logos/settings.png" alt="Settings" class="btn-icon">
+                    <span data-i18n="settings_change_master">Change Master Password</span>
+                </button>
+            </div>
+
+            <div class="settings-section">
+                <h3 class="settings-section-title" data-i18n="settings_data">Data Management</h3>
+                <button class="settings-option" id="show-export-btn">
+                    <img src="../logos/export.png" alt="Export" class="btn-icon">
+                    <span data-i18n="settings_export">Export Passwords</span>
+                </button>
+                <button class="settings-option" id="show-import-btn">
+                    <img src="../logos/import.png" alt="Import" class="btn-icon">
+                    <span data-i18n="settings_import">Import Passwords</span>
+                </button>
+                <button class="settings-option" id="show-csv-import-btn">
+                    <img src="../logos/import.png" alt="Import CSV" class="btn-icon">
+                    <span data-i18n="settings_import_csv">Import from CSV (Browser)</span>
+                </button>
+            </div>
+
+            <div class="settings-section">
+                <h3 class="settings-section-title" data-i18n="settings_app">Application</h3>
+                <div class="settings-row">
+                    <label data-i18n="settings_language">Language</label>
+                    <select id="language-select" class="folder-select" style="width: auto; min-width: 150px;">
+                        <option value="en">English</option>
+                        <option value="de">Deutsch</option>
+                    </select>
+                </div>
+                <button class="settings-option" id="check-updates-btn">
+                    <img src="../logos/reload.png" alt="Update" class="btn-icon">
+                    <span data-i18n="settings_updates">Check for Updates</span>
+                </button>
+            </div>
+
+
+
+            <div class="settings-section">
+                <h3 class="settings-section-title" style="color: var(--color-danger);" data-i18n="settings_danger">Danger Zone</h3>
+                <button class="settings-option" id="logout-btn">
+                    <img src="../logos/left.png" alt="Logout" class="btn-icon">
+                    <span data-i18n="settings_logout">Logout</span>
+                </button>
+                <button class="settings-option danger-option" id="delete-account-btn">
+                    <img src="../logos/trash.png" alt="Delete" class="btn-icon">
+                    <span data-i18n="settings_delete">Delete Account</span>
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- Export Screen -->
     <div id="export-screen" class="screen hidden">
         <header class="app-header">
-            <h1 class="header-title">Export</h1>
+            <h1 class="header-title" data-i18n="header_export">Export Passwords</h1>
             <button class="icon-button close-btn" id="close-export-btn">✕</button>
         </header>
         <div class="form-container">
             <div class="form-group">
-                <label>Set Export Password</label>
-                <input type="password" id="export-password" placeholder="Password for export file">
-            </div>
-            <div class="form-group">
-                <p class="hint">This password is required to import the data again.</p>
+                <label data-i18n="label_password">Set Export Password</label>
+                <input type="password" id="export-password" data-i18n="placeholder_password" placeholder="Password for export file">
             </div>
             <div class="button-group">
-                <button class="button primary" id="do-export-btn">Export</button>
-                <button class="button secondary" id="cancel-export-btn">Cancel</button>
+                <button class="button primary" id="do-export-btn" data-i18n="settings_export">Export</button>
+                <button class="button secondary" id="cancel-export-btn" data-i18n="btn_cancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -319,24 +360,24 @@
     <!-- Import Screen -->
     <div id="import-screen" class="screen hidden">
         <header class="app-header">
-            <h1 class="header-title">Import</h1>
+            <h1 class="header-title" data-i18n="header_import">Import Passwords</h1>
             <button class="icon-button close-btn" id="close-import-btn">✕</button>
         </header>
         <div class="form-container">
             <div class="form-group">
-                <label>Select File</label>
+                <label data-i18n="settings_import">Select File</label>
                 <div class="file-input-wrapper">
-                    <button class="button secondary" id="select-import-file-btn">Select File...</button>
-                    <span id="import-file-path" class="file-path">No file selected</span>
+                    <button class="button secondary" id="select-import-file-btn" data-i18n="settings_import">Select File...</button>
+                    <span id="import-file-path" class="file-path" data-i18n="label_no_folder">No file selected</span>
                 </div>
             </div>
             <div class="form-group">
-                <label>Import Password</label>
-                <input type="password" id="import-password" placeholder="Password of export file">
+                <label data-i18n="label_password">Import Password</label>
+                <input type="password" id="import-password" data-i18n="placeholder_password" placeholder="Password of export file">
             </div>
             <div class="button-group">
-                <button class="button primary" id="do-import-btn">Import</button>
-                <button class="button secondary" id="cancel-import-btn">Cancel</button>
+                <button class="button primary" id="do-import-btn" data-i18n="settings_import">Import</button>
+                <button class="button secondary" id="cancel-import-btn" data-i18n="btn_cancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -344,31 +385,53 @@
     <!-- Change PIN Screen -->
     <div id="change-pin-screen" class="screen hidden">
         <header class="app-header">
-            <h1 class="header-title">Change PIN</h1>
+            <h1 class="header-title" data-i18n="header_change_pin">Change PIN</h1>
             <button class="icon-button close-btn" id="close-change-pin-btn">✕</button>
         </header>
         <div class="form-container">
-            <h3>Confirmation</h3>
+            <h3 data-i18n="section_confirmation">Confirmation</h3>
             <div class="form-group">
-                <label>Master Password</label>
-                <input type="password" id="confirm-master-pwd-pin" placeholder="Current Master Password">
+                <label data-i18n="label_master_password">Master Password</label>
+                <input type="password" id="confirm-master-pwd-pin" data-i18n="label_current_password" placeholder="Current Master Password">
             </div>
             <div class="form-group">
-                <label>Current PIN</label>
+                <label data-i18n="label_current_pin">Current PIN</label>
                 <input type="password" id="confirm-current-pin" placeholder="000000" maxlength="6">
             </div>
-            <h3>New PIN</h3>
+            <h3 data-i18n="label_new_pin">New PIN</h3>
             <div class="form-group">
-                <label>New PIN (6 digits)</label>
+                <label data-i18n="label_new_pin">New PIN (6 digits)</label>
                 <input type="password" id="new-pin" placeholder="000000" maxlength="6">
             </div>
             <div class="form-group">
-                <label>Repeat PIN</label>
+                <label data-i18n="label_repeat_pin">Repeat PIN</label>
                 <input type="password" id="new-pin-repeat" placeholder="000000" maxlength="6">
             </div>
             <div class="button-group">
-                <button class="button primary" id="save-new-pin-btn">Change PIN</button>
-                <button class="button secondary" id="cancel-change-pin-btn">Cancel</button>
+                <button class="button primary" id="save-new-pin-btn" data-i18n="settings_change_pin">Change PIN</button>
+                <button class="button secondary" id="cancel-change-pin-btn" data-i18n="btn_cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CSV Import Screen -->
+    <div id="csv-import-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" data-i18n="settings_import_csv">Import from CSV (Browser)</h1>
+            <button class="icon-button close-btn" id="close-csv-import-btn">✕</button>
+        </header>
+        <div class="form-container">
+            <div class="settings-info-box" style="margin-bottom: 20px;">
+                <p>Support for Google Chrome and Firefox CSV exports.</p>
+                <p class="hint">Your data will be encrypted and saved locally.</p>
+            </div>
+            <div class="form-group">
+                <button class="button primary" id="select-csv-file-btn">Select CSV File</button>
+                <p id="csv-file-path" class="file-name-display">No file selected</p>
+            </div>
+            <div class="button-group">
+                <button class="button primary" id="do-csv-import-btn">Start Import</button>
+                <button class="button secondary" id="cancel-csv-import-btn">Cancel</button>
             </div>
         </div>
     </div>
@@ -376,31 +439,31 @@
     <!-- Change Password Screen -->
     <div id="change-password-screen" class="screen hidden">
         <header class="app-header">
-            <h1 class="header-title">Change Master Password</h1>
+            <h1 class="header-title" data-i18n="header_change_password">Change Master Password</h1>
             <button class="icon-button close-btn" id="close-change-password-btn">✕</button>
         </header>
         <div class="form-container">
-            <h3>Confirmation</h3>
+            <h3 data-i18n="section_confirmation">Confirmation</h3>
             <div class="form-group">
-                <label>Current Master Password</label>
-                <input type="password" id="confirm-current-pwd" placeholder="Current Password">
+                <label data-i18n="label_current_password">Current Master Password</label>
+                <input type="password" id="confirm-current-pwd" data-i18n="label_current_password" placeholder="Current Password">
             </div>
             <div class="form-group">
-                <label>PIN</label>
+                <label data-i18n="label_pin">PIN</label>
                 <input type="password" id="confirm-pin-pwd" placeholder="000000" maxlength="6">
             </div>
-            <h3>New Master Password</h3>
+            <h3 data-i18n="label_new_password">New Master Password</h3>
             <div class="form-group">
-                <label>New Master Password (min. 10 chars)</label>
-                <input type="password" id="new-master-pwd" placeholder="New Password">
+                <label data-i18n="label_new_password">New Master Password (min. 10 chars)</label>
+                <input type="password" id="new-master-pwd" data-i18n="label_new_password" placeholder="New Password">
             </div>
             <div class="form-group">
-                <label>Repeat Password</label>
-                <input type="password" id="new-master-pwd-repeat" placeholder="Repeat Password">
+                <label data-i18n="label_repeat_password">Repeat Password</label>
+                <input type="password" id="new-master-pwd-repeat" data-i18n="label_repeat_password" placeholder="Repeat Password">
             </div>
             <div class="button-group">
-                <button class="button primary" id="save-new-password-btn">Change Password</button>
-                <button class="button secondary" id="cancel-change-password-btn">Cancel</button>
+                <button class="button primary" id="save-new-password-btn" data-i18n="settings_change_master">Change Password</button>
+                <button class="button secondary" id="cancel-change-password-btn" data-i18n="btn_cancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -408,30 +471,32 @@
     <!-- Delete Account Screen -->
     <div id="delete-account-screen" class="screen hidden">
         <header class="app-header">
-            <h1 class="header-title" style="color: var(--color-danger);">Delete Account</h1>
+            <h1 class="header-title" data-i18n="header_delete_account" style="color: var(--color-danger);">Delete Account</h1>
             <button class="icon-button close-btn" id="close-delete-account-btn">✕</button>
         </header>
         <div class="form-container">
             <div class="form-group">
                 <p style="color: var(--color-danger); margin-bottom: 20px; font-weight: bold;">
-                    ⚠️ Warning: This action cannot be undone. All your passwords and data will be permanently deleted.
+                    <span data-i18n="modal_delete_folder_desc">⚠️ Warning: This action cannot be undone. All your passwords and data will be permanently deleted.</span>
                 </p>
-                <label>Confirm Master Password</label>
-                <input type="password" id="delete-account-password" placeholder="Master Password">
+                <label data-i18n="label_master_password">Confirm Master Password</label>
+                <input type="password" id="delete-account-password" data-i18n="label_master_password" placeholder="Master Password">
             </div>
             <div class="form-group">
-                <label>Confirm PIN (6 digits)</label>
+                <label data-i18n="label_pin">Confirm PIN (6 digits)</label>
                 <input type="password" id="delete-account-pin" placeholder="000000" maxlength="6">
             </div>
             <div class="button-group">
-                <button class="button danger" id="confirm-delete-account-btn">Permanently Delete Account</button>
-                <button class="button secondary" id="cancel-delete-account-btn">Cancel</button>
+                <button class="button danger" id="confirm-delete-account-btn" data-i18n="settings_delete">Permanently Delete Account</button>
+                <button class="button secondary" id="cancel-delete-account-btn" data-i18n="btn_cancel">Cancel</button>
             </div>
         </div>
     </div>
 
     <!-- Toast Notification -->
-    <div id="toast" class="toast hidden"></div>
+    <div id="toast" class="toast hidden">
+        <span id="toast-message"></span>
+    </div>
 
     <!-- Custom Confirmation Modal -->
     <div id="confirmation-modal" class="modal-overlay">

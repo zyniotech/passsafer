@@ -9,9 +9,16 @@ let currentEditFolder = null;
 let currentFileData = null;
 let currentFileName = null;
 let currentFiles = []; // Array of {data, name}
+let translations = {};
+let currentLanguage = 'en';
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', async () => {
+    // Initialize Language
+    const systemLang = navigator.language.split('-')[0];
+    currentLanguage = (systemLang === 'de') ? 'de' : 'en';
+    await loadTranslations(currentLanguage);
+
     const isFirstRun = await window.api.checkFirstRun();
     if (isFirstRun) {
         showScreen('register-screen');
@@ -21,6 +28,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
     setupAutoLogout();
     setupCustomSelect(); // Initialize custom select listener
+    
+    // Set language select value
+    const langSelect = document.getElementById('language-select');
+    if (langSelect) langSelect.value = currentLanguage;
 });
 
 // Screen Management
@@ -32,17 +43,64 @@ function showScreen(screenId) {
 }
 
 // Toast Notifications
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', isLiteral = false) {
     const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = 'toast show';
-    if (type === 'success') toast.classList.add('success');
-    if (type === 'error') toast.classList.add('error');
+    const toastMessage = document.getElementById('toast-message');
+    
+    const text = isLiteral ? message : (translations[message] || message);
+    if (toastMessage) {
+        toastMessage.textContent = text;
+    } else {
+        toast.textContent = text;
+    }
+    
+    toast.className = `toast show ${type}`;
 
     setTimeout(() => {
-        toast.classList.remove('show');
-        toast.classList.add('hidden');
+        toast.className = 'toast';
     }, 3000);
+}
+
+// i18n Logic
+async function loadTranslations(lang) {
+    try {
+        const response = await fetch(`./locales/${lang}.json`);
+        translations = await response.json();
+        applyTranslations();
+    } catch (err) {
+        console.error('Failed to load translations:', err);
+    }
+}
+
+function applyTranslations() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        let translation = translations[key];
+        
+        if (translation) {
+            if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'password' || el.type === 'url')) {
+                el.placeholder = translation;
+            } else if (el.hasAttribute('title')) {
+                el.setAttribute('title', translation);
+            } else {
+                // Find span or text node to avoid overwriting icons
+                const span = el.querySelector('span[data-i18n]') || (el.tagName === 'SPAN' ? el : null);
+                if (span) {
+                    span.textContent = translation;
+                } else if (el.children.length === 0) {
+                    el.textContent = translation;
+                }
+            }
+        }
+    });
+}
+
+function t(key, variables = {}) {
+    let text = translations[key] || key;
+    for (const [vKey, vValue] of Object.entries(variables)) {
+        text = text.replace(`{${vKey}}`, vValue);
+    }
+    return text;
 }
 
 // Password Validation
@@ -113,7 +171,7 @@ function setupEventListeners() {
     document.getElementById('show-login-btn').addEventListener('click', () => showScreen('login-screen'));
 
     // Main Screen
-    document.getElementById('settings-btn').addEventListener('click', () => showScreen('settings-screen'));
+    document.getElementById('settings-btn').addEventListener('click', showSettings);
     document.getElementById('add-password-btn').addEventListener('click', showAddPassword);
     document.getElementById('create-folder-btn').addEventListener('click', showCreateFolder);
     document.getElementById('back-btn').addEventListener('click', handleBackToRoot);
@@ -123,9 +181,23 @@ function setupEventListeners() {
     document.getElementById('close-detail-btn').addEventListener('click', () => showMainScreen());
     document.getElementById('copy-username-btn').addEventListener('click', copyUsername);
     document.getElementById('copy-password-btn').addEventListener('click', copyPassword);
+    const copyLinkBtn = document.getElementById('copy-link-btn');
+    if (copyLinkBtn) copyLinkBtn.addEventListener('click', copyLink);
     document.getElementById('toggle-password-btn').addEventListener('click', togglePasswordVisibility);
     document.getElementById('save-folder-btn').addEventListener('click', savePasswordFolder);
     document.getElementById('edit-password-btn').addEventListener('click', editCurrentPassword);
+    
+    // Link Opening in Default Browser
+    const detailLink = document.getElementById('detail-link');
+    if (detailLink) {
+        detailLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            const url = detailLink.textContent;
+            if (url && url !== '#') {
+                window.api.openExternal(url);
+            }
+        });
+    }
     document.getElementById('delete-password-btn').addEventListener('click', deleteCurrentPassword);
 
     // Edit Password Screen
@@ -145,6 +217,27 @@ function setupEventListeners() {
     document.getElementById('change-pin-btn').addEventListener('click', () => showScreen('change-pin-screen'));
     document.getElementById('change-password-btn').addEventListener('click', () => showScreen('change-password-screen'));
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
+    document.getElementById('check-updates-btn').addEventListener('click', handleManualUpdateCheck);
+
+    document.getElementById('show-csv-import-btn').addEventListener('click', () => {
+        document.getElementById('csv-file-path').textContent = 'No file selected';
+        document.getElementById('csv-file-path').dataset.path = '';
+        showScreen('csv-import-screen');
+    });
+
+    document.getElementById('close-csv-import-btn').addEventListener('click', () => showScreen('settings-screen'));
+    document.getElementById('cancel-csv-import-btn').addEventListener('click', () => showScreen('settings-screen'));
+    document.getElementById('select-csv-file-btn').addEventListener('click', selectCsvFile);
+    document.getElementById('do-csv-import-btn').addEventListener('click', handleCsvImport);
+
+    const langSelect = document.getElementById('language-select');
+    if (langSelect) {
+        langSelect.addEventListener('change', async (e) => {
+            currentLanguage = e.target.value;
+            await loadTranslations(currentLanguage);
+            showToast(currentLanguage === 'de' ? 'Sprache geändert' : 'Language changed', 'success');
+        });
+    }
 
     // Change PIN Screen
     document.getElementById('close-change-pin-btn').addEventListener('click', () => showScreen('settings-screen'));
@@ -411,11 +504,11 @@ function renderPasswordList() {
 
     // Show empty state if nothing to display
     if (displayFolders.length === 0 && displayPasswords.length === 0) {
-        const message = searchTerm ? 'No results found.' : 'No passwords saved.';
+        const message = searchTerm ? t('msg_no_results') : t('msg_no_passwords');
         container.innerHTML = `
             <div class="empty-state">
                 <p>${message}</p>
-                ${!searchTerm ? '<p class="hint">Click + to add a password.</p>' : ''}
+                ${!searchTerm ? `<p class="hint">${t('msg_add_hint')}</p>` : ''}
             </div>
         `;
         return;
@@ -456,7 +549,7 @@ function createFolderCard(folder) {
         <img src="../logos/folder.png" alt="Folder" class="folder-card-icon">
         <span class="folder-card-name">${escapeHtml(folder.name)}</span>
         <span class="folder-card-count">${passwordCount}</span>
-        <button class="folder-card-edit" title="Edit">
+        <button class="folder-card-edit" title="${t('btn_edit')}">
             <img src="../logos/pencil.png" alt="Edit">
         </button>
     `;
@@ -494,6 +587,15 @@ function showPasswordDetail(index) {
     document.getElementById('detail-password').dataset.password = pwd.password || '';
     document.getElementById('detail-password').dataset.masked = 'true';
 
+    const linkSection = document.getElementById('link-section');
+    if (pwd.link) {
+        document.getElementById('detail-link').href = pwd.link.startsWith('http') ? pwd.link : 'https://' + pwd.link;
+        document.getElementById('detail-link').textContent = pwd.link;
+        if (linkSection) linkSection.style.display = 'block';
+    } else {
+        if (linkSection) linkSection.style.display = 'none';
+    }
+
     const notesSection = document.getElementById('notes-section');
     if (pwd.notes) {
         document.getElementById('detail-notes').textContent = pwd.notes;
@@ -521,25 +623,22 @@ function showPasswordDetail(index) {
 
     // Add "No Folder" option
     const noFolderOption = document.createElement('div');
-    noFolderOption.textContent = 'No Folder';
+    noFolderOption.textContent = t('label_no_folder');
     noFolderOption.addEventListener('click', () => {
-        trigger.textContent = 'No Folder';
+        trigger.textContent = t('label_no_folder');
         hiddenInput.value = '';
-        closeAllSelect(null);
+        optionsContainer.classList.add('select-hide');
     });
     optionsContainer.appendChild(noFolderOption);
 
-    // Default state
     let foundCurrent = false;
-
     folders.forEach(folder => {
         const option = document.createElement('div');
         option.textContent = folder.name;
-
+        
         if (pwd.folderId === folder.id) {
             trigger.textContent = folder.name;
             hiddenInput.value = folder.id;
-            option.classList.add('same-as-selected');
             foundCurrent = true;
         }
 
@@ -553,7 +652,7 @@ function showPasswordDetail(index) {
     });
 
     if (!foundCurrent) {
-        trigger.textContent = 'No Folder';
+        trigger.textContent = t('label_no_folder');
         hiddenInput.value = '';
     }
 
@@ -619,7 +718,14 @@ function scheduleClipboardClear() {
 function copyUsername() {
     const username = document.getElementById('detail-username').textContent;
     navigator.clipboard.writeText(username);
-    showToast('✓ Username copied! (clears in 30s)', 'success');
+    showToast('msg_copied', 'success');
+    scheduleClipboardClear();
+}
+
+function copyLink() {
+    const link = document.getElementById('detail-link').textContent;
+    navigator.clipboard.writeText(link);
+    showToast('msg_copied', 'success');
     scheduleClipboardClear();
 }
 
@@ -627,7 +733,7 @@ function copyPassword() {
     const pwdElement = document.getElementById('detail-password');
     const password = pwdElement.dataset.password;
     navigator.clipboard.writeText(password);
-    showToast('✓ Password copied! (clears in 30s)', 'success');
+    showToast('msg_copied', 'success');
     scheduleClipboardClear();
 }
 
@@ -654,8 +760,8 @@ function editCurrentPassword() {
 
 async function deleteCurrentPassword() {
     showConfirmationModal(
-        'Delete entry?',
-        'Do you really want to delete this entry?',
+        'modal_delete_pwd_title',
+        'modal_delete_pwd_desc',
         async () => {
             passwords.splice(currentEditIndex, 1);
 
@@ -683,6 +789,8 @@ function showAddPassword() {
     currentFiles = [];
     document.getElementById('edit-title').textContent = 'Add Password';
     document.getElementById('edit-app').value = '';
+    const editLink = document.getElementById('edit-link');
+    if (editLink) editLink.value = '';
     document.getElementById('edit-username').value = '';
     document.getElementById('edit-password').value = '';
     document.getElementById('edit-notes').value = '';
@@ -701,6 +809,8 @@ function showEditPassword(index) {
 
     document.getElementById('edit-title').textContent = 'Edit Password';
     document.getElementById('edit-app').value = pwd.app;
+    const editLink = document.getElementById('edit-link');
+    if (editLink) editLink.value = pwd.link || '';
     document.getElementById('edit-username').value = pwd.username || '';
     document.getElementById('edit-password').value = pwd.password || '';
     document.getElementById('edit-notes').value = pwd.notes || '';
@@ -710,6 +820,8 @@ function showEditPassword(index) {
 
 async function handleSavePassword() {
     const app = document.getElementById('edit-app').value;
+    const linkInput = document.getElementById('edit-link');
+    const link = linkInput ? linkInput.value : '';
     const username = document.getElementById('edit-username').value;
     const password = document.getElementById('edit-password').value;
     const notes = document.getElementById('edit-notes').value;
@@ -721,6 +833,7 @@ async function handleSavePassword() {
 
     const passwordData = {
         app,
+        link,
         username,
         password,
         notes,
@@ -809,8 +922,8 @@ async function handleSaveFolder() {
 
 async function handleDeleteFolder() {
     showConfirmationModal(
-        'Delete Folder?',
-        'Do you really want to delete this folder? Passwords inside will be moved to root.',
+        'modal_delete_folder_title',
+        'modal_delete_folder_desc',
         async () => {
             // Move passwords to root
             passwords.forEach(pwd => {
@@ -958,8 +1071,8 @@ function handleLogout(force = false) {
     }
 
     showConfirmationModal(
-        'Logout',
-        'Do you really want to logout?',
+        'modal_logout_title',
+        'modal_logout_desc',
         performLogout
     );
 }
@@ -978,10 +1091,16 @@ function performLogout() {
 // Custom Confirmation Modal
 let pendingConfirmAction = null;
 
-function showConfirmationModal(title, description, onConfirm) {
-    document.getElementById('modal-title').textContent = title;
-    document.getElementById('modal-desc').textContent = description;
+function showConfirmationModal(titleKey, descKey, onConfirm) {
+    document.getElementById('modal-title').textContent = t(titleKey);
+    document.getElementById('modal-desc').textContent = t(descKey);
     pendingConfirmAction = onConfirm;
+
+    // Also translate buttons
+    const confirmBtn = document.getElementById('modal-confirm-btn');
+    const cancelBtn = document.getElementById('modal-cancel-btn');
+    if (confirmBtn) confirmBtn.textContent = t('modal_confirm');
+    if (cancelBtn) cancelBtn.textContent = t('modal_cancel');
 
     document.getElementById('confirmation-modal').classList.add('show');
 }
@@ -1289,4 +1408,202 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Settings Screen Helper
+function showSettings() {
+    showScreen('settings-screen');
+}
+
+// Manual Update Check
+async function handleManualUpdateCheck() {
+    showToast('settings_updates', 'info'); // Using key for "Checking for updates..."
+    try {
+        const result = await window.api.manualCheckUpdates();
+        
+        if (result.success) {
+            if (result.updateInfo) {
+                const msg = t('msg_new_version', { version: result.updateInfo.version });
+                showToast(msg, 'success', true);
+            } else {
+                showToast('msg_no_update', 'info');
+            }
+        } else {
+            // Check for specific 404 or common update errors
+            if (result.error && (result.error.includes('404') || result.error.includes('Not Found'))) {
+                showToast('msg_no_update', 'info');
+            } else {
+                showToast('msg_update_error', 'error');
+            }
+        }
+    } catch (err) {
+        showToast('msg_update_error', 'error');
+    }
+}
+
+// CSV Import Logic
+async function selectCsvFile() {
+    const { filePaths } = await window.api.showOpenDialog({
+        title: 'Select Browser CSV Export',
+        filters: [{ name: 'CSV Files', extensions: ['csv'] }],
+        properties: ['openFile']
+    });
+
+    if (filePaths && filePaths.length > 0) {
+        const path = filePaths[0];
+        document.getElementById('csv-file-path').textContent = path;
+        document.getElementById('csv-file-path').dataset.path = path;
+    }
+}
+
+async function handleCsvImport() {
+    const filePath = document.getElementById('csv-file-path').dataset.path;
+    if (!filePath) {
+        showToast('Please select a CSV file!', 'error');
+        return;
+    }
+
+    try {
+        const result = await window.api.readFile(filePath);
+        if (!result.success) throw new Error(result.error);
+
+        const content = atob(result.data);
+        const rows = parseCSV(content);
+        
+        if (rows.length < 2) {
+            showToast('CSV file seems empty or invalid.', 'error');
+            return;
+        }
+
+        const headers = rows[0].map(h => h.toLowerCase().trim());
+        const importedData = [];
+
+        // Detect format
+        const isChrome = headers.includes('url') && headers.includes('username') && headers.includes('password');
+        const isFirefox = headers.includes('url') && headers.includes('username') && headers.includes('password') && headers.includes('httprealm');
+
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (row.length < 3) continue;
+
+            let entry = {};
+            if (isChrome || isFirefox) {
+                const urlIdx = headers.indexOf('url');
+                const userIdx = headers.indexOf('username');
+                const pwdIdx = headers.indexOf('password');
+                const nameIdx = headers.indexOf('name');
+                const noteIdx = headers.indexOf('note');
+
+                entry = {
+                    app: (nameIdx !== -1 && row[nameIdx]) ? row[nameIdx] : (row[urlIdx] || 'Imported'),
+                    link: row[urlIdx] || '',
+                    username: row[userIdx] || '',
+                    password: row[pwdIdx] || '',
+                    notes: (noteIdx !== -1) ? (row[noteIdx] || '') : 'Imported',
+                    folderId: null,
+                    files: []
+                };
+            } else {
+                // Fallback: try columns as Name, Url, User, Pwd, Note if 5 columns
+                if (row.length >= 5) {
+                    entry = {
+                        app: row[0] || 'Imported',
+                        link: row[1] || '',
+                        username: row[2] || '',
+                        password: row[3] || '',
+                        notes: row[4] || '',
+                        folderId: null,
+                        files: []
+                    };
+                } else {
+                    entry = {
+                        app: row[0] || 'Imported',
+                        username: row[1] || '',
+                        password: row[2] || '',
+                        link: '',
+                        notes: 'Imported (unknown format)',
+                        folderId: null,
+                        files: []
+                    };
+                }
+            }
+            
+            if (entry.app && entry.password) {
+                importedData.push(entry);
+            }
+        }
+
+        if (importedData.length === 0) {
+            showToast('No valid entries found in CSV.', 'error');
+            return;
+        }
+
+        // Merge with existing
+        let added = 0;
+        importedData.forEach(imp => {
+            const exists = passwords.some(p => p.app === imp.app && p.username === imp.username);
+            if (!exists) {
+                passwords.push(imp);
+                added++;
+            }
+        });
+
+        const saveResult = await window.api.savePasswords({
+            password: currentPassword,
+            passwords,
+            folders
+        });
+
+        if (saveResult.success) {
+            showToast(`${added} entries imported successfully!`, 'success');
+            renderPasswordList();
+            showScreen('settings-screen');
+        } else {
+            showToast('Error saving imported data!', 'error');
+        }
+
+    } catch (err) {
+        showToast('Import failed: ' + err.message, 'error');
+    }
+}
+
+function parseCSV(text) {
+    const rows = [];
+    let currentRow = [];
+    let currentField = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const nextChar = text[i + 1];
+
+        if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+                currentField += '"';
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            currentRow.push(currentField);
+            currentField = '';
+        } else if ((char === '\r' || char === '\n') && !inQuotes) {
+            if (currentField || currentRow.length > 0) {
+                currentRow.push(currentField);
+                rows.push(currentRow);
+            }
+            currentRow = [];
+            currentField = '';
+            if (char === '\r' && nextChar === '\n') i++;
+        } else {
+            currentField += char;
+        }
+    }
+    
+    if (currentField || currentRow.length > 0) {
+        currentRow.push(currentField);
+        rows.push(currentRow);
+    }
+
+    return rows;
 }

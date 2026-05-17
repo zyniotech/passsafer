@@ -61,7 +61,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "installerIcon": "../logos/locked.ico",
-      "uninstallerIcon": "../logos/locked.ico"
+      "uninstallerIcon": "../logos/locked.ico",
+      "deleteAppDataOnUninstall": true
     },
     "mac": {
       "target": "dmg",

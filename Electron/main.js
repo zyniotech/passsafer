@@ -9,15 +9,8 @@ const DATA_DIR = path.join(app.getPath('appData'), 'PassSafer', 'PassSaferData')
 const MASTER_HASH_FILE = path.join(DATA_DIR, '.mh');
 const PIN_HASH_FILE = path.join(DATA_DIR, '.ph');
 const PASSWORDS_FILE = path.join(DATA_DIR, '.pw');
-const LICENSE_FILE = path.join(DATA_DIR, '.license');
-
-// ─── License Configuration ────────────────────────────────────────────
-const API_BASE_URL = 'https://passsafer-api.zyniotech.workers.dev';
-const LICENSE_CHECK_INTERVAL_DAYS = 30; // Online validation every 30 days
 
 let mainWindow;
-let licenseWindow;
-let currentLicenseData = null;
 
 // Erstelle App-Fenster
 function createWindow() {
@@ -63,24 +56,12 @@ function createWindow() {
 
 app.whenReady().then(async () => {
     await ensureDataDir();
-
-    // License check before starting the app
-    const licenseStatus = await checkLicense();
-
-    if (licenseStatus === 'valid') {
-        createWindow();
-        checkForUpdates();
-    } else if (licenseStatus === 'expired') {
-        createExpiredWindow();
-    } else {
-        createLicenseWindow();
-    }
+    createWindow();
+    checkForUpdates();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
-            const status = currentLicenseData ? 'valid' : 'none';
-            if (status === 'valid') createWindow();
-            else createLicenseWindow();
+            createWindow();
         }
     });
 });
@@ -551,289 +532,9 @@ ipcMain.handle('show-open-dialog', async (event, options) => {
     return result;
 });
 
-// ═══════════════════════════════════════════════════════════════════════
-// LICENSE SYSTEM
-// ═══════════════════════════════════════════════════════════════════════
-
-/**
- * Generate a stable device fingerprint hash
- * Uses hostname + platform + CPU arch + username
- */
-function getDeviceHash() {
-    const data = [
-        os.hostname(),
-        os.platform(),
-        os.arch(),
-        os.userInfo().username,
-        os.cpus()[0]?.model || 'unknown'
-    ].join('|');
-
-    return crypto.createHash('sha256').update(data).digest('hex').substring(0, 32);
-}
-
-/**
- * Check license validity
- * Returns: 'valid' | 'expired' | 'none'
- */
-async function checkLicense() {
-    try {
-        const licenseRaw = await fs.readFile(LICENSE_FILE, 'utf8');
-        const license = JSON.parse(licenseRaw);
-        currentLicenseData = license;
-
-        // Check local expiration first
-        if (license.expiresAt) {
-            const expiryDate = new Date(license.expiresAt);
-            if (expiryDate < new Date()) {
-                return 'expired';
-            }
-        }
-
-        // Check if online validation is needed (every 30 days)
-        const lastValidated = license.lastValidated ? new Date(license.lastValidated) : null;
-        const daysSinceValidation = lastValidated
-            ? (Date.now() - lastValidated.getTime()) / (1000 * 60 * 60 * 24)
-            : Infinity;
-
-        if (daysSinceValidation >= LICENSE_CHECK_INTERVAL_DAYS) {
-            // Online validation required
-            try {
-                const result = await validateLicenseOnline(license.key);
-                if (result.valid) {
-                    // Update local cache
-                    license.lastValidated = new Date().toISOString();
-                    license.expiresAt = result.expiresAt || null;
-                    license.plan = result.plan;
-                    await fs.writeFile(LICENSE_FILE, JSON.stringify(license, null, 2));
-                    await setSecurePermissions(LICENSE_FILE);
-                    currentLicenseData = license;
-                    return 'valid';
-                } else if (result.reason === 'License has expired') {
-                    return 'expired';
-                } else {
-                    // License revoked or invalid online — but still allow offline
-                    // Only block if we got a clear "invalid" response
-                    return 'none';
-                }
-            } catch (networkError) {
-                // Network error — allow offline usage with cached license
-                console.log('License validation: offline mode (network error)');
-                return 'valid';
-            }
-        }
-
-        // Local cache is fresh enough
-        return 'valid';
-
-    } catch (err) {
-        // No license file exists
-        currentLicenseData = null;
-        return 'none';
-    }
-}
-
-/**
- * Validate license key against Cloudflare Worker API
- */
-async function validateLicenseOnline(key) {
-    const deviceHash = getDeviceHash();
-
-    const response = await fetch(`${API_BASE_URL}/api/validate-license`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, deviceHash })
-    });
-
-    if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-    }
-
-    return await response.json();
-}
-
-/**
- * Create License Activation Window
- */
-function createLicenseWindow() {
-    if (licenseWindow && !licenseWindow.isDestroyed()) {
-        licenseWindow.focus();
-        return;
-    }
-
-    licenseWindow = new BrowserWindow({
-        width: 550,
-        height: 620,
-        minWidth: 500,
-        minHeight: 580,
-        webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-            preload: path.join(__dirname, 'preload.js')
-        },
-        frame: true,
-        backgroundColor: '#2d2d2d',
-        icon: path.join(__dirname, '..', 'logos', 'locked.png')
-    });
-
-    licenseWindow.loadFile('license.html');
-    licenseWindow.removeMenu();
-
-    // Block DevTools in production
-    licenseWindow.webContents.on('devtools-opened', () => {
-        licenseWindow.webContents.closeDevTools();
-    });
-    licenseWindow.webContents.on('before-input-event', (event, input) => {
-        if (input.key === 'F12' ||
-            (input.control && input.shift && (input.key === 'I' || input.key === 'i'))) {
-            event.preventDefault();
-        }
-    });
-}
-
-/**
- * Create License Expired Window
- */
-function createExpiredWindow() {
-    const expiredWindow = new BrowserWindow({
-        width: 550,
-        height: 620,
-        minWidth: 500,
-        minHeight: 580,
-        webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-            preload: path.join(__dirname, 'preload.js')
-        },
-        frame: true,
-        backgroundColor: '#2d2d2d',
-        icon: path.join(__dirname, '..', 'logos', 'locked.png')
-    });
-
-    expiredWindow.loadFile('expired.html');
-    expiredWindow.removeMenu();
-
-    expiredWindow.webContents.on('devtools-opened', () => {
-        expiredWindow.webContents.closeDevTools();
-    });
-}
-
-// ─── License IPC Handlers ─────────────────────────────────────────────
-
-// Activate license key
-ipcMain.handle('activate-license', async (event, key) => {
-    try {
-        console.log('[License] Activating key:', key);
-        const result = await validateLicenseOnline(key.trim().toUpperCase());
-        console.log('[License] Validation result:', JSON.stringify(result));
-
-        if (result.valid) {
-            // Save license locally
-            const licenseData = {
-                key: key.trim().toUpperCase(),
-                plan: result.plan,
-                expiresAt: result.expiresAt || null,
-                purchasedAt: result.purchasedAt,
-                lastValidated: new Date().toISOString(),
-                deviceHash: getDeviceHash()
-            };
-
-            await fs.writeFile(LICENSE_FILE, JSON.stringify(licenseData, null, 2));
-            await setSecurePermissions(LICENSE_FILE);
-            currentLicenseData = licenseData;
-
-            // Close license window, open main app
-            if (licenseWindow && !licenseWindow.isDestroyed()) {
-                licenseWindow.close();
-            }
-            createWindow();
-            checkForUpdates();
-
-            return { valid: true };
-        } else {
-            return { valid: false, reason: result.reason || 'Invalid license key' };
-        }
-    } catch (error) {
-        console.error('[License] Activation error:', error);
-        return { valid: false, reason: 'Connection error. Please check your internet connection.' };
-    }
-});
-
-// Import license from .pass file
-ipcMain.handle('import-license-file', async () => {
-    try {
-        const activeWindow = licenseWindow || BrowserWindow.getFocusedWindow();
-        const result = await dialog.showOpenDialog(activeWindow, {
-            title: 'Import License File',
-            filters: [{ name: 'PassSafer License', extensions: ['pass'] }],
-            properties: ['openFile']
-        });
-
-        if (result.canceled || !result.filePaths.length) {
-            return { valid: false, reason: 'No file selected' };
-        }
-
-        const filePath = result.filePaths[0];
-        const content = await fs.readFile(filePath, 'utf8');
-
-        // Try to parse as JSON (license export format)
-        let licenseKey;
-        try {
-            const data = JSON.parse(content);
-            licenseKey = data.key || data.licenseKey;
-        } catch {
-            // Plain text key
-            licenseKey = content.trim();
-        }
-
-        if (!licenseKey) {
-            return { valid: false, reason: 'Invalid license file format' };
-        }
-
-        // Validate the key online
-        const validation = await validateLicenseOnline(licenseKey);
-        if (validation.valid) {
-            const licenseData = {
-                key: licenseKey.toUpperCase(),
-                plan: validation.plan,
-                expiresAt: validation.expiresAt || null,
-                purchasedAt: validation.purchasedAt,
-                lastValidated: new Date().toISOString(),
-                deviceHash: getDeviceHash()
-            };
-
-            await fs.writeFile(LICENSE_FILE, JSON.stringify(licenseData, null, 2));
-            await setSecurePermissions(LICENSE_FILE);
-            currentLicenseData = licenseData;
-
-            if (licenseWindow && !licenseWindow.isDestroyed()) {
-                licenseWindow.close();
-            }
-            createWindow();
-            checkForUpdates();
-
-            return { valid: true };
-        } else {
-            return { valid: false, reason: validation.reason || 'Invalid license key in file' };
-        }
-    } catch (error) {
-        return { valid: false, reason: 'Failed to read license file' };
-    }
-});
-
-// Check license status (for expired screen)
-ipcMain.handle('check-license-status', async () => {
-    return currentLicenseData;
-});
-
-// Open external URL (for "Buy License" link)
+// Open external URL (for links)
 ipcMain.handle('open-external', async (event, url) => {
     await shell.openExternal(url);
-});
-
-// Show license input (switch from expired to license window)
-ipcMain.handle('show-license-input', async () => {
-    BrowserWindow.getAllWindows().forEach(w => w.close());
-    createLicenseWindow();
 });
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -895,5 +596,19 @@ ipcMain.handle('install-update', async () => {
         autoUpdater.quitAndInstall();
     } catch (err) {
         console.error('Install update error:', err.message);
+    }
+});
+
+// Manual check for updates
+ipcMain.handle('manual-check-updates', async () => {
+    try {
+        if (!app.isPackaged) {
+            return { success: false, error: 'Auto-update is only available in packaged app.' };
+        }
+        const { autoUpdater } = require('electron-updater');
+        const result = await autoUpdater.checkForUpdates();
+        return { success: true, updateInfo: result.updateInfo };
+    } catch (err) {
+        return { success: false, error: err.message };
     }
 });
