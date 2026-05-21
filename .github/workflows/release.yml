@@ -42,8 +42,9 @@ jobs:
         working-directory: ./Electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Build Windows installer. For SignPath origin validation, we compile the unsigned installer,
-        # upload it to GitHub artifacts, request signing via SignPath GitHub Action, and then publish it.
+          WIN_CSC_LINK: ${{ secrets.WIN_CERTS }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CERTS_PASSWORD }}
+        # Build Windows installer and sign automatically using electron-builder.
         run: npx electron-builder --win --publish always
 
       # ─────────────────────────────────────────────────────────────────

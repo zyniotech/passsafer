@@ -25,5 +25,15 @@ contextBridge.exposeInMainWorld('api', {
     installUpdate: () => ipcRenderer.invoke('install-update'),
     manualCheckUpdates: () => ipcRenderer.invoke('manual-check-updates'),
     onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (e, info) => callback(info)),
-    onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', () => callback())
+    onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', () => callback()),
+
+    // Licensing
+    getDeviceId: () => ipcRenderer.invoke('get-device-id'),
+    loadLicense: () => ipcRenderer.invoke('load-license'),
+    saveLicense: (data) => ipcRenderer.invoke('save-license', data),
+    deleteLicense: () => ipcRenderer.invoke('delete-license'),
+
+    // Native Messaging
+    onNativeRequest: (callback) => ipcRenderer.on('native-request', (e, data) => callback(data)),
+    sendNativeResponse: (data) => ipcRenderer.send('native-response', data)
 });

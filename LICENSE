@@ -1,16 +1,19 @@
-MIT License
+PassSafer License
 
 Copyright (c) 2026 Zynio Tech
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+PassSafer is Open Source, meaning the source code is publicly available for transparency and auditability.
+However, it is NOT free software under the MIT or GPL definitions. 
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. OPEN SOURCE TRANSPARENCY
+You are free to view, audit, and inspect the source code of PassSafer to verify its security, privacy, and functionality.
+
+2. USAGE
+Use of the PassSafer application requires a valid license key (either a Free Trial key or a Premium key). 
+You may not circumvent the license verification systems, modify the code to remove license checks, or distribute cracked versions of the software.
+
+3. REDISTRIBUTION
+You may not redistribute the compiled software or modified source code without explicit permission from Zynio Tech.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,

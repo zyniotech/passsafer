@@ -9,6 +9,8 @@ const DATA_DIR = path.join(app.getPath('appData'), 'PassSafer', 'PassSaferData')
 const MASTER_HASH_FILE = path.join(DATA_DIR, '.mh');
 const PIN_HASH_FILE = path.join(DATA_DIR, '.ph');
 const PASSWORDS_FILE = path.join(DATA_DIR, '.pw');
+const LICENSE_FILE = path.join(DATA_DIR, '.lic');
+const DEVICE_ID_FILE = path.join(DATA_DIR, '.did');
 
 let mainWindow;
 
@@ -48,7 +50,14 @@ function createWindow() {
         callback({
             responseHeaders: {
                 ...details.responseHeaders,
-                'Content-Security-Policy': ["default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';"]
+                'Content-Security-Policy': [
+                    "default-src 'self'; " +
+                    "script-src 'self'; " +
+                    "style-src 'self' 'unsafe-inline'; " +
+                    "img-src 'self' data:; " +
+                    "font-src 'self'; " +
+                    "connect-src 'self' https://passsafer-api.zyniotech.workers.dev;"
+                ]
             }
         });
     });
@@ -535,6 +544,91 @@ ipcMain.handle('show-open-dialog', async (event, options) => {
 // Open external URL (for links)
 ipcMain.handle('open-external', async (event, url) => {
     await shell.openExternal(url);
+});
+
+// Licensing Helpers
+function getLicenseKeyForEncryption(deviceId) {
+    return crypto.pbkdf2Sync(deviceId, 'license-salt-12893812903', 1000, 32, 'sha256');
+}
+
+function encryptLicense(data, deviceId) {
+    const key = getLicenseKeyForEncryption(deviceId);
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag().toString('hex');
+    return 'v1:' + iv.toString('hex') + ':' + authTag + ':' + encrypted;
+}
+
+function decryptLicense(encryptedData, deviceId) {
+    const key = getLicenseKeyForEncryption(deviceId);
+    const parts = encryptedData.substring(3).split(':');
+    const iv = Buffer.from(parts[0], 'hex');
+    const authTag = Buffer.from(parts[1], 'hex');
+    const encrypted = parts[2];
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return JSON.parse(decrypted);
+}
+
+// Licensing IPC Handlers
+ipcMain.handle('get-device-id', async () => {
+    try {
+        let deviceId;
+        try {
+            deviceId = await fs.readFile(DEVICE_ID_FILE, 'utf8');
+        } catch {
+            deviceId = crypto.randomUUID();
+            await fs.writeFile(DEVICE_ID_FILE, deviceId, 'utf8');
+            await setSecurePermissions(DEVICE_ID_FILE);
+        }
+        return deviceId;
+    } catch (error) {
+        console.error('Error getting device ID:', error);
+        return 'device-' + crypto.randomBytes(8).toString('hex');
+    }
+});
+
+ipcMain.handle('load-license', async () => {
+    try {
+        const deviceId = await fs.readFile(DEVICE_ID_FILE, 'utf8');
+        const fileContent = await fs.readFile(LICENSE_FILE, 'utf8');
+        const licenseData = decryptLicense(fileContent, deviceId);
+        return { success: true, license: licenseData };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('save-license', async (event, licenseData) => {
+    try {
+        let deviceId;
+        try {
+            deviceId = await fs.readFile(DEVICE_ID_FILE, 'utf8');
+        } catch {
+            deviceId = crypto.randomUUID();
+            await fs.writeFile(DEVICE_ID_FILE, deviceId, 'utf8');
+            await setSecurePermissions(DEVICE_ID_FILE);
+        }
+        const encrypted = encryptLicense(licenseData, deviceId);
+        await fs.writeFile(LICENSE_FILE, encrypted, 'utf8');
+        await setSecurePermissions(LICENSE_FILE);
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('delete-license', async () => {
+    try {
+        await fs.unlink(LICENSE_FILE);
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
 });
 
 // ═══════════════════════════════════════════════════════════════════════

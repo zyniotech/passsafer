@@ -11,6 +11,8 @@ let currentFileName = null;
 let currentFiles = []; // Array of {data, name}
 let translations = {};
 let currentLanguage = 'en';
+const API_BASE_URL = 'https://passsafer-api.zyniotech.workers.dev';
+let licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false } };
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', async () => {
@@ -19,15 +21,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentLanguage = (systemLang === 'de') ? 'de' : 'en';
     await loadTranslations(currentLanguage);
 
-    const isFirstRun = await window.api.checkFirstRun();
-    if (isFirstRun) {
-        showScreen('register-screen');
+    // Check license FIRST before showing any screen
+    const hasLicense = await checkLicenseStatus().catch(err => {
+        console.error('Startup license check failed:', err);
+        return false;
+    });
+
+    if (!hasLicense) {
+        // No valid license → show license screen first
+        showScreen('license-screen');
     } else {
-        showScreen('login-screen');
+        // Valid license → proceed to login or register
+        const isFirstRun = await window.api.checkFirstRun();
+        if (isFirstRun) {
+            showScreen('register-screen');
+        } else {
+            showScreen('login-screen');
+        }
     }
+
     setupEventListeners();
     setupAutoLogout();
-    setupCustomSelect(); // Initialize custom select listener
+    setupCustomSelect();
     
     // Set language select value
     const langSelect = document.getElementById('language-select');
@@ -121,6 +136,10 @@ function validateUsername(username) {
 }
 
 function generateStrongPassword() {
+    if (!licenseState.valid || !licenseState.features || !licenseState.features.passwordGenerator) {
+        showToast('Password generator requires a Premium license.', 'warning', true);
+        return;
+    }
     const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const lower = 'abcdefghijklmnopqrstuvwxyz';
     const digits = '0123456789';
@@ -218,6 +237,27 @@ function setupEventListeners() {
     document.getElementById('change-password-btn').addEventListener('click', () => showScreen('change-password-screen'));
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
     document.getElementById('check-updates-btn').addEventListener('click', handleManualUpdateCheck);
+    
+    // License Listeners
+    document.getElementById('activate-license-btn').addEventListener('click', handleActivateLicense);
+    document.getElementById('get-trial-btn').addEventListener('click', () => {
+        window.api.openExternal('https://zynio-tech.web.app/register');
+    });
+    document.getElementById('buy-premium-btn').addEventListener('click', () => {
+        window.api.openExternal('https://zynio-tech.web.app/pricing');
+    });
+    // license-back-btn removed from HTML since license is now the first screen
+    document.getElementById('settings-activate-license-btn').addEventListener('click', () => {
+        const input = document.getElementById('license-key-input');
+        if (input) {
+            window.api.loadLicense().then(res => {
+                if (res.success && res.license && res.license.licenseKey) {
+                    input.value = res.license.licenseKey;
+                }
+            });
+        }
+        showScreen('license-screen');
+    });
 
     document.getElementById('show-csv-import-btn').addEventListener('click', () => {
         document.getElementById('csv-file-path').textContent = 'No file selected';
@@ -367,7 +407,7 @@ async function handleLogin() {
         currentUser = username;
         currentPassword = password;
 
-        // Load passwords
+        // License is already validated before login, so just load passwords
         const loadResult = await window.api.loadPasswords({ password });
         if (loadResult.success) {
             passwords = loadResult.data;
@@ -1412,6 +1452,8 @@ function escapeHtml(text) {
 
 // Settings Screen Helper
 function showSettings() {
+    updateSettingsLicenseUI();
+    checkLicenseStatus(true).catch(err => console.error('Silent license sync failed:', err));
     showScreen('settings-screen');
 }
 
@@ -1606,4 +1648,271 @@ function parseCSV(text) {
     }
 
     return rows;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// LICENSING SYSTEM
+// ═══════════════════════════════════════════════════════════════════════
+
+async function checkLicenseStatus(forceSync = false) {
+    try {
+        const loadRes = await window.api.loadLicense();
+        if (!loadRes.success) {
+            licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false } };
+            return false;
+        }
+
+        const cached = loadRes.license;
+        const now = Date.now();
+        const lastSync = cached.lastSync || 0;
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        const isOfflineLimitExceeded = (now - lastSync) > thirtyDaysMs;
+
+        const isOnline = navigator.onLine;
+
+        if (isOnline && (forceSync || isOfflineLimitExceeded)) {
+            const deviceId = await window.api.getDeviceId();
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/validate-license`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ licenseKey: cached.licenseKey, deviceId })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.valid) {
+                        const updatedLicense = {
+                            licenseKey: cached.licenseKey,
+                            plan: data.plan,
+                            features: data.features,
+                            expiryDate: data.expiryDate,
+                            lastSync: Date.now()
+                        };
+                        await window.api.saveLicense(updatedLicense);
+                        licenseState = {
+                            valid: true,
+                            plan: data.plan,
+                            features: data.features,
+                            expiryDate: data.expiryDate,
+                            lastSync: Date.now()
+                        };
+                        updateSettingsLicenseUI();
+                        return true;
+                    } else {
+                        await window.api.deleteLicense();
+                        licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false } };
+                        updateSettingsLicenseUI();
+                        return false;
+                    }
+                }
+            } catch (fetchErr) {
+                console.error('Failed to contact licensing server during sync:', fetchErr);
+            }
+        }
+
+        if (isOfflineLimitExceeded) {
+            licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false }, error: 'offline_sync_required' };
+            updateSettingsLicenseUI();
+            return false;
+        }
+
+        if (cached.expiryDate) {
+            const expiry = new Date(cached.expiryDate);
+            if (expiry.getTime() < now) {
+                licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false } };
+                updateSettingsLicenseUI();
+                return false;
+            }
+        }
+
+        licenseState = {
+            valid: true,
+            plan: cached.plan,
+            features: cached.features || { passwordGenerator: cached.plan === 'premium' },
+            expiryDate: cached.expiryDate,
+            lastSync: cached.lastSync
+        };
+        updateSettingsLicenseUI();
+        return true;
+    } catch (err) {
+        console.error('Error in checkLicenseStatus:', err);
+        return false;
+    }
+}
+
+function updateSettingsLicenseUI() {
+    const statusEl = document.getElementById('settings-license-status');
+    const planEl = document.getElementById('settings-license-plan');
+    const expiryEl = document.getElementById('settings-license-expiry');
+    const syncEl = document.getElementById('settings-license-sync');
+
+    if (licenseState.valid) {
+        if (statusEl) {
+            statusEl.textContent = 'Active';
+            statusEl.style.color = 'var(--color-success)';
+        }
+        if (planEl) planEl.textContent = licenseState.plan.toUpperCase();
+        if (expiryEl) {
+            expiryEl.textContent = licenseState.expiryDate 
+                ? new Date(licenseState.expiryDate).toLocaleDateString() 
+                : 'Lifetime';
+        }
+        if (syncEl) {
+            syncEl.textContent = licenseState.lastSync 
+                ? new Date(licenseState.lastSync).toLocaleString() 
+                : 'N/A';
+        }
+    } else {
+        if (statusEl) {
+            statusEl.textContent = licenseState.error === 'offline_sync_required' ? 'Sync Required (30 Days Offline)' : 'Inactive';
+            statusEl.style.color = 'var(--color-danger)';
+        }
+        if (planEl) planEl.textContent = '-';
+        if (expiryEl) expiryEl.textContent = '-';
+        if (syncEl) syncEl.textContent = '-';
+    }
+}
+
+async function handleActivateLicense() {
+    const licenseKey = document.getElementById('license-key-input').value.trim();
+    const errorEl = document.getElementById('license-error-msg');
+    
+    if (!licenseKey) {
+        errorEl.textContent = 'Please enter a license key.';
+        errorEl.classList.remove('hidden');
+        return;
+    }
+
+    if (!navigator.onLine) {
+        errorEl.textContent = 'Internet connection is required to activate a license.';
+        errorEl.classList.remove('hidden');
+        return;
+    }
+
+    errorEl.textContent = 'Activating...';
+    errorEl.classList.remove('hidden');
+
+    try {
+        const deviceId = await window.api.getDeviceId();
+        const response = await fetch(`${API_BASE_URL}/api/validate-license`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ licenseKey, deviceId })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (data.valid) {
+            const licenseData = {
+                licenseKey,
+                plan: data.plan,
+                features: data.features,
+                expiryDate: data.expiryDate,
+                lastSync: Date.now()
+            };
+            const saveRes = await window.api.saveLicense(licenseData);
+            if (saveRes.success) {
+                licenseState = {
+                    valid: true,
+                    plan: data.plan,
+                    features: data.features,
+                    expiryDate: data.expiryDate,
+                    lastSync: Date.now()
+                };
+                errorEl.classList.add('hidden');
+                showToast('License activated successfully!', 'success');
+                
+                // License activated → proceed to login or register
+                const isFirstRun = await window.api.checkFirstRun();
+                if (isFirstRun) {
+                    showScreen('register-screen');
+                } else {
+                    showScreen('login-screen');
+                }
+            } else {
+                errorEl.textContent = 'Failed to save license locally.';
+            }
+        } else {
+            if (data.error === 'device_limit_exceeded') {
+                errorEl.textContent = 'Device limit reached. Only 1 device is allowed for Free Trial, and up to 100 devices for Premium.';
+            } else if (data.error === 'license_expired') {
+                errorEl.textContent = 'This license has expired. Please buy a new license.';
+            } else if (data.error === 'license_inactive') {
+                errorEl.textContent = 'This license is inactive.';
+            } else {
+                errorEl.textContent = 'Invalid license key. Please check your spelling and try again.';
+            }
+        }
+    } catch (err) {
+        console.error('License activation error:', err);
+        errorEl.textContent = 'Activation failed. Please ensure you are connected to the internet and try again.';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// NATIVE MESSAGING IPC HANDLER (FROM CHROME EXTENSION)
+// ═══════════════════════════════════════════════════════════════════════
+if (window.api && window.api.onNativeRequest) {
+    window.api.onNativeRequest(async ({ id, request }) => {
+        // Only process requests if app is unlocked
+        if (!currentPassword) {
+            window.api.sendNativeResponse({ id, response: { action: (request.action || "").replace('request', 'response'), success: false, error: 'Locked' } });
+            return;
+        }
+
+        if (request.action === "get-credentials") {
+            const matched = passwords.filter(p => p.link && p.link.toLowerCase().includes(request.domain.toLowerCase()));
+            window.api.sendNativeResponse({ 
+                id, 
+                response: { 
+                    action: "credentials-response", 
+                    success: true, 
+                    credentials: matched.map(p => ({ username: p.username, password: p.password })) 
+                } 
+            });
+        }
+        else if (request.action === "check-exists") {
+            const existing = passwords.find(p => p.link && p.link.toLowerCase().includes(request.domain.toLowerCase()) && p.username === request.username);
+            if (!existing) {
+                window.api.sendNativeResponse({ id, response: { action: "check-response", shouldSave: true, isUpdate: false } });
+            } else if (existing.password !== request.password) {
+                window.api.sendNativeResponse({ id, response: { action: "check-response", shouldSave: true, isUpdate: true } });
+            } else {
+                window.api.sendNativeResponse({ id, response: { action: "check-response", shouldSave: false } });
+            }
+        }
+        else if (request.action === "save-credential") {
+            const { domain, username, password, isUpdate } = request;
+            if (isUpdate) {
+                const existing = passwords.find(p => p.link && p.link.toLowerCase().includes(domain.toLowerCase()) && p.username === username);
+                if (existing) {
+                    existing.password = password;
+                }
+            } else {
+                passwords.push({
+                    app: domain.charAt(0).toUpperCase() + domain.slice(1),
+                    link: 'https://' + domain,
+                    username: username,
+                    password: password,
+                    notes: 'Saved automatically by PassSafer Browser Extension.',
+                    folderId: null,
+                    files: []
+                });
+            }
+
+            const result = await window.api.savePasswords({ password: currentPassword, passwords, folders });
+            window.api.sendNativeResponse({ id, response: { action: "save-response", success: result.success } });
+            
+            // Refresh UI if on main screen
+            const mainScreen = document.getElementById('main-screen');
+            if (mainScreen && !mainScreen.classList.contains('hidden')) {
+                renderPasswordList();
+                showToast('Passwords synchronized from extension!', 'success');
+            }
+        }
+    });
 }

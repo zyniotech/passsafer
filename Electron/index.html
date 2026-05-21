@@ -72,6 +72,53 @@
         </div>
     </div>
 
+    <!-- License Screen -->
+    <div id="license-screen" class="screen hidden">
+        <div class="auth-container" style="max-width: 480px; width: 100%; margin: 0 auto; padding: 2.5rem 2rem;">
+            <!-- Header with icon -->
+            <div class="auth-header" style="margin-bottom: 2rem; text-align: center;">
+                <img src="../logos/locked.png" alt="PassSafer" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.9;">
+                <h1 class="app-title" style="font-size: 2rem; margin-bottom: 0.25rem;"><span style="color: var(--color-accent);">Pass</span>Safer</h1>
+                <p style="font-size: 0.9rem; color: var(--color-text-muted); font-weight: 400; margin: 0;">Enter your license key to unlock the app</p>
+            </div>
+
+            <div class="auth-form">
+                <!-- Info Box -->
+                <div style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(255, 140, 0, 0.08) 0%, rgba(255, 140, 0, 0.02) 100%); border: 1px solid rgba(255, 140, 0, 0.2); padding: 1rem 1.2rem; border-radius: 10px;">
+                    <p style="font-size: 0.88rem; font-weight: 700; color: var(--color-accent); margin: 0 0 6px 0;">License Required</p>
+                    <p style="font-size: 0.82rem; line-height: 1.55; color: var(--color-text-secondary); margin: 0;">
+                        Get a <strong style="color: var(--color-text);">free 6-month trial</strong> for single-device use, or upgrade to <strong style="color: var(--color-text);">Premium</strong> for 100 devices and the password generator.
+                    </p>
+                </div>
+
+                <!-- License Key Input -->
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.4rem; display: block; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px;">License Key</label>
+                    <input type="text" id="license-key-input" placeholder="PSAF-XXXX-XXXX-XXXX-XXXX" autocomplete="off" style="text-align: center; letter-spacing: 2.5px; font-family: 'Consolas', 'Courier New', monospace; font-size: 1.1rem; padding: 0.85rem 0.75rem; border-radius: 8px; border: 2px solid var(--color-border); background: rgba(0,0,0,0.25); color: #fff; transition: border-color 0.3s ease; width: 100%; box-sizing: border-box;">
+                </div>
+
+                <!-- Error/Status Message -->
+                <p id="license-error-msg" style="color: var(--color-danger); font-size: 0.82rem; margin-top: -6px; margin-bottom: 12px; text-align: center; font-weight: 500;" class="hidden"></p>
+
+                <!-- Buttons -->
+                <div class="button-group" style="flex-direction: column; gap: 10px;">
+                    <button class="button primary" id="activate-license-btn" style="width: 100%; padding: 0.85rem; font-size: 1rem; font-weight: 700; border-radius: 8px;">Activate License</button>
+
+                    <div style="display: flex; align-items: center; gap: 10px; margin: 0.4rem 0;">
+                        <div style="flex: 1; height: 1px; background: var(--color-border);"></div>
+                        <span style="font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 1px;">or</span>
+                        <div style="flex: 1; height: 1px; background: var(--color-border);"></div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; width: 100%;">
+                        <button class="button secondary" id="get-trial-btn" style="flex: 1; font-size: 0.82rem; font-weight: 600; padding: 0.7rem; border-radius: 6px;">Get Free Trial</button>
+                        <button class="button secondary" id="buy-premium-btn" style="flex: 1; font-size: 0.82rem; font-weight: 600; padding: 0.7rem; border-radius: 6px; border-color: rgba(255, 140, 0, 0.35); color: var(--color-accent);">Buy Premium</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Screen -->
     <div id="main-screen" class="screen hidden">
         <!-- Header -->
@@ -289,6 +336,32 @@
                 <button class="settings-option" id="change-password-btn">
                     <img src="../logos/settings.png" alt="Settings" class="btn-icon">
                     <span data-i18n="settings_change_master">Change Master Password</span>
+                </button>
+            </div>
+
+            <div class="settings-section">
+                <h3 class="settings-section-title">License</h3>
+                <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 15px; background: rgba(255, 255, 255, 0.03); border-radius: 6px; border: 1px solid var(--color-border); margin-bottom: 12px;">
+                    <div style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
+                        <span style="color: var(--color-text-secondary);">Status:</span>
+                        <strong id="settings-license-status" style="color: var(--color-accent);">Checking...</strong>
+                    </div>
+                    <div style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
+                        <span style="color: var(--color-text-secondary);">Plan:</span>
+                        <strong id="settings-license-plan">-</strong>
+                    </div>
+                    <div id="settings-license-expiry-row" style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
+                        <span style="color: var(--color-text-secondary);">Expires:</span>
+                        <strong id="settings-license-expiry">-</strong>
+                    </div>
+                    <div id="settings-license-sync-row" style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
+                        <span style="color: var(--color-text-secondary);">Last Synced:</span>
+                        <strong id="settings-license-sync">-</strong>
+                    </div>
+                </div>
+                <button class="settings-option" id="settings-activate-license-btn">
+                    <img src="../logos/settings.png" alt="License" class="btn-icon">
+                    <span>Manage / Change License</span>
                 </button>
             </div>
 
