@@ -17,7 +17,7 @@ permissions:
   contents: write  # Required to create GitHub Releases
 
 jobs:
-  release:
+  build:
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -37,24 +37,50 @@ jobs:
         working-directory: ./Electron
         run: npm ci
 
-      - name: Build & Publish (Windows)
+      - name: Build (Windows)
         if: matrix.os == 'windows-latest'
         working-directory: ./Electron
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Build Windows installer and sign automatically using electron-builder.
-        run: npx electron-builder --win --publish always
+        run: npx electron-builder --win --publish never
 
-      - name: Build & Publish (macOS)
+      - name: Build (macOS)
         if: matrix.os == 'macos-latest'
         working-directory: ./Electron
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --mac --publish always
+        run: npx electron-builder --mac --publish never
 
-      - name: Build & Publish (Linux)
+      - name: Build (Linux)
         if: matrix.os == 'ubuntu-latest'
         working-directory: ./Electron
+        run: npx electron-builder --linux --publish never
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}
+          path: |
+            Electron/dist/*.exe
+            Electron/dist/*.blockmap
+            Electron/dist/*.dmg
+            Electron/dist/*.zip
+            Electron/dist/*.AppImage
+            Electron/dist/latest*.yml
+          if-no-files-found: error
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./release-artifacts
+          pattern: build-*
+          merge-multiple: true
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./release-artifacts/*
+          draft: false
+          prerelease: false
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --linux --publish always
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
