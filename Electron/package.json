@@ -35,7 +35,8 @@
     "publish": {
       "provider": "github",
       "owner": "zyniotech",
-      "repo": "passsafer"
+      "repo": "passsafer",
+      "releaseType": "release"
     },
     "files": [
       "**/*",
