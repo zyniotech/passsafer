@@ -45,44 +45,6 @@ jobs:
         # Build Windows installer and sign automatically using electron-builder.
         run: npx electron-builder --win --publish always
 
-      # ─────────────────────────────────────────────────────────────────
-      # SIGNPATH INTEGRATION EXAMPLE FOR SIGNPATH FOUNDATION
-      # ─────────────────────────────────────────────────────────────────
-      # The steps below illustrate how to connect your GitHub Action to SignPath.
-      # When you configure your SignPath Foundation account:
-      # 1. Uncomment these steps.
-      # 2. Add your secrets (SIGNPATH_API_TOKEN, SIGNPATH_ORGANIZATION_ID, etc.).
-      # 3. This enables fully automated, secure origin-verified code signing.
-      #
-      # - name: Upload Unsigned Installer for Signing
-      #   if: matrix.os == 'windows-latest'
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: unsigned-windows-installer
-      #     path: ./Electron/dist/*.exe
-      #
-      # - name: Submit to SignPath for Signing
-      #   if: matrix.os == 'windows-latest'
-      #   uses: signpath/github-action-submit-signing-request@v1
-      #   with:
-      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-      #     organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-      #     project-slug: 'passsafer'
-      #     signing-policy-slug: 'release-signing'
-      #     github-token: ${{ secrets.GITHUB_TOKEN }}
-      #     artifact-name: 'unsigned-windows-installer'
-      #     output-directory: './Electron/dist/signed'
-      #
-      # - name: Upload Signed Installer to Release
-      #   if: matrix.os == 'windows-latest'
-      #   working-directory: ./Electron
-      #   env:
-      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   run: |
-      #     # Script to upload the downloaded signed installer to the GitHub Release
-      #     gh release upload ${{ github.ref_name }} ./dist/signed/*.exe --clobber
-      # ─────────────────────────────────────────────────────────────────
-
       - name: Build & Publish (macOS)
         if: matrix.os == 'macos-latest'
         working-directory: ./Electron
