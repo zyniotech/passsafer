@@ -351,8 +351,29 @@ function setupEventListeners() {
 function setupAutoUpdate() {
     if (window.api && window.api.onUpdateAvailable) {
         window.api.onUpdateAvailable((info) => {
-            showToast(`Update v${info.version} wird im Hintergrund heruntergeladen...`, 'info');
+            const banner = document.getElementById('update-banner');
+            const text = document.getElementById('update-text');
+            const downloadBtn = document.getElementById('update-download-btn');
+            const installBtn = document.getElementById('update-install-btn');
+            
+            text.textContent = t('msg_new_version', { version: info.version }) || `Neue Version v${info.version} verfügbar!`;
+            banner.classList.remove('hidden');
+            downloadBtn.classList.remove('hidden');
+            downloadBtn.disabled = false;
+            downloadBtn.textContent = 'Download';
+            installBtn.classList.add('hidden');
         });
+
+        if (window.api.onUpdateProgress) {
+            window.api.onUpdateProgress((info) => {
+                const text = document.getElementById('update-text');
+                const downloadBtn = document.getElementById('update-download-btn');
+                const percent = Math.round(info.percent || 0);
+                text.textContent = `Lade herunter... ${percent}%`;
+                downloadBtn.textContent = 'Downloading...';
+                downloadBtn.disabled = true;
+            });
+        }
 
         window.api.onUpdateDownloaded(() => {
             const banner = document.getElementById('update-banner');
@@ -1464,9 +1485,23 @@ async function handleManualUpdateCheck() {
         const result = await window.api.manualCheckUpdates();
         
         if (result.success) {
-            if (result.updateInfo) {
-                const msg = t('msg_new_version', { version: result.updateInfo.version });
+            if (result.updateAvailable && result.updateInfo) {
+                const msg = t('msg_new_version', { version: result.updateInfo.version }) || `Neue Version v${result.updateInfo.version} gefunden!`;
                 showToast(msg, 'success', true);
+
+                const banner = document.getElementById('update-banner');
+                const text = document.getElementById('update-text');
+                const downloadBtn = document.getElementById('update-download-btn');
+                const installBtn = document.getElementById('update-install-btn');
+                
+                text.textContent = msg;
+                banner.classList.remove('hidden');
+                downloadBtn.classList.remove('hidden');
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = 'Download';
+                installBtn.classList.add('hidden');
+                
+                showScreen('main-screen');
             } else {
                 showToast('msg_no_update', 'info');
             }

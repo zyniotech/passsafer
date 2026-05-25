@@ -3,7 +3,11 @@ const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
 const https = require('https');
+const http = require('http');
 const os = require('os');
+const net = require('net');
+
+const allowedPaths = new Set();
 
 const DATA_DIR = path.join(app.getPath('appData'), 'PassSafer', 'PassSaferData');
 const MASTER_HASH_FILE = path.join(DATA_DIR, '.mh');
@@ -67,6 +71,7 @@ app.whenReady().then(async () => {
     await ensureDataDir();
     createWindow();
     checkForUpdates();
+    startIpcServer();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -409,12 +414,35 @@ ipcMain.handle('change-password', async (event, { currentPassword, currentPin, n
     }
 });
 
+// Helper to resolve canonical paths to handle Windows 8.3 short name and symlink bypasses
+async function getCanonicalPath(filePath) {
+    try {
+        return await fs.realpath(filePath);
+    } catch {
+        try {
+            const parent = path.dirname(filePath);
+            const realParent = await fs.realpath(parent);
+            return path.join(realParent, path.basename(filePath));
+        } catch {
+            return path.resolve(filePath);
+        }
+    }
+}
+
 // Export Passwords
 ipcMain.handle('export-passwords', async (event, { password, filePath, data }) => {
     try {
         // Validate file extension
         if (!filePath.toLowerCase().endsWith('.pass')) {
             return { success: false, error: 'Invalid file type. Only .pass files are allowed.' };
+        }
+        const canonical = await getCanonicalPath(filePath);
+        const resolved = path.resolve(canonical).toLowerCase();
+        if (!allowedPaths.has(resolved)) {
+            return { success: false, error: 'Access to this file path is not authorized.' };
+        }
+        if (!(await isPathSafe(filePath))) {
+            return { success: false, error: 'Access to this location is not allowed.' };
         }
         // Verschlüssele Daten mit Export-Passwort und zufälligem Salt
         const encrypted = encryptExport(JSON.stringify(data), password);
@@ -431,6 +459,14 @@ ipcMain.handle('import-passwords', async (event, { password, filePath }) => {
         // Validate file extension
         if (!filePath.toLowerCase().endsWith('.pass')) {
             return { success: false, error: 'Invalid file type. Only .pass files are allowed.' };
+        }
+        const canonical = await getCanonicalPath(filePath);
+        const resolved = path.resolve(canonical).toLowerCase();
+        if (!allowedPaths.has(resolved)) {
+            return { success: false, error: 'Access to this file path is not authorized.' };
+        }
+        if (!(await isPathSafe(filePath))) {
+            return { success: false, error: 'Access to this location is not allowed.' };
         }
         const fileContent = await fs.readFile(filePath, 'utf8');
         const decrypted = decryptExport(fileContent, password);
@@ -474,14 +510,15 @@ ipcMain.handle('delete-account', async (event, { password, pin }) => {
 });
 
 // [HOCH-04] Path safety check - verbessert gegen Traversal und UNC
-function isPathSafe(filePath) {
-    const resolved = path.resolve(filePath);
+async function isPathSafe(filePath) {
+    const canonical = await getCanonicalPath(filePath);
+    const resolved = path.resolve(canonical);
 
     // Block UNC paths (network shares)
     if (resolved.startsWith('\\\\') || resolved.startsWith('//')) return false;
 
     // Block path traversal attempts
-    if (filePath.includes('..')) return false;
+    if (filePath.includes('..') || resolved.includes('..')) return false;
 
     const dangerous = [
         path.join(process.env.SystemRoot || 'C:\\Windows'),
@@ -490,14 +527,27 @@ function isPathSafe(filePath) {
         '/usr', '/etc', '/bin', '/sbin', '/var', '/sys', // Linux/Mac paths
         DATA_DIR // Protect own data directory
     ].map(p => p.toLowerCase());
+    
     const resolvedLower = resolved.toLowerCase();
-    return !dangerous.some(d => resolvedLower.startsWith(d));
+    
+    // Check if resolved path is inside or identical to any dangerous directory
+    for (const d of dangerous) {
+        if (resolvedLower === d || resolvedLower.startsWith(d + path.sep)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // Read File (for file attachment upload)
 ipcMain.handle('read-file', async (event, filePath) => {
     try {
-        if (!isPathSafe(filePath)) {
+        const canonical = await getCanonicalPath(filePath);
+        const resolved = path.resolve(canonical).toLowerCase();
+        if (!allowedPaths.has(resolved)) {
+            return { success: false, error: 'Access to this file path is not authorized.' };
+        }
+        if (!(await isPathSafe(filePath))) {
             return { success: false, error: 'Access to this location is not allowed.' };
         }
         const stats = await fs.stat(filePath);
@@ -518,7 +568,12 @@ ipcMain.handle('read-file', async (event, filePath) => {
 // Write File (for file attachment download)
 ipcMain.handle('write-file', async (event, { filePath, data }) => {
     try {
-        if (!isPathSafe(filePath)) {
+        const canonical = await getCanonicalPath(filePath);
+        const resolved = path.resolve(canonical).toLowerCase();
+        if (!allowedPaths.has(resolved)) {
+            return { success: false, error: 'Access to this file path is not authorized.' };
+        }
+        if (!(await isPathSafe(filePath))) {
             return { success: false, error: 'Access to this location is not allowed.' };
         }
         const buffer = Buffer.from(data, 'base64');
@@ -532,18 +587,48 @@ ipcMain.handle('write-file', async (event, { filePath, data }) => {
 // Show Save Dialog
 ipcMain.handle('show-save-dialog', async (event, options) => {
     const result = await dialog.showSaveDialog(mainWindow, options);
+    if (result && result.filePath) {
+        allowedPaths.add(path.resolve(result.filePath).toLowerCase());
+        try {
+            const canonical = await getCanonicalPath(result.filePath);
+            allowedPaths.add(path.resolve(canonical).toLowerCase());
+        } catch (e) {}
+    }
     return result;
 });
 
 // Show Open Dialog
 ipcMain.handle('show-open-dialog', async (event, options) => {
     const result = await dialog.showOpenDialog(mainWindow, options);
+    if (result && result.filePaths) {
+        for (const fp of result.filePaths) {
+            allowedPaths.add(path.resolve(fp).toLowerCase());
+            try {
+                const canonical = await getCanonicalPath(fp);
+                allowedPaths.add(path.resolve(canonical).toLowerCase());
+            } catch (e) {}
+        }
+    }
     return result;
 });
 
 // Open external URL (for links)
 ipcMain.handle('open-external', async (event, url) => {
-    await shell.openExternal(url);
+    try {
+        let targetUrl = url;
+        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) {
+            // No protocol, default to https
+            targetUrl = 'https://' + url;
+        }
+        const parsedUrl = new URL(targetUrl);
+        if (['http:', 'https:', 'mailto:'].includes(parsedUrl.protocol)) {
+            await shell.openExternal(targetUrl);
+        } else {
+            console.warn('Rejected dangerous protocol:', parsedUrl.protocol);
+        }
+    } catch (err) {
+        console.error('Invalid URL passed to open-external:', url, err);
+    }
 });
 
 // Licensing Helpers
@@ -644,7 +729,7 @@ function checkForUpdates() {
     try {
         const { autoUpdater } = require('electron-updater');
 
-        autoUpdater.autoDownload = true; // Automatically download in background
+        autoUpdater.autoDownload = false; // Disable auto download (Option A)
         autoUpdater.autoInstallOnAppQuit = true;
 
         autoUpdater.on('update-available', (info) => {
@@ -652,6 +737,14 @@ function checkForUpdates() {
                 mainWindow.webContents.send('update-available', {
                     version: info.version,
                     releaseNotes: info.releaseNotes
+                });
+            }
+        });
+
+        autoUpdater.on('download-progress', (progressObj) => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('update-progress', {
+                    percent: progressObj.percent
                 });
             }
         });
@@ -701,8 +794,112 @@ ipcMain.handle('manual-check-updates', async () => {
         }
         const { autoUpdater } = require('electron-updater');
         const result = await autoUpdater.checkForUpdates();
-        return { success: true, updateInfo: result.updateInfo };
+        if (!result || !result.updateInfo) {
+            return { success: true, updateAvailable: false };
+        }
+        const currentVersion = app.getVersion();
+        const latestVersion = result.updateInfo.version;
+        const updateAvailable = isNewerVersion(currentVersion, latestVersion);
+        return { success: true, updateAvailable, updateInfo: result.updateInfo };
     } catch (err) {
         return { success: false, error: err.message };
     }
 });
+
+// Helper for semver comparison
+function isNewerVersion(current, latest) {
+    const cParts = current.split('.').map(Number);
+    const lParts = latest.split('.').map(Number);
+    for (let i = 0; i < Math.max(cParts.length, lParts.length); i++) {
+        const c = cParts[i] || 0;
+        const l = lParts[i] || 0;
+        if (l > c) return true;
+        if (l < c) return false;
+    }
+    return false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// LOCAL IPC BRIDGE FOR BROWSER EXTENSION (NATIVE MESSAGING)
+// ═══════════════════════════════════════════════════════════════════════
+let ipcServer;
+const pendingExtensionRequests = new Map();
+const PIPE_PATH = process.platform === 'win32'
+    ? '\\\\.\\pipe\\passsafer-ipc'
+    : path.join(os.tmpdir(), 'passsafer-ipc.sock');
+
+function startIpcServer() {
+    // On non-Windows, clean up any existing socket file
+    if (process.platform !== 'win32') {
+        try {
+            require('fs').unlinkSync(PIPE_PATH);
+        } catch (e) {}
+    }
+
+    ipcServer = net.createServer((socket) => {
+        let dataBuffer = '';
+        socket.on('data', (chunk) => {
+            dataBuffer += chunk.toString();
+            if (dataBuffer.endsWith('\n')) {
+                try {
+                    const parsed = JSON.parse(dataBuffer.trim());
+                    const requestId = crypto.randomUUID();
+
+                    if (!mainWindow || mainWindow.isDestroyed()) {
+                        socket.write(JSON.stringify({ success: false, error: 'App window not available' }) + '\n');
+                        socket.end();
+                        return;
+                    }
+
+                    // 5-second timeout for request
+                    const timeout = setTimeout(() => {
+                        if (pendingExtensionRequests.has(requestId)) {
+                            pendingExtensionRequests.delete(requestId);
+                            socket.write(JSON.stringify({ success: false, error: 'Timeout waiting for desktop app' }) + '\n');
+                            socket.end();
+                        }
+                    }, 5000);
+
+                    pendingExtensionRequests.set(requestId, { socket, timeout });
+
+                    // Send request to renderer
+                    mainWindow.webContents.send('native-request', { id: requestId, request: parsed });
+                } catch (e) {
+                    socket.write(JSON.stringify({ success: false, error: 'Invalid JSON' }) + '\n');
+                    socket.end();
+                }
+                dataBuffer = '';
+            }
+        });
+
+        socket.on('error', (err) => {
+            console.error('[PassSafer] IPC Socket error:', err);
+        });
+    });
+
+    ipcServer.listen(PIPE_PATH, () => {
+        console.log(`[PassSafer] IPC Server listening on Windows Named Pipe: ${PIPE_PATH}`);
+    });
+
+    ipcServer.on('error', (err) => {
+        console.error('[PassSafer] IPC Server error:', err);
+    });
+}
+
+// Handle native response from renderer
+ipcMain.on('native-response', (event, { id, response }) => {
+    const pending = pendingExtensionRequests.get(id);
+    if (pending) {
+        clearTimeout(pending.timeout);
+        pendingExtensionRequests.delete(id);
+        pending.socket.write(JSON.stringify(response) + '\n');
+        pending.socket.end();
+    }
+});
+
+app.on('will-quit', () => {
+    if (ipcServer) {
+        ipcServer.close();
+    }
+});
+
