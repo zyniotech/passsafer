@@ -1,6 +1,6 @@
 {
   "name": "passsafer-electron",
-  "version": "1.7.0",
+  "version": "1.7.3",
   "description": "Secure Password Manager with Encryption",
   "main": "main.js",
   "scripts": {
@@ -55,14 +55,14 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "../logos/newlocked3.png"
+      "icon": "../logos/newlocked3.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "installerIcon": "../logos/newlocked.png",
-      "uninstallerIcon": "../logos/newlocked.png",
+      "installerIcon": "../logos/newlocked3.ico",
+      "uninstallerIcon": "../logos/newlocked3.ico",
       "deleteAppDataOnUninstall": true
     },
     "mac": {
