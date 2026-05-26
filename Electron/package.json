@@ -55,7 +55,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "../logos/newlocked.png"
+      "icon": "../logos/newlocked3.png"
     },
     "nsis": {
       "oneClick": false,
