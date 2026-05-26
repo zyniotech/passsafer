@@ -86,7 +86,7 @@
     },
     "linux": {
       "target": "AppImage",
-      "icon": "../logos/newlocked.png",
+      "icon": "../logos/newlocked3.png",
       "category": "Utility"
     }
   }
