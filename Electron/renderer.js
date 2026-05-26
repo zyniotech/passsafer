@@ -17,8 +17,9 @@ let licenseState = { valid: false, plan: 'none', features: { passwordGenerator: 
 // Initialize App
 document.addEventListener('DOMContentLoaded', async () => {
     // Initialize Language
+    const supportedLangs = ['en', 'de', 'es', 'fr', 'zh', 'hi', 'ar', 'pt', 'ru', 'ja', 'bn', 'ur'];
     const systemLang = navigator.language.split('-')[0];
-    currentLanguage = (systemLang === 'de') ? 'de' : 'en';
+    currentLanguage = supportedLangs.includes(systemLang) ? systemLang : 'en';
     await loadTranslations(currentLanguage);
 
     // Check license FIRST before showing any screen
@@ -237,6 +238,10 @@ function setupEventListeners() {
     document.getElementById('change-password-btn').addEventListener('click', () => showScreen('change-password-screen'));
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
     document.getElementById('check-updates-btn').addEventListener('click', handleManualUpdateCheck);
+    
+    // Security Audit
+    document.getElementById('security-audit-btn').addEventListener('click', openSecurityAudit);
+    document.getElementById('close-audit-btn').addEventListener('click', () => showScreen('settings-screen'));
     
     // License Listeners
     document.getElementById('activate-license-btn').addEventListener('click', handleActivateLicense);
@@ -1705,7 +1710,14 @@ async function checkLicenseStatus(forceSync = false) {
 
         const isOnline = navigator.onLine;
 
-        if (isOnline && (forceSync || isOfflineLimitExceeded)) {
+        // Only check online once per calendar month (and year)
+        const lastSyncDate = new Date(lastSync);
+        const currentDate = new Date(now);
+        const isSameMonth = lastSync && 
+                            lastSyncDate.getFullYear() === currentDate.getFullYear() && 
+                            lastSyncDate.getMonth() === currentDate.getMonth();
+
+        if (isOnline && !isSameMonth) {
             const deviceId = await window.api.getDeviceId();
             try {
                 const response = await fetch(`${API_BASE_URL}/api/validate-license`, {
@@ -1873,7 +1885,7 @@ async function handleActivateLicense() {
             }
         } else {
             if (data.error === 'device_limit_exceeded') {
-                errorEl.textContent = 'Device limit reached. Only 1 device is allowed for Free Trial, and up to 100 devices for Premium.';
+                errorEl.textContent = 'Device limit reached. Only 1 device is allowed for Free Trial, up to 50 devices for Premium, and up to 100 devices for Lifetime.';
             } else if (data.error === 'license_expired') {
                 errorEl.textContent = 'This license has expired. Please buy a new license.';
             } else if (data.error === 'license_inactive') {
@@ -1889,10 +1901,176 @@ async function handleActivateLicense() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// PASSWORT-SICHERHEITS-AUDIT
+// ═══════════════════════════════════════════════════════════════════════
+
+let auditResults = [];
+let auditLeakedSet = new Set();
+
+async function openSecurityAudit() {
+    showScreen('audit-screen');
+    
+    // Reset UI
+    document.getElementById('audit-scanning').style.display = 'block';
+    document.getElementById('audit-summary').style.display = 'none';
+    document.getElementById('audit-filters').style.display = 'none';
+    document.getElementById('audit-results').innerHTML = '';
+    document.getElementById('audit-progress').textContent = 'Analyzing password strength...';
+    
+    auditResults = [];
+    auditLeakedSet = new Set();
+
+    try {
+        // Step 1: Local audit (weak, reused)
+        const auditRes = await window.api.passwordAudit({ password: currentPassword });
+        if (!auditRes.success) {
+            showToast('Audit failed: ' + auditRes.error, 'error');
+            return;
+        }
+        auditResults = auditRes.results;
+
+        // Step 2: HaveIBeenPwned Leak Check (K-Anonymity)
+        document.getElementById('audit-progress').textContent = 'Checking for leaked passwords (0/' + auditResults.length + ')...';
+        
+        for (let i = 0; i < auditResults.length; i++) {
+            const entry = auditResults[i];
+            document.getElementById('audit-progress').textContent = `Checking leaks (${i + 1}/${auditResults.length})...`;
+
+            try {
+                // SHA-1 Hash im Browser berechnen
+                const pwd = passwords.find(p => p.app === entry.app && p.username === entry.username);
+                if (pwd && pwd.password) {
+                    const encoder = new TextEncoder();
+                    const data = encoder.encode(pwd.password);
+                    const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+                    const hashArray = Array.from(new Uint8Array(hashBuffer));
+                    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                    
+                    const pwnResult = await window.api.checkPwned({ passwordHash: hashHex });
+                    if (pwnResult.success && pwnResult.pwned) {
+                        entry.issues.push('leaked');
+                        entry.leakCount = pwnResult.count;
+                        auditLeakedSet.add(entry.app + ':' + entry.username);
+                    }
+                }
+            } catch (e) {
+                // Leak-Check fehlgeschlagen – nicht kritisch
+                console.warn('[Audit] Leak check failed for', entry.app, e.message);
+            }
+
+            // Rate-Limiting: 100ms Pause zwischen API-Anfragen
+            if (i < auditResults.length - 1) {
+                await new Promise(r => setTimeout(r, 100));
+            }
+        }
+
+        // Step 3: Ergebnisse anzeigen
+        document.getElementById('audit-scanning').style.display = 'none';
+        renderAuditSummary();
+        renderAuditResults('all');
+        setupAuditFilters();
+
+    } catch (err) {
+        showToast('Audit error: ' + err.message, 'error');
+    }
+}
+
+function renderAuditSummary() {
+    const total = auditResults.length;
+    const weak = auditResults.filter(r => r.issues.some(i => i.startsWith('weak'))).length;
+    const reused = auditResults.filter(r => r.issues.includes('reused')).length;
+    const leaked = auditResults.filter(r => r.issues.includes('leaked')).length;
+    const strong = auditResults.filter(r => r.issues.length === 0).length;
+
+    document.getElementById('audit-total').textContent = total;
+    document.getElementById('audit-strong').textContent = strong;
+    document.getElementById('audit-weak').textContent = weak;
+    document.getElementById('audit-reused').textContent = reused;
+    document.getElementById('audit-leaked').textContent = leaked;
+    
+    document.getElementById('audit-summary').style.display = 'grid';
+    document.getElementById('audit-filters').style.display = 'flex';
+}
+
+function setupAuditFilters() {
+    const filterBtns = document.querySelectorAll('.audit-filter-btn');
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderAuditResults(btn.dataset.filter);
+        });
+    });
+}
+
+function renderAuditResults(filter) {
+    const container = document.getElementById('audit-results');
+    container.innerHTML = '';
+
+    let filtered = auditResults;
+    if (filter === 'weak') {
+        filtered = auditResults.filter(r => r.issues.some(i => i.startsWith('weak')));
+    } else if (filter === 'reused') {
+        filtered = auditResults.filter(r => r.issues.includes('reused'));
+    } else if (filter === 'leaked') {
+        filtered = auditResults.filter(r => r.issues.includes('leaked'));
+    } else if (filter === 'strong') {
+        filtered = auditResults.filter(r => r.issues.length === 0);
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="empty-state"><p>${filter === 'strong' ? 'No strong passwords found.' : 'No issues found in this category. 🎉'}</p></div>`;
+        return;
+    }
+
+    filtered.forEach(result => {
+        const card = document.createElement('div');
+        card.className = 'audit-result-card';
+
+        const hasWeak = result.issues.some(i => i.startsWith('weak'));
+        const hasReused = result.issues.includes('reused');
+        const hasLeaked = result.issues.includes('leaked');
+        const isStrong = result.issues.length === 0;
+
+        // Stärke-Farbe
+        let strengthColor = '#ef4444'; // red
+        if (result.strength >= 70) strengthColor = '#22c55e'; // green
+        else if (result.strength >= 45) strengthColor = '#f59e0b'; // amber
+
+        let badges = '';
+        if (hasLeaked) badges += '<span class="audit-badge audit-badge-leaked">🔓 Leaked' + (result.leakCount ? ` (${result.leakCount.toLocaleString()}x)` : '') + '</span>';
+        if (hasWeak) badges += '<span class="audit-badge audit-badge-weak">⚠️ Weak</span>';
+        if (hasReused) badges += '<span class="audit-badge audit-badge-reused">🔄 Reused (' + result.reusedCount + ')</span>';
+        if (isStrong) badges += '<span class="audit-badge audit-badge-strong">✅ Strong</span>';
+
+        card.innerHTML = `
+            <div class="audit-result-header">
+                <div class="audit-result-app">${escapeHtml(result.app)}</div>
+                <div class="audit-result-user">${escapeHtml(result.username)}</div>
+            </div>
+            <div class="audit-result-body">
+                <div class="audit-strength-bar">
+                    <div class="audit-strength-fill" style="width: ${result.strength}%; background: ${strengthColor};"></div>
+                </div>
+                <span class="audit-strength-label" style="color: ${strengthColor};">${result.strength}%</span>
+            </div>
+            <div class="audit-badges">${badges}</div>
+        `;
+
+        container.appendChild(card);
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // NATIVE MESSAGING IPC HANDLER (FROM CHROME EXTENSION)
 // ═══════════════════════════════════════════════════════════════════════
 if (window.api && window.api.onNativeRequest) {
     window.api.onNativeRequest(async ({ id, request }) => {
+        if (request.action === "ping") {
+            window.api.sendNativeResponse({ id, response: { action: "ping", success: true, status: currentPassword ? "unlocked" : "locked" } });
+            return;
+        }
+
         // Only process requests if app is unlocked
         if (!currentPassword) {
             window.api.sendNativeResponse({ id, response: { action: (request.action || "").replace('request', 'response'), success: false, error: 'Locked' } });
@@ -1947,6 +2125,30 @@ if (window.api && window.api.onNativeRequest) {
             if (mainScreen && !mainScreen.classList.contains('hidden')) {
                 renderPasswordList();
                 showToast('Passwords synchronized from extension!', 'success');
+            }
+        }
+        else if (request.action === "request-vault") {
+            // Browser-Erweiterung fordert die verschlüsselte Datenbank an (für entkoppelten Cache)
+            try {
+                const loadResult = await window.api.loadPasswords({ password: currentPassword });
+                if (loadResult.success) {
+                    window.api.sendNativeResponse({
+                        id,
+                        response: {
+                            action: "vault-response",
+                            success: true,
+                            masterPassword: currentPassword,
+                            vault: {
+                                passwords: loadResult.data,
+                                folders: loadResult.folders
+                            }
+                        }
+                    });
+                } else {
+                    window.api.sendNativeResponse({ id, response: { action: "vault-response", success: false, error: loadResult.error } });
+                }
+            } catch (e) {
+                window.api.sendNativeResponse({ id, response: { action: "vault-response", success: false, error: e.message } });
             }
         }
     });

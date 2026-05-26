@@ -36,5 +36,9 @@ contextBridge.exposeInMainWorld('api', {
 
     // Native Messaging
     onNativeRequest: (callback) => ipcRenderer.on('native-request', (e, data) => callback(data)),
-    sendNativeResponse: (data) => ipcRenderer.send('native-response', data)
+    sendNativeResponse: (data) => ipcRenderer.send('native-response', data),
+
+    // Password Security Audit
+    passwordAudit: (data) => ipcRenderer.invoke('password-audit', data),
+    checkPwned: (data) => ipcRenderer.invoke('check-pwned', data)
 });

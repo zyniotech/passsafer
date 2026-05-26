@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
@@ -9,6 +9,20 @@ const net = require('net');
 
 const allowedPaths = new Set();
 
+// Restore original white locked.png from BrowserExtension icons during development
+if (!app.isPackaged) {
+    try {
+        const fsSync = require('fs');
+        const src = path.join(__dirname, '..', 'BrowserExtension', 'icons', 'icon48.png');
+        const dest = path.join(__dirname, '..', 'logos', 'locked.png');
+        if (fsSync.existsSync(src) && fsSync.existsSync(path.dirname(dest))) {
+            fsSync.copyFileSync(src, dest);
+        }
+    } catch (restoreErr) {
+        console.error('Failed to restore original locked.png:', restoreErr);
+    }
+}
+
 const DATA_DIR = path.join(app.getPath('appData'), 'PassSafer', 'PassSaferData');
 const MASTER_HASH_FILE = path.join(DATA_DIR, '.mh');
 const PIN_HASH_FILE = path.join(DATA_DIR, '.ph');
@@ -16,15 +30,25 @@ const PASSWORDS_FILE = path.join(DATA_DIR, '.pw');
 const LICENSE_FILE = path.join(DATA_DIR, '.lic');
 const DEVICE_ID_FILE = path.join(DATA_DIR, '.did');
 
+// In-Memory Master Key für Sync-Push an Browser-Erweiterung
+let inMemoryMasterPassword = null;
+
 let mainWindow;
+
+// --tray Support: Lautloser Start ohne sichtbares Fenster
+const isTrayStart = process.argv.includes('--tray');
 
 // Erstelle App-Fenster
 function createWindow() {
+    // Force dark theme native title bar/controls even on light OS themes
+    nativeTheme.themeSource = 'dark';
+
     mainWindow = new BrowserWindow({
         width: 1000,
         height: 700,
         minWidth: 900,
         minHeight: 650,
+        show: !isTrayStart, // Bei --tray nicht anzeigen
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -49,7 +73,7 @@ function createWindow() {
         }
     });
 
-    // Content Security Policy
+    // Content Security Policy – erweitert um HaveIBeenPwned API
     mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
         callback({
             responseHeaders: {
@@ -60,7 +84,7 @@ function createWindow() {
                     "style-src 'self' 'unsafe-inline'; " +
                     "img-src 'self' data:; " +
                     "font-src 'self'; " +
-                    "connect-src 'self' https://passsafer-api.zyniotech.workers.dev;"
+                    "connect-src 'self' https://passsafer-api.zyniotech.workers.dev https://api.pwnedpasswords.com;"
                 ]
             }
         });
@@ -142,22 +166,47 @@ class LoginAttemptTracker {
 
 const loginTracker = new LoginAttemptTracker();
 
-// Hash-Funktionen mit bcrypt-ähnlicher Sicherheit (PBKDF2)
+// ═══════════════════════════════════════════════════════════════════════
+// KRYPTOGRAPHIE: Scrypt-basiertes Hashing & Schlüsselableitung
+// Scrypt-Parameter: N=16384, r=8, p=1 (speicherintensiv, brute-force-resistent)
+// ═══════════════════════════════════════════════════════════════════════
+
+const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+
+// Hash-Funktionen mit Scrypt (Upgrade von PBKDF2)
 function hashPassword(password, salt) {
+    return crypto.scryptSync(password, salt, 64, SCRYPT_PARAMS).toString('hex');
+}
+
+// Legacy PBKDF2 Hash (nur für Migration)
+function hashPasswordPBKDF2(password, salt) {
     return crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
 }
 
 function verifyPassword(password, hash, salt) {
     const passwordHash = hashPassword(password, salt);
-    // Timing-safe comparison to prevent timing attacks
     const hashBuffer = Buffer.from(hash, 'hex');
     const inputBuffer = Buffer.from(passwordHash, 'hex');
     if (hashBuffer.length !== inputBuffer.length) return false;
     return crypto.timingSafeEqual(hashBuffer, inputBuffer);
 }
 
-// Verschlüsselungs-Funktionen
+// Legacy PBKDF2 Verifikation (für Migration)
+function verifyPasswordPBKDF2(password, hash, salt) {
+    const passwordHash = hashPasswordPBKDF2(password, salt);
+    const hashBuffer = Buffer.from(hash, 'hex');
+    const inputBuffer = Buffer.from(passwordHash, 'hex');
+    if (hashBuffer.length !== inputBuffer.length) return false;
+    return crypto.timingSafeEqual(hashBuffer, inputBuffer);
+}
+
+// Verschlüsselungs-Funktionen mit Scrypt
 function deriveKey(password, salt) {
+    return crypto.scryptSync(password, salt, 32, SCRYPT_PARAMS);
+}
+
+// Legacy PBKDF2 Key Derivation (für Migration)
+function deriveKeyPBKDF2(password, salt) {
     return crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
 }
 
@@ -188,6 +237,31 @@ function decrypt(encryptedData, password, salt) {
         return decrypted;
     } else {
         // Legacy CBC format: iv:encrypted (backward compatibility)
+        const parts = encryptedData.split(':');
+        const iv = Buffer.from(parts[0], 'hex');
+        const encrypted = parts[1];
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    }
+}
+
+// Decrypt mit Legacy PBKDF2-Schlüssel (für Migration)
+function decryptWithPBKDF2(encryptedData, password, salt) {
+    const key = deriveKeyPBKDF2(password, salt);
+
+    if (encryptedData.startsWith('v2:')) {
+        const parts = encryptedData.substring(3).split(':');
+        const iv = Buffer.from(parts[0], 'hex');
+        const authTag = Buffer.from(parts[1], 'hex');
+        const encrypted = parts[2];
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(authTag);
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    } else {
         const parts = encryptedData.split(':');
         const iv = Buffer.from(parts[0], 'hex');
         const encrypted = parts[1];
@@ -288,7 +362,7 @@ ipcMain.handle('register', async (event, { username, password, pin }) => {
     }
 });
 
-// Login - [HOCH-02] Globaler Brute-Force-Schutz (nicht username-basiert)
+// Login - [HOCH-02] Globaler Brute-Force-Schutz + Scrypt-Migration
 ipcMain.handle('login', async (event, { username, password, pin }) => {
     try {
         // Brute Force Schutz - global, nicht umgehbar durch Username-Wechsel
@@ -302,11 +376,60 @@ ipcMain.handle('login', async (event, { username, password, pin }) => {
         const masterData = JSON.parse(await fs.readFile(MASTER_HASH_FILE, 'utf8'));
         const pinData = JSON.parse(await fs.readFile(PIN_HASH_FILE, 'utf8'));
 
-        const masterValid = verifyPassword(password, masterData.hash, masterData.salt);
-        const pinValid = verifyPassword(pin, pinData.hash, pinData.salt);
+        let masterValid = verifyPassword(password, masterData.hash, masterData.salt);
+        let pinValid = verifyPassword(pin, pinData.hash, pinData.salt);
+        let needsMigration = false;
+
+        // Fallback: PBKDF2-Verifikation für nahtlose Migration
+        if (!masterValid) {
+            masterValid = verifyPasswordPBKDF2(password, masterData.hash, masterData.salt);
+            if (masterValid) needsMigration = true;
+        }
+        if (!pinValid) {
+            pinValid = verifyPasswordPBKDF2(pin, pinData.hash, pinData.salt);
+            if (pinValid && masterValid) needsMigration = true;
+        }
 
         if (masterValid && pinValid) {
             loginTracker.resetAttempts();
+            inMemoryMasterPassword = password;
+
+            // Transparente Scrypt-Migration bei erstem Login nach Update
+            if (needsMigration) {
+                try {
+                    console.log('[PassSafer] Migrating credentials from PBKDF2 to Scrypt...');
+
+                    // Master-Hash mit Scrypt neu berechnen
+                    const newMasterSalt = crypto.randomBytes(16).toString('hex');
+                    const newMasterHash = hashPassword(password, newMasterSalt);
+                    await fs.writeFile(MASTER_HASH_FILE, JSON.stringify({ hash: newMasterHash, salt: newMasterSalt, kdf: 'scrypt' }));
+                    await setSecurePermissions(MASTER_HASH_FILE);
+
+                    // PIN-Hash mit Scrypt neu berechnen
+                    const newPinSalt = crypto.randomBytes(16).toString('hex');
+                    const newPinHash = hashPassword(pin, newPinSalt);
+                    await fs.writeFile(PIN_HASH_FILE, JSON.stringify({ hash: newPinHash, salt: newPinSalt, kdf: 'scrypt' }));
+                    await setSecurePermissions(PIN_HASH_FILE);
+
+                    // Passwort-Datenbank neu verschlüsseln mit Scrypt-Key
+                    const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
+                    let decryptedData;
+                    try {
+                        decryptedData = decrypt(fileData.data, password, fileData.salt);
+                    } catch {
+                        decryptedData = decryptWithPBKDF2(fileData.data, password, fileData.salt);
+                    }
+                    const newStorageSalt = crypto.randomBytes(16).toString('hex');
+                    const reEncrypted = encrypt(decryptedData, password, newStorageSalt);
+                    await fs.writeFile(PASSWORDS_FILE, JSON.stringify({ salt: newStorageSalt, data: reEncrypted, kdf: 'scrypt' }));
+                    await setSecurePermissions(PASSWORDS_FILE);
+
+                    console.log('[PassSafer] Scrypt migration completed successfully.');
+                } catch (migrationErr) {
+                    console.error('[PassSafer] Scrypt migration failed (non-critical):', migrationErr.message);
+                }
+            }
+
             return { success: true };
         } else {
             return { success: false, error: 'Ungültige Zugangsdaten' };
@@ -316,11 +439,17 @@ ipcMain.handle('login', async (event, { username, password, pin }) => {
     }
 });
 
-// Lade Passwörter
+// Lade Passwörter (mit PBKDF2-Fallback für Migration)
 ipcMain.handle('load-passwords', async (event, { password }) => {
     try {
         const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
-        const decryptedData = decrypt(fileData.data, password, fileData.salt);
+        let decryptedData;
+        try {
+            decryptedData = decrypt(fileData.data, password, fileData.salt);
+        } catch {
+            // Fallback: PBKDF2-Entschlüsselung für Legacy-Datenbanken
+            decryptedData = decryptWithPBKDF2(fileData.data, password, fileData.salt);
+        }
         const parsedData = JSON.parse(decryptedData);
 
         return {
@@ -333,7 +462,7 @@ ipcMain.handle('load-passwords', async (event, { password }) => {
     }
 });
 
-// Speichere Passwörter
+// Speichere Passwörter + Sync-Push an Browser-Erweiterung
 ipcMain.handle('save-passwords', async (event, { password, passwords, folders }) => {
     try {
         const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
@@ -342,8 +471,11 @@ ipcMain.handle('save-passwords', async (event, { password, passwords, folders })
         const dataToSave = { passwords, folders };
         const encrypted = encrypt(JSON.stringify(dataToSave), password, salt);
 
-        await fs.writeFile(PASSWORDS_FILE, JSON.stringify({ salt, data: encrypted }));
+        await fs.writeFile(PASSWORDS_FILE, JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
         await setSecurePermissions(PASSWORDS_FILE);
+
+        // Sync-Push an verbundene Browser-Erweiterung (falls IPC-Server aktiv)
+        pushSyncToExtension(salt, encrypted);
 
         return { success: true };
     } catch (error) {
@@ -901,5 +1033,135 @@ app.on('will-quit', () => {
     if (ipcServer) {
         ipcServer.close();
     }
+    // Speicher bereinigen
+    inMemoryMasterPassword = null;
 });
 
+// ═══════════════════════════════════════════════════════════════════════
+// SYNC-PUSH AN BROWSER-ERWEITERUNG
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Sendet die aktualisierte verschlüsselte Datenbank über die Named Pipe
+ * an die verbundene Browser-Erweiterung, damit diese ihren Cache aktualisieren kann.
+ */
+function pushSyncToExtension(salt, encryptedData) {
+    try {
+        const client = net.connect(PIPE_PATH, () => {
+            const syncMessage = JSON.stringify({
+                action: 'sync-vault-push',
+                vault: { salt, data: encryptedData }
+            }) + '\n';
+            client.write(syncMessage);
+            client.end();
+        });
+        client.on('error', () => {
+            // Extension nicht verbunden – ignorieren (ist normal wenn kein native-host läuft)
+        });
+    } catch (e) {
+        // Stille Fehler – Sync-Push ist best-effort
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PASSWORT-SICHERHEITS-AUDIT (Weak, Reused, Leaked via HaveIBeenPwned)
+// ═══════════════════════════════════════════════════════════════════════
+
+ipcMain.handle('password-audit', async (event, { password }) => {
+    try {
+        // 1. Passwörter laden und entschlüsseln
+        const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
+        let decryptedData;
+        try {
+            decryptedData = decrypt(fileData.data, password, fileData.salt);
+        } catch {
+            decryptedData = decryptWithPBKDF2(fileData.data, password, fileData.salt);
+        }
+        const parsedData = JSON.parse(decryptedData);
+        const passwords = parsedData.passwords || parsedData.data || [];
+
+        if (passwords.length === 0) {
+            return { success: true, results: [] };
+        }
+
+        const results = [];
+
+        // 2. Analyse jedes Passworts
+        for (const entry of passwords) {
+            if (!entry.password) continue;
+
+            const issues = [];
+            const pwd = entry.password;
+
+            // Weak Check: < 12 Zeichen oder mangelnde Komplexität
+            if (pwd.length < 12) issues.push('weak_short');
+            if (!/[A-Z]/.test(pwd)) issues.push('weak_no_upper');
+            if (!/[a-z]/.test(pwd)) issues.push('weak_no_lower');
+            if (!/[0-9]/.test(pwd)) issues.push('weak_no_digit');
+            if (!/[^A-Za-z0-9]/.test(pwd)) issues.push('weak_no_special');
+
+            // Reused Check: identisches Passwort bei mehreren Einträgen
+            const reusedCount = passwords.filter(p => p.password === pwd && p !== entry).length;
+            if (reusedCount > 0) issues.push('reused');
+
+            // Passwort-Stärke-Score (0-100)
+            let strength = 0;
+            if (pwd.length >= 8) strength += 20;
+            if (pwd.length >= 12) strength += 15;
+            if (pwd.length >= 16) strength += 10;
+            if (/[A-Z]/.test(pwd)) strength += 10;
+            if (/[a-z]/.test(pwd)) strength += 10;
+            if (/[0-9]/.test(pwd)) strength += 10;
+            if (/[^A-Za-z0-9]/.test(pwd)) strength += 15;
+            // Unique chars bonus
+            const uniqueChars = new Set(pwd).size;
+            if (uniqueChars >= 8) strength += 10;
+            strength = Math.min(100, strength);
+
+            results.push({
+                app: entry.app,
+                username: entry.username || '',
+                issues,
+                strength,
+                reusedCount
+            });
+        }
+
+        return { success: true, results };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// HaveIBeenPwned K-Anonymity Leak-Check (SHA-1 Prefix-Abfrage)
+ipcMain.handle('check-pwned', async (event, { passwordHash }) => {
+    try {
+        const prefix = passwordHash.substring(0, 5).toUpperCase();
+        const suffix = passwordHash.substring(5).toUpperCase();
+
+        const response = await new Promise((resolve, reject) => {
+            const req = https.get(`https://api.pwnedpasswords.com/range/${prefix}`, {
+                headers: { 'User-Agent': 'PassSafer-PasswordManager' }
+            }, (res) => {
+                let data = '';
+                res.on('data', (chunk) => data += chunk);
+                res.on('end', () => resolve(data));
+            });
+            req.on('error', reject);
+            req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')); });
+        });
+
+        // Suche nach unserem Hash-Suffix in der Antwort
+        const lines = response.split('\n');
+        for (const line of lines) {
+            const [hashSuffix, count] = line.trim().split(':');
+            if (hashSuffix === suffix) {
+                return { success: true, pwned: true, count: parseInt(count, 10) };
+            }
+        }
+
+        return { success: true, pwned: false, count: 0 };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});

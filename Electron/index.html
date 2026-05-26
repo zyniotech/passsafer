@@ -87,7 +87,7 @@
                 <div style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(255, 140, 0, 0.08) 0%, rgba(255, 140, 0, 0.02) 100%); border: 1px solid rgba(255, 140, 0, 0.2); padding: 1rem 1.2rem; border-radius: 10px;">
                     <p style="font-size: 0.88rem; font-weight: 700; color: var(--color-accent); margin: 0 0 6px 0;">License Required</p>
                     <p style="font-size: 0.82rem; line-height: 1.55; color: var(--color-text-secondary); margin: 0;">
-                        Get a <strong style="color: var(--color-text);">free 6-month trial</strong> for single-device use, or upgrade to <strong style="color: var(--color-text);">Premium</strong> for 100 devices and the password generator.
+                        Get a <strong style="color: var(--color-text);">free 1-month trial</strong> for single-device use, or upgrade to <strong style="color: var(--color-text);">Premium</strong> for 50 devices (100 for Lifetime) and the password generator.
                     </p>
                 </div>
 
@@ -337,6 +337,10 @@
                     <img src="../logos/settings.png" alt="Settings" class="btn-icon">
                     <span data-i18n="settings_change_master">Change Master Password</span>
                 </button>
+                <button class="settings-option" id="security-audit-btn" style="border-left: 3px solid var(--color-accent);">
+                    <img src="../logos/settings.png" alt="Audit" class="btn-icon">
+                    <span>🛡️ Password Security Audit</span>
+                </button>
             </div>
 
             <div class="settings-section">
@@ -388,6 +392,16 @@
                     <select id="language-select" class="folder-select" style="width: auto; min-width: 150px;">
                         <option value="en">English</option>
                         <option value="de">Deutsch</option>
+                        <option value="es">Español</option>
+                        <option value="fr">Français</option>
+                        <option value="zh">中文 (Chinese)</option>
+                        <option value="hi">हिन्दी (Hindi)</option>
+                        <option value="ar">العربية (Arabic)</option>
+                        <option value="pt">Português</option>
+                        <option value="ru">Русский (Russian)</option>
+                        <option value="ja">日本語 (Japanese)</option>
+                        <option value="bn">বাংলা (Bengali)</option>
+                        <option value="ur">اردو (Urdu)</option>
                     </select>
                 </div>
                 <button class="settings-option" id="check-updates-btn">
@@ -409,6 +423,58 @@
                     <span data-i18n="settings_delete">Delete Account</span>
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Security Audit Screen -->
+    <div id="audit-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title">🛡️ Security Audit</h1>
+            <button class="icon-button close-btn" id="close-audit-btn">✕</button>
+        </header>
+        <div class="settings-content" style="padding-bottom: 30px;">
+            <!-- Summary Cards -->
+            <div id="audit-summary" class="audit-summary" style="display: none;">
+                <div class="audit-card audit-card-total">
+                    <div class="audit-card-number" id="audit-total">0</div>
+                    <div class="audit-card-label">Total Passwords</div>
+                </div>
+                <div class="audit-card audit-card-strong">
+                    <div class="audit-card-number" id="audit-strong">0</div>
+                    <div class="audit-card-label">Strong</div>
+                </div>
+                <div class="audit-card audit-card-weak">
+                    <div class="audit-card-number" id="audit-weak">0</div>
+                    <div class="audit-card-label">Weak</div>
+                </div>
+                <div class="audit-card audit-card-reused">
+                    <div class="audit-card-number" id="audit-reused">0</div>
+                    <div class="audit-card-label">Reused</div>
+                </div>
+                <div class="audit-card audit-card-leaked">
+                    <div class="audit-card-number" id="audit-leaked">0</div>
+                    <div class="audit-card-label">Leaked</div>
+                </div>
+            </div>
+
+            <!-- Scanning State -->
+            <div id="audit-scanning" style="text-align: center; padding: 60px 20px;">
+                <div class="audit-spinner"></div>
+                <p style="color: var(--color-text-muted); margin-top: 20px; font-size: 0.95rem;">Analyzing your passwords...</p>
+                <p id="audit-progress" style="color: var(--color-text-secondary); font-size: 0.85rem;">Preparing...</p>
+            </div>
+
+            <!-- Filter Tabs -->
+            <div id="audit-filters" class="audit-filters" style="display: none;">
+                <button class="audit-filter-btn active" data-filter="all">All</button>
+                <button class="audit-filter-btn" data-filter="weak">⚠️ Weak</button>
+                <button class="audit-filter-btn" data-filter="reused">🔄 Reused</button>
+                <button class="audit-filter-btn" data-filter="leaked">🔓 Leaked</button>
+                <button class="audit-filter-btn" data-filter="strong">✅ Strong</button>
+            </div>
+
+            <!-- Results List -->
+            <div id="audit-results" class="audit-results"></div>
         </div>
     </div>
 

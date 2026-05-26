@@ -1120,3 +1120,203 @@ textarea {
 .file-download-btn:hover img {
     filter: brightness(0) invert(1);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECURITY AUDIT DASHBOARD
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Summary Cards Grid */
+.audit-summary {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.audit-card {
+    background-color: var(--color-dark);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius);
+    padding: 18px 12px;
+    text-align: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.audit-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+}
+
+.audit-card-number {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.audit-card-label {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.audit-card-total .audit-card-number { color: var(--color-accent); }
+.audit-card-strong .audit-card-number { color: #22c55e; }
+.audit-card-weak .audit-card-number { color: #f59e0b; }
+.audit-card-reused .audit-card-number { color: #8b5cf6; }
+.audit-card-leaked .audit-card-number { color: #ef4444; }
+
+.audit-card-total { border-top: 3px solid var(--color-accent); }
+.audit-card-strong { border-top: 3px solid #22c55e; }
+.audit-card-weak { border-top: 3px solid #f59e0b; }
+.audit-card-reused { border-top: 3px solid #8b5cf6; }
+.audit-card-leaked { border-top: 3px solid #ef4444; }
+
+/* Scanning Spinner */
+.audit-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    margin: 0 auto;
+    animation: audit-spin 0.8s linear infinite;
+}
+
+@keyframes audit-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Filter Tabs */
+.audit-filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.audit-filter-btn {
+    background-color: var(--color-dark);
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    padding: 8px 16px;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.audit-filter-btn:hover {
+    border-color: var(--color-accent);
+    color: var(--color-text);
+}
+
+.audit-filter-btn.active {
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+    color: white;
+    font-weight: 600;
+}
+
+/* Result Cards */
+.audit-results {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.audit-result-card {
+    background-color: var(--color-dark);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius);
+    padding: 16px 20px;
+    transition: border-color 0.2s;
+}
+
+.audit-result-card:hover {
+    border-color: var(--color-accent);
+}
+
+.audit-result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.audit-result-app {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.audit-result-user {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+}
+
+.audit-result-body {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.audit-strength-bar {
+    flex: 1;
+    height: 6px;
+    background-color: var(--color-border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.audit-strength-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+.audit-strength-label {
+    font-size: 13px;
+    font-weight: 700;
+    min-width: 40px;
+    text-align: right;
+}
+
+/* Issue Badges */
+.audit-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.audit-badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.audit-badge-leaked {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.audit-badge-weak {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.audit-badge-reused {
+    background-color: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.audit-badge-strong {
+    background-color: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
