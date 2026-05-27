@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Tray, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
@@ -8,6 +8,20 @@ const os = require('os');
 const net = require('net');
 
 const allowedPaths = new Set();
+
+// Single-instance lock: prevent multiple background processes
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+    app.quit();
+} else {
+    app.on('second-instance', () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+}
 
 // Restore original white locked.png from BrowserExtension icons during development
 if (!app.isPackaged) {
@@ -56,7 +70,9 @@ function createWindow() {
         },
         frame: true,
         backgroundColor: '#2d2d2d',
-        icon: path.join(__dirname, '..', 'logos', 'locked.png')
+        icon: process.platform === 'win32'
+            ? path.join(__dirname, '..', 'logos', 'newlocked3.ico')
+            : path.join(__dirname, '..', 'logos', 'locked.png')
     });
 
     mainWindow.loadFile('index.html');
@@ -95,7 +111,43 @@ app.whenReady().then(async () => {
     await ensureDataDir();
     createWindow();
     checkForUpdates();
-    startIpcServer();
+
+    // Generate IPC auth token and write to file
+    const ipcAuthToken = crypto.randomBytes(32).toString('hex');
+    const IPC_TOKEN_FILE = path.join(DATA_DIR, '.ipc_token');
+    await fs.writeFile(IPC_TOKEN_FILE, ipcAuthToken, 'utf8');
+    try { await setSecurePermissions(IPC_TOKEN_FILE); } catch (e) {}
+
+    startIpcServer(ipcAuthToken);
+
+    // System Tray Icon (only in --tray background mode)
+    if (isTrayStart) {
+        const iconPath = path.join(__dirname, '..', 'logos', 'newlocked3.ico');
+        const tray = new Tray(iconPath);
+        tray.setToolTip('PassSafer – Background Service');
+        tray.setContextMenu(Menu.buildFromTemplate([
+            { label: 'Open PassSafer', click: () => { mainWindow.show(); mainWindow.focus(); } },
+            { type: 'separator' },
+            { label: 'Quit', click: () => app.quit() }
+        ]));
+        tray.on('double-click', () => { mainWindow.show(); mainWindow.focus(); });
+    }
+
+    // Idle auto-shutdown (only in --tray background mode)
+    if (isTrayStart) {
+        let lastIpcActivity = Date.now();
+        const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+        // Expose activity tracker for IPC server
+        global.touchIpcActivity = () => { lastIpcActivity = Date.now(); };
+
+        setInterval(() => {
+            if (!mainWindow.isVisible() && (Date.now() - lastIpcActivity > IDLE_TIMEOUT_MS)) {
+                console.log('[PassSafer] Idle timeout reached – shutting down background process.');
+                app.quit();
+            }
+        }, 60_000);
+    }
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -960,7 +1012,7 @@ const PIPE_PATH = process.platform === 'win32'
     ? '\\\\.\\pipe\\passsafer-ipc'
     : path.join(os.tmpdir(), 'passsafer-ipc.sock');
 
-function startIpcServer() {
+function startIpcServer(authToken) {
     // On non-Windows, clean up any existing socket file
     if (process.platform !== 'win32') {
         try {
@@ -975,6 +1027,17 @@ function startIpcServer() {
             if (dataBuffer.endsWith('\n')) {
                 try {
                     const parsed = JSON.parse(dataBuffer.trim());
+
+                    // Validate IPC auth token
+                    if (!parsed._token || parsed._token !== authToken) {
+                        socket.write(JSON.stringify({ success: false, error: 'Unauthorized' }) + '\n');
+                        socket.end();
+                        return;
+                    }
+                    delete parsed._token; // Don't forward token to renderer
+
+                    if (global.touchIpcActivity) global.touchIpcActivity();
+
                     const requestId = crypto.randomUUID();
 
                     if (!mainWindow || mainWindow.isDestroyed()) {
