@@ -5,7 +5,6 @@
   "description": "Your intelligent password manager – Autofill, Save & Generate.",
 
   "permissions": ["storage", "activeTab", "nativeMessaging", "alarms"],
-  "host_permissions": ["<all_urls>"],
 
   "background": {
     "service_worker": "background.js"
