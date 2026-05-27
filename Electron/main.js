@@ -916,6 +916,11 @@ function checkForUpdates() {
         autoUpdater.autoDownload = false; // Disable auto download (Option A)
         autoUpdater.autoInstallOnAppQuit = true;
 
+        // Bypass signature verification to prevent update failures/hangs on Windows
+        autoUpdater.verifyUpdateCodeSignature = async (publisherName, path) => {
+            return null;
+        };
+
         autoUpdater.on('update-available', (info) => {
             if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.webContents.send('update-available', {
@@ -941,6 +946,9 @@ function checkForUpdates() {
 
         autoUpdater.on('error', (err) => {
             console.error('Auto-update error:', err.message);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('update-error', err.message);
+            }
         });
 
         autoUpdater.checkForUpdates();
@@ -953,6 +961,9 @@ function checkForUpdates() {
 ipcMain.handle('download-update', async () => {
     try {
         const { autoUpdater } = require('electron-updater');
+        autoUpdater.verifyUpdateCodeSignature = async (publisherName, path) => {
+            return null;
+        };
         autoUpdater.downloadUpdate();
         return { success: true };
     } catch (err) {
@@ -977,6 +988,9 @@ ipcMain.handle('manual-check-updates', async () => {
             return { success: false, error: 'Auto-update is only available in packaged app.' };
         }
         const { autoUpdater } = require('electron-updater');
+        autoUpdater.verifyUpdateCodeSignature = async (publisherName, path) => {
+            return null;
+        };
         const result = await autoUpdater.checkForUpdates();
         if (!result || !result.updateInfo) {
             return { success: true, updateAvailable: false };

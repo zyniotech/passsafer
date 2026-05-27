@@ -63,6 +63,8 @@
     "msg_latest_version": "Du nutzt die aktuellste Version.",
     "msg_update_error": "Updates konnten nicht geprüft werden. Bitte später versuchen.",
     "msg_no_update": "Momentan sind keine Updates verfügbar.",
+    "msg_update_stalled": "Auto-Update hängt oder ist fehlgeschlagen. Bitte manuell aktualisieren.",
+    "btn_manual_download": "Manuell herunterladen",
     "msg_copied": "In die Zwischenablage kopiert!",
     "msg_saved": "Erfolgreich gespeichert!",
     "msg_error": "Ein Fehler ist aufgetreten.",

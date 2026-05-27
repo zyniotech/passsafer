@@ -63,6 +63,8 @@
     "msg_latest_version": "You are on the latest version.",
     "msg_update_error": "Could not check for updates. Please try again later.",
     "msg_no_update": "No updates available at the moment.",
+    "msg_update_stalled": "Auto-update stalled or failed. Please update manually.",
+    "btn_manual_download": "Manual Download",
     "msg_copied": "Copied to clipboard!",
     "msg_saved": "Saved successfully!",
     "msg_error": "An error occurred.",

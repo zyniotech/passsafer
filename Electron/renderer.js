@@ -12,7 +12,7 @@ let currentFiles = []; // Array of {data, name}
 let translations = {};
 let currentLanguage = 'en';
 const API_BASE_URL = 'https://passsafer-api.zyniotech.workers.dev';
-let licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false } };
+let licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false, securityAudit: false } };
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', async () => {
@@ -355,57 +355,130 @@ function setupEventListeners() {
 // Auto-Update Handler
 function setupAutoUpdate() {
     if (window.api && window.api.onUpdateAvailable) {
+        let downloadTimeout = null;
+
+        function resetDownloadTimeout() {
+            if (downloadTimeout) clearTimeout(downloadTimeout);
+            downloadTimeout = setTimeout(() => {
+                console.warn('Update download stalled. Triggering fallback.');
+                showUpdateFallback('stalled');
+            }, 20000); // 20 seconds timeout
+        }
+
+        function clearDownloadTimeout() {
+            if (downloadTimeout) {
+                clearTimeout(downloadTimeout);
+                downloadTimeout = null;
+            }
+        }
+
+        function showUpdateFallback(reason) {
+            clearDownloadTimeout();
+            const text = document.getElementById('update-text');
+            const downloadBtn = document.getElementById('update-download-btn');
+            const manualBtn = document.getElementById('update-manual-btn');
+            const installBtn = document.getElementById('update-install-btn');
+
+            let msg = t('msg_update_stalled');
+            if (msg === 'msg_update_stalled') {
+                msg = currentLanguage === 'de' ? 'Auto-Update hängt oder ist fehlgeschlagen. Bitte manuell aktualisieren.' : 'Auto-update stalled or failed. Please update manually.';
+            }
+            text.textContent = msg;
+
+            if (downloadBtn) downloadBtn.classList.add('hidden');
+            if (installBtn) installBtn.classList.add('hidden');
+            if (manualBtn) {
+                manualBtn.classList.remove('hidden');
+                let btnText = t('btn_manual_download');
+                if (btnText === 'btn_manual_download') {
+                    btnText = currentLanguage === 'de' ? 'Manuell herunterladen' : 'Manual Download';
+                }
+                manualBtn.textContent = btnText;
+            }
+        }
+
         window.api.onUpdateAvailable((info) => {
+            clearDownloadTimeout();
             const banner = document.getElementById('update-banner');
             const text = document.getElementById('update-text');
             const downloadBtn = document.getElementById('update-download-btn');
             const installBtn = document.getElementById('update-install-btn');
+            const manualBtn = document.getElementById('update-manual-btn');
             
             text.textContent = t('msg_new_version', { version: info.version }) || `Neue Version v${info.version} verfügbar!`;
             banner.classList.remove('hidden');
-            downloadBtn.classList.remove('hidden');
-            downloadBtn.disabled = false;
-            downloadBtn.textContent = 'Download';
-            installBtn.classList.add('hidden');
+            if (downloadBtn) {
+                downloadBtn.classList.remove('hidden');
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = 'Download';
+            }
+            if (installBtn) installBtn.classList.add('hidden');
+            if (manualBtn) manualBtn.classList.add('hidden');
         });
 
         if (window.api.onUpdateProgress) {
             window.api.onUpdateProgress((info) => {
+                resetDownloadTimeout();
                 const text = document.getElementById('update-text');
                 const downloadBtn = document.getElementById('update-download-btn');
+                const manualBtn = document.getElementById('update-manual-btn');
                 const percent = Math.round(info.percent || 0);
                 text.textContent = `Lade herunter... ${percent}%`;
-                downloadBtn.textContent = 'Downloading...';
-                downloadBtn.disabled = true;
+                if (downloadBtn) {
+                    downloadBtn.textContent = 'Downloading...';
+                    downloadBtn.disabled = true;
+                }
+                if (manualBtn) manualBtn.classList.add('hidden');
             });
         }
 
         window.api.onUpdateDownloaded(() => {
+            clearDownloadTimeout();
             const banner = document.getElementById('update-banner');
             const text = document.getElementById('update-text');
             const downloadBtn = document.getElementById('update-download-btn');
             const installBtn = document.getElementById('update-install-btn');
+            const manualBtn = document.getElementById('update-manual-btn');
             
             text.textContent = 'Update ist bereit! Bitte starte die App neu.';
             banner.classList.remove('hidden');
-            downloadBtn.classList.add('hidden');
-            installBtn.classList.remove('hidden');
-            installBtn.textContent = 'Jetzt neustarten';
+            if (downloadBtn) downloadBtn.classList.add('hidden');
+            if (installBtn) {
+                installBtn.classList.remove('hidden');
+                installBtn.textContent = 'Jetzt neustarten';
+            }
+            if (manualBtn) manualBtn.classList.add('hidden');
             showToast('Update erfolgreich geladen!', 'success');
         });
+
+        if (window.api.onUpdateError) {
+            window.api.onUpdateError((errMessage) => {
+                console.error('Update error received from main process:', errMessage);
+                showUpdateFallback('error');
+            });
+        }
 
         document.getElementById('update-download-btn').addEventListener('click', async (e) => {
             const btn = e.target;
             btn.disabled = true;
             btn.textContent = 'Downloading...';
+            resetDownloadTimeout();
             await window.api.downloadUpdate();
         });
+
+        const manualBtn = document.getElementById('update-manual-btn');
+        if (manualBtn) {
+            manualBtn.addEventListener('click', () => {
+                window.api.openExternal('https://zynio-tech.web.app/download');
+            });
+        }
 
         document.getElementById('update-install-btn').addEventListener('click', () => {
             window.api.installUpdate();
         });
 
         document.getElementById('update-dismiss-btn').addEventListener('click', () => {
+            clearDownloadTimeout();
             document.getElementById('update-banner').classList.add('hidden');
         });
     }
@@ -1498,6 +1571,7 @@ async function handleManualUpdateCheck() {
                 const text = document.getElementById('update-text');
                 const downloadBtn = document.getElementById('update-download-btn');
                 const installBtn = document.getElementById('update-install-btn');
+                const manualBtn = document.getElementById('update-manual-btn');
                 
                 text.textContent = msg;
                 banner.classList.remove('hidden');
@@ -1505,6 +1579,7 @@ async function handleManualUpdateCheck() {
                 downloadBtn.disabled = false;
                 downloadBtn.textContent = 'Download';
                 installBtn.classList.add('hidden');
+                if (manualBtn) manualBtn.classList.add('hidden');
                 
                 showScreen('main-screen');
             } else {
@@ -1698,7 +1773,7 @@ async function checkLicenseStatus(forceSync = false) {
     try {
         const loadRes = await window.api.loadLicense();
         if (!loadRes.success) {
-            licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false } };
+            licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false, securityAudit: false } };
             return false;
         }
 
@@ -1748,7 +1823,7 @@ async function checkLicenseStatus(forceSync = false) {
                         return true;
                     } else {
                         await window.api.deleteLicense();
-                        licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false } };
+                        licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false, securityAudit: false } };
                         updateSettingsLicenseUI();
                         return false;
                     }
@@ -1759,7 +1834,7 @@ async function checkLicenseStatus(forceSync = false) {
         }
 
         if (isOfflineLimitExceeded) {
-            licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false }, error: 'offline_sync_required' };
+            licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false, securityAudit: false }, error: 'offline_sync_required' };
             updateSettingsLicenseUI();
             return false;
         }
@@ -1767,16 +1842,20 @@ async function checkLicenseStatus(forceSync = false) {
         if (cached.expiryDate) {
             const expiry = new Date(cached.expiryDate);
             if (expiry.getTime() < now) {
-                licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false } };
+                licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false, securityAudit: false } };
                 updateSettingsLicenseUI();
                 return false;
             }
         }
 
+        const isPremiumPlan = cached.plan !== 'free' && cached.plan !== 'trial' && cached.plan !== 'none';
         licenseState = {
             valid: true,
             plan: cached.plan,
-            features: cached.features || { passwordGenerator: cached.plan === 'premium' },
+            features: cached.features || { 
+                passwordGenerator: isPremiumPlan,
+                securityAudit: isPremiumPlan
+            },
             expiryDate: cached.expiryDate,
             lastSync: cached.lastSync
         };
@@ -1908,6 +1987,10 @@ let auditResults = [];
 let auditLeakedSet = new Set();
 
 async function openSecurityAudit() {
+    if (!licenseState.valid || !licenseState.features || !licenseState.features.securityAudit) {
+        showToast('Password security audit requires a Premium license.', 'warning', true);
+        return;
+    }
     showScreen('audit-screen');
     
     // Reset UI

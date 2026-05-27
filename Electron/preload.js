@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('api', {
     onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (e, info) => callback(info)),
     onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', () => callback()),
     onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (e, info) => callback(info)),
+    onUpdateError: (callback) => ipcRenderer.on('update-error', (e, message) => callback(message)),
 
     // Licensing
     getDeviceId: () => ipcRenderer.invoke('get-device-id'),
