@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PassSafer</title>
+  <style>
+    :root {
+      --primary: #ff8c00;
+      --primary-hover: #ff9f26;
+      --danger: #e74c3c;
+      --danger-hover: #c0392b;
+      --success: #27ae60;
+      --bg: #2d2d2d;
+      --bg-surface: #1a1a1a;
+      --bg-input: #252525;
+      --text: #e0e0e0;
+      --text-muted: #888888;
+      --border: #404040;
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      width: 320px;
+      min-height: 200px;
+      padding: 16px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header img {
+      width: 28px;
+      height: 28px;
+    }
+
+    .header h1 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    /* Views */
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    /* Status Badges */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-badge.locked {
+      background: rgba(231, 76, 60, 0.15);
+      color: #e74c3c;
+    }
+
+    .status-badge.unlocked {
+      background: rgba(39, 174, 96, 0.15);
+      color: #27ae60;
+    }
+
+    .status-badge.no-vault {
+      background: rgba(150, 150, 170, 0.15);
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Info Rows */
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      font-size: 13px;
+    }
+
+    .info-row .label {
+      color: var(--text-muted);
+    }
+
+    /* Forms */
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .pin-input-wrapper {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .pin-digit {
+      width: 38px;
+      height: 44px;
+      text-align: center;
+      font-size: 20px;
+      font-weight: 600;
+      background: var(--bg-input);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .pin-digit:focus {
+      border-color: var(--primary);
+    }
+
+    .pin-digit.error {
+      border-color: var(--danger);
+      animation: shake 0.3s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
+    }
+
+    select {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+    }
+
+    select:focus {
+      border-color: var(--primary);
+    }
+
+    /* Buttons */
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: var(--danger-hover);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover:not(:disabled) {
+      background: var(--bg-surface);
+    }
+
+    .btn + .btn {
+      margin-top: 8px;
+    }
+
+    /* Messages */
+    .message {
+      padding: 8px 12px;
+      border-radius: var(--radius);
+      font-size: 12px;
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    .message.error {
+      background: rgba(231, 76, 60, 0.15);
+      color: #e74c3c;
+      display: block;
+    }
+
+    .message.success {
+      background: rgba(39, 174, 96, 0.15);
+      color: #27ae60;
+      display: block;
+    }
+
+    .message.info {
+      background: rgba(74, 144, 217, 0.15);
+      color: var(--primary);
+      display: block;
+    }
+
+    /* Description Texts */
+    .description {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    /* Divider */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 14px 0;
+    }
+
+    /* Settings */
+    .settings-section {
+      margin-top: 12px;
+    }
+
+    .settings-section h3 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    /* Sync Info */
+    .sync-info {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="icons/icon48.png" alt="PassSafer" />
+    <h1>PassSafer</h1>
+  </div>
+
+  <!-- View: No Vault Available -->
+  <div id="view-no-vault" class="view">
+    <span class="status-badge no-vault">
+      <span class="status-dot"></span>
+      Not Configured
+    </span>
+    <p class="description" style="margin-top: 14px;">
+      Please open the PassSafer desktop app to synchronize the vault with the browser extension.
+    </p>
+    <div id="msg-no-vault" class="message"></div>
+    <button id="btn-connect" class="btn btn-primary">Connect to Desktop App</button>
+  </div>
+
+  <!-- View: Set Up PIN -->
+  <div id="view-setup-pin" class="view">
+    <p class="description">
+      Set up a 6-digit PIN to unlock the vault even without the desktop app.
+    </p>
+    <div id="msg-setup" class="message"></div>
+    <div class="form-group">
+      <label>Set PIN</label>
+      <div class="pin-input-wrapper" id="pin-setup-inputs">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Confirm PIN</label>
+      <div class="pin-input-wrapper" id="pin-confirm-inputs">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Locking Behavior</label>
+      <select id="setup-lock-policy">
+        <option value="browser_restart">Lock on browser restart (recommended)</option>
+        <option value="timeout_15m">Lock after 15 minutes of inactivity</option>
+        <option value="timeout_1h">Lock after 1 hour of inactivity</option>
+        <option value="persistent">Never lock automatically</option>
+      </select>
+    </div>
+    <button id="btn-save-pin" class="btn btn-primary" disabled>Save PIN</button>
+  </div>
+
+  <!-- View: Enter PIN (Locked) -->
+  <div id="view-locked" class="view">
+    <span class="status-badge locked">
+      <span class="status-dot"></span>
+      Locked
+    </span>
+    <p class="description" style="margin-top: 14px;">
+      Enter your 6-digit PIN to unlock the vault.
+    </p>
+    <div id="msg-unlock" class="message"></div>
+    <div class="form-group">
+      <div class="pin-input-wrapper" id="pin-unlock-inputs">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+      </div>
+    </div>
+    <button id="btn-unlock" class="btn btn-primary" disabled>Unlock</button>
+  </div>
+
+  <!-- View: Unlocked -->
+  <div id="view-unlocked" class="view">
+    <span class="status-badge unlocked">
+      <span class="status-dot"></span>
+      Unlocked
+    </span>
+    <div style="margin-top: 14px;">
+      <div class="info-row">
+        <span class="label">Vault Entries</span>
+        <span id="vault-count">–</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Last Synchronized</span>
+        <span id="last-sync">–</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Desktop App</span>
+        <span id="app-status">–</span>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <div class="settings-section">
+      <h3>Settings</h3>
+      <div class="form-group">
+        <label>Locking Behavior</label>
+        <select id="lock-policy-select">
+          <option value="browser_restart">Lock on browser restart</option>
+          <option value="timeout_15m">Lock after 15 minutes of inactivity</option>
+          <option value="timeout_1h">Lock after 1 hour of inactivity</option>
+          <option value="persistent">Never lock automatically</option>
+        </select>
+      </div>
+    </div>
+
+    <button id="btn-sync" class="btn btn-ghost">Sync Now</button>
+    <button id="btn-lock" class="btn btn-danger">Lock Vault</button>
+    <button id="btn-reset" class="btn btn-ghost" style="margin-top: 16px; font-size: 11px; color: var(--danger);">Reset PIN & Cache</button>
+  </div>
+
+  <div class="sync-info" id="sync-footer"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
