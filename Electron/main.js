@@ -43,6 +43,10 @@ const PIN_HASH_FILE = path.join(DATA_DIR, '.ph');
 const PASSWORDS_FILE = path.join(DATA_DIR, '.pw');
 const LICENSE_FILE = path.join(DATA_DIR, '.lic');
 const DEVICE_ID_FILE = path.join(DATA_DIR, '.did');
+const IDS_FILE = path.join(DATA_DIR, '.id');
+const DOCUMENTS_FILE = path.join(DATA_DIR, '.doc');
+const CARDS_FILE = path.join(DATA_DIR, '.card');
+const REPORTS_FILE = path.join(DATA_DIR, '.report');
 
 // In-Memory Master Key für Sync-Push an Browser-Erweiterung
 let inMemoryMasterPassword = null;
@@ -58,8 +62,8 @@ function createWindow() {
     nativeTheme.themeSource = 'dark';
 
     mainWindow = new BrowserWindow({
-        width: 1000,
-        height: 700,
+        width: 1300,
+        height: 800,
         minWidth: 900,
         minHeight: 650,
         show: !isTrayStart, // Bei --tray nicht anzeigen
@@ -70,9 +74,7 @@ function createWindow() {
         },
         frame: true,
         backgroundColor: '#2d2d2d',
-        icon: process.platform === 'win32'
-            ? path.join(__dirname, '..', 'logos', 'newlocked3.ico')
-            : path.join(__dirname, '..', 'logos', 'locked.png')
+        icon: path.join(__dirname, '..', 'logos', 'logo_win_linx.ico')
     });
 
     mainWindow.loadFile('index.html');
@@ -122,7 +124,7 @@ app.whenReady().then(async () => {
 
     // System Tray Icon (only in --tray background mode)
     if (isTrayStart) {
-        const iconPath = path.join(__dirname, '..', 'logos', 'newlocked3.ico');
+        const iconPath = path.join(__dirname, '..', 'logos', 'logo_win_linx.ico');
         const tray = new Tray(iconPath);
         tray.setToolTip('PassSafer – Background Service');
         tray.setContextMenu(Menu.buildFromTemplate([
@@ -507,20 +509,21 @@ ipcMain.handle('load-passwords', async (event, { password }) => {
         return {
             success: true,
             data: parsedData.passwords || parsedData.data || [],
-            folders: parsedData.folders || []
+            folders: parsedData.folders || [],
+            trash: parsedData.trash || []
         };
     } catch (error) {
-        return { success: false, error: error.message, data: [], folders: [] };
+        return { success: false, error: error.message, data: [], folders: [], trash: [] };
     }
 });
 
 // Speichere Passwörter + Sync-Push an Browser-Erweiterung
-ipcMain.handle('save-passwords', async (event, { password, passwords, folders }) => {
+ipcMain.handle('save-passwords', async (event, { password, passwords, folders, trash }) => {
     try {
         const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
         const salt = fileData.salt;
 
-        const dataToSave = { passwords, folders };
+        const dataToSave = { passwords, folders, trash };
         const encrypted = encrypt(JSON.stringify(dataToSave), password, salt);
 
         await fs.writeFile(PASSWORDS_FILE, JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
@@ -679,6 +682,10 @@ ipcMain.handle('delete-account', async (event, { password, pin }) => {
         await fs.unlink(MASTER_HASH_FILE);
         await fs.unlink(PIN_HASH_FILE);
         await fs.unlink(PASSWORDS_FILE);
+        try { await fs.unlink(IDS_FILE); } catch (e) {}
+        try { await fs.unlink(DOCUMENTS_FILE); } catch (e) {}
+        try { await fs.unlink(CARDS_FILE); } catch (e) {}
+        try { await fs.unlink(REPORTS_FILE); } catch (e) {}
 
         // Optional: Lösche Data Directory wenn leer
         try {
@@ -894,6 +901,79 @@ ipcMain.handle('save-license', async (event, licenseData) => {
 ipcMain.handle('delete-license', async () => {
     try {
         await fs.unlink(LICENSE_FILE);
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// Load encrypted IDs
+ipcMain.handle('load-ids', async (event, { password }) => {
+    try {
+        let fileData;
+        try {
+            fileData = JSON.parse(await fs.readFile(IDS_FILE, 'utf8'));
+        } catch {
+            return { success: true, data: [] }; // File doesn't exist yet
+        }
+        let decryptedData = decrypt(fileData.data, password, fileData.salt);
+        const parsedData = JSON.parse(decryptedData);
+        return { success: true, data: parsedData || [] };
+    } catch (error) {
+        return { success: false, error: error.message, data: [] };
+    }
+});
+
+// Save encrypted IDs
+ipcMain.handle('save-ids', async (event, { password, ids }) => {
+    try {
+        const salt = crypto.randomBytes(16).toString('hex');
+        const encrypted = encrypt(JSON.stringify(ids), password, salt);
+        await fs.writeFile(IDS_FILE, JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
+        await setSecurePermissions(IDS_FILE);
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// Load encrypted Documents
+ipcMain.handle('load-documents', async (event, { password }) => {
+    try {
+        let fileData;
+        try {
+            fileData = JSON.parse(await fs.readFile(DOCUMENTS_FILE, 'utf8'));
+        } catch {
+            return { success: true, data: [] }; // File doesn't exist yet
+        }
+        let decryptedData = decrypt(fileData.data, password, fileData.salt);
+        const parsedData = JSON.parse(decryptedData);
+        return { success: true, data: parsedData || [] };
+    } catch (error) {
+        return { success: false, error: error.message, data: [] };
+    }
+});
+
+// Save encrypted Documents
+ipcMain.handle('save-documents', async (event, { password, documents }) => {
+    try {
+        // [HOCH-06] 100MB File size limit check in main process (for documents and attachments)
+        const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+        for (const doc of documents) {
+            if (doc.files) {
+                for (const f of doc.files) {
+                    const approxSize = f.data ? Math.round((f.data.length * 3) / 4) : 0;
+                    if (approxSize > MAX_FILE_SIZE) {
+                        return { success: false, error: `File too large. Maximum size is 100 MB.` };
+                    }
+                }
+            }
+        }
+
+        const salt = crypto.randomBytes(16).toString('hex');
+        const encrypted = encrypt(JSON.stringify(documents), password, salt);
+        await fs.writeFile(DOCUMENTS_FILE, JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
+        await setSecurePermissions(DOCUMENTS_FILE);
         return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
@@ -1238,6 +1318,66 @@ ipcMain.handle('check-pwned', async (event, { passwordHash }) => {
         }
 
         return { success: true, pwned: false, count: 0 };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// Load encrypted Cards
+ipcMain.handle('load-cards', async (event, { password }) => {
+    try {
+        let fileData;
+        try {
+            fileData = JSON.parse(await fs.readFile(CARDS_FILE, 'utf8'));
+        } catch (e) {
+            return { success: true, data: [] };
+        }
+        let decryptedData = decrypt(fileData.data, password, fileData.salt);
+        const parsedData = JSON.parse(decryptedData);
+        return { success: true, data: parsedData || [] };
+    } catch (error) {
+        return { success: false, error: error.message, data: [] };
+    }
+});
+
+// Save encrypted Cards
+ipcMain.handle('save-cards', async (event, { password, cards }) => {
+    try {
+        const salt = crypto.randomBytes(16).toString('hex');
+        const encrypted = encrypt(JSON.stringify(cards), password, salt);
+        await fs.writeFile(CARDS_FILE, JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
+        await setSecurePermissions(CARDS_FILE);
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// Load encrypted Reports
+ipcMain.handle('load-reports', async (event, { password }) => {
+    try {
+        let fileData;
+        try {
+            fileData = JSON.parse(await fs.readFile(REPORTS_FILE, 'utf8'));
+        } catch (e) {
+            return { success: true, data: [] };
+        }
+        let decryptedData = decrypt(fileData.data, password, fileData.salt);
+        const parsedData = JSON.parse(decryptedData);
+        return { success: true, data: parsedData || [] };
+    } catch (error) {
+        return { success: false, error: error.message, data: [] };
+    }
+});
+
+// Save encrypted Reports
+ipcMain.handle('save-reports', async (event, { password, reports }) => {
+    try {
+        const salt = crypto.randomBytes(16).toString('hex');
+        const encrypted = encrypt(JSON.stringify(reports), password, salt);
+        await fs.writeFile(REPORTS_FILE, JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
+        await setSecurePermissions(REPORTS_FILE);
+        return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
     }

@@ -3,6 +3,12 @@ let currentUser = null;
 let currentPassword = null;
 let passwords = [];
 let folders = [];
+let trash = [];
+let ids = [];
+let documents = [];
+let cards = [];
+let reports = [];
+let currentActiveReport = null;
 let currentFolder = null;
 let currentEditIndex = null;
 let currentEditFolder = null;
@@ -17,7 +23,7 @@ let licenseState = { valid: false, plan: 'none', features: { passwordGenerator: 
 // Initialize App
 document.addEventListener('DOMContentLoaded', async () => {
     // Initialize Language
-    const supportedLangs = ['en', 'de', 'es', 'fr', 'zh', 'hi', 'ar', 'pt', 'ru', 'ja', 'bn', 'ur'];
+    const supportedLangs = ['en', 'de', 'es', 'fr'];
     const systemLang = navigator.language.split('-')[0];
     currentLanguage = supportedLangs.includes(systemLang) ? systemLang : 'en';
     await loadTranslations(currentLanguage);
@@ -50,12 +56,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (langSelect) langSelect.value = currentLanguage;
 });
 
+// Screens where sidebar should be hidden (unauthenticated)
+const SIDEBAR_HIDDEN_SCREENS = ['login-screen', 'register-screen', 'license-screen'];
+
+// Map of nav items to screen IDs
+const NAV_SCREEN_MAP = {
+    'dashboard': 'dashboard-screen',
+    'passwords': 'main-screen',
+    'trash': 'trash-screen',
+    'watchtower': 'audit-screen',
+    'ids': 'ids-screen',
+    'documents': 'documents-screen',
+    'cards': 'cards-screen',
+    'reports': 'reports-screen',
+    'import': 'import-screen',
+    'export': 'export-screen',
+    'csv-import': 'csv-import-screen',
+    'settings': 'settings-screen'
+};
+
 // Screen Management
 function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.add('hidden');
     });
     document.getElementById(screenId).classList.remove('hidden');
+
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+        if (SIDEBAR_HIDDEN_SCREENS.includes(screenId)) {
+            sidebar.classList.add('hidden');
+        } else {
+            sidebar.classList.remove('hidden');
+        }
+    }
 }
 
 // Toast Notifications
@@ -236,6 +270,7 @@ function setupEventListeners() {
     document.getElementById('close-settings-btn').addEventListener('click', () => showMainScreen());
     document.getElementById('change-pin-btn').addEventListener('click', () => showScreen('change-pin-screen'));
     document.getElementById('change-password-btn').addEventListener('click', () => showScreen('change-password-screen'));
+    document.getElementById('generate-report-btn').addEventListener('click', generateManualReport);
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
     document.getElementById('check-updates-btn').addEventListener('click', handleManualUpdateCheck);
     
@@ -350,6 +385,9 @@ function setupEventListeners() {
 
     // Auto-Update Events
     setupAutoUpdate();
+
+    // Setup new screens & features listeners
+    setupNewEventListeners();
 }
 
 // Auto-Update Handler
@@ -362,7 +400,7 @@ function setupAutoUpdate() {
             downloadTimeout = setTimeout(() => {
                 console.warn('Update download stalled. Triggering fallback.');
                 showUpdateFallback('stalled');
-            }, 20000); // 20 seconds timeout
+            }, 60000); // 60 seconds timeout
         }
 
         function clearDownloadTimeout() {
@@ -423,7 +461,7 @@ function setupAutoUpdate() {
                 const downloadBtn = document.getElementById('update-download-btn');
                 const manualBtn = document.getElementById('update-manual-btn');
                 const percent = Math.round(info.percent || 0);
-                text.textContent = `Lade herunter... ${percent}%`;
+                text.textContent = t('msg_downloading', { percent });
                 if (downloadBtn) {
                     downloadBtn.textContent = 'Downloading...';
                     downloadBtn.disabled = true;
@@ -440,15 +478,15 @@ function setupAutoUpdate() {
             const installBtn = document.getElementById('update-install-btn');
             const manualBtn = document.getElementById('update-manual-btn');
             
-            text.textContent = 'Update ist bereit! Bitte starte die App neu.';
+            text.textContent = t('msg_update_ready');
             banner.classList.remove('hidden');
             if (downloadBtn) downloadBtn.classList.add('hidden');
             if (installBtn) {
                 installBtn.classList.remove('hidden');
-                installBtn.textContent = 'Jetzt neustarten';
+                installBtn.textContent = t('msg_update_install');
             }
             if (manualBtn) manualBtn.classList.add('hidden');
-            showToast('Update erfolgreich geladen!', 'success');
+            showToast(t('msg_update_toast_success'), 'success', true);
         });
 
         if (window.api.onUpdateError) {
@@ -511,7 +549,28 @@ async function handleLogin() {
         if (loadResult.success) {
             passwords = loadResult.data;
             folders = loadResult.folders;
-            showMainScreen();
+            trash = loadResult.trash || [];
+            
+            // Load IDs and Documents
+            const idsResult = await window.api.loadIds({ password });
+            if (idsResult.success) ids = idsResult.data || [];
+            const docsResult = await window.api.loadDocuments({ password });
+            if (docsResult.success) documents = docsResult.data || [];
+            const cardsResult = await window.api.loadCards({ password });
+            if (cardsResult.success) cards = cardsResult.data || [];
+            const reportsResult = await window.api.loadReports({ password });
+            if (reportsResult.success) {
+                reports = reportsResult.data || [];
+                if (!localStorage.getItem('reports_cleaned_v2')) {
+                    reports = [];
+                    await window.api.saveReports({ password, reports });
+                    localStorage.setItem('reports_cleaned_v2', 'true');
+                }
+            }
+            // Purge expired items from trash on startup
+            purgeExpiredTrash();
+
+            showDashboard();
             showToast('Login successful!', 'success');
             resetLogoutTimer();
         } else {
@@ -578,6 +637,7 @@ function showMainScreen() {
     updateHeaderTitle();
     updateControls();
     renderPasswordList();
+    updateSidebarActive('passwords');
 }
 
 function updateHeaderTitle() {
@@ -670,6 +730,7 @@ function renderPasswordList() {
 function createPasswordCard(pwd, index) {
     const card = document.createElement('div');
     card.className = 'password-card';
+    card.setAttribute('draggable', 'true');
     card.innerHTML = `
         <span class="password-card-name">${escapeHtml(pwd.app)}</span>
         <span class="password-card-arrow">
@@ -677,6 +738,13 @@ function createPasswordCard(pwd, index) {
         </span>
     `;
     card.addEventListener('click', () => showPasswordDetail(index));
+    card.addEventListener('dragstart', (e) => {
+        card.classList.add('dragging');
+        e.dataTransfer.setData('text/plain', index.toString());
+    });
+    card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+    });
     return card;
 }
 
@@ -684,6 +752,7 @@ function createFolderCard(folder) {
     const passwordCount = passwords.filter(p => p.folderId === folder.id).length;
     const card = document.createElement('div');
     card.className = 'folder-card';
+    card.setAttribute('data-drop-target', 'true');
     card.innerHTML = `
         <img src="../logos/folder.png" alt="Folder" class="folder-card-icon">
         <span class="folder-card-name">${escapeHtml(folder.name)}</span>
@@ -699,6 +768,32 @@ function createFolderCard(folder) {
             showEditFolder(folder);
         } else {
             openFolder(folder.id);
+        }
+    });
+
+    card.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        card.classList.add('drag-over');
+    });
+
+    card.addEventListener('dragleave', () => {
+        card.classList.remove('drag-over');
+    });
+
+    card.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        card.classList.remove('drag-over');
+        const passwordIndex = parseInt(e.dataTransfer.getData('text/plain'));
+        if (!isNaN(passwordIndex) && passwords[passwordIndex]) {
+            const pwd = passwords[passwordIndex];
+            pwd.folderId = folder.id;
+            const result = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+            if (result.success) {
+                showToast(t('msg_moved_to_folder', { app: pwd.app, folder: folder.name }), 'success', true);
+                renderPasswordList();
+            } else {
+                showToast('msg_error', 'error');
+            }
         }
     });
 
@@ -883,7 +978,8 @@ async function savePasswordFolder() {
     const result = await window.api.savePasswords({
         password: currentPassword,
         passwords,
-        folders
+        folders,
+        trash
     });
 
     if (result.success) {
@@ -902,20 +998,7 @@ async function deleteCurrentPassword() {
         'modal_delete_pwd_title',
         'modal_delete_pwd_desc',
         async () => {
-            passwords.splice(currentEditIndex, 1);
-
-            const result = await window.api.savePasswords({
-                password: currentPassword,
-                passwords,
-                folders
-            });
-
-            if (result.success) {
-                showToast('Password deleted!', 'success');
-                showMainScreen();
-            } else {
-                showToast('Error deleting!', 'error');
-            }
+            await moveToTrash(currentEditIndex);
         }
     );
 }
@@ -991,7 +1074,8 @@ async function handleSavePassword() {
     const result = await window.api.savePasswords({
         password: currentPassword,
         passwords,
-        folders
+        folders,
+        trash
     });
 
     if (result.success) {
@@ -1048,7 +1132,8 @@ async function handleSaveFolder() {
     const result = await window.api.savePasswords({
         password: currentPassword,
         passwords,
-        folders
+        folders,
+        trash
     });
 
     if (result.success) {
@@ -1077,7 +1162,8 @@ async function handleDeleteFolder() {
             const result = await window.api.savePasswords({
                 password: currentPassword,
                 passwords,
-                folders
+                folders,
+                trash
             });
 
             if (result.success) {
@@ -1221,9 +1307,21 @@ function performLogout() {
     currentPassword = null;
     passwords = [];
     folders = [];
+    trash = [];
+    ids = [];
+    documents = [];
+    cards = [];
+    reports = [];
+    currentActiveReport = null;
     currentFolder = null;
 
-    showToast('Successfully logged out!', 'success');
+    // Clear input fields
+    const loginPwd = document.getElementById('login-password');
+    if (loginPwd) loginPwd.value = '';
+    const loginPin = document.getElementById('login-pin');
+    if (loginPin) loginPin.value = '';
+
+    showToast('msg_logout_success', 'success');
     setTimeout(() => showScreen('login-screen'), 1000);
 }
 
@@ -1554,6 +1652,7 @@ function showSettings() {
     updateSettingsLicenseUI();
     checkLicenseStatus(true).catch(err => console.error('Silent license sync failed:', err));
     showScreen('settings-screen');
+    updateSidebarActive('settings');
 }
 
 // Manual Update Check
@@ -1992,6 +2091,7 @@ async function openSecurityAudit() {
         return;
     }
     showScreen('audit-screen');
+    updateSidebarActive('watchtower');
     
     // Reset UI
     document.getElementById('audit-scanning').style.display = 'block';
@@ -2235,4 +2335,1392 @@ if (window.api && window.api.onNativeRequest) {
             }
         }
     });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// NEW SCREEN LOGIC & EVENT LISTENERS
+// ═══════════════════════════════════════════════════════════════════════
+
+let currentEditIdIndex = null;
+let currentEditDocIndex = null;
+let currentEditCardIndex = null;
+
+function setupNewEventListeners() {
+    // Sidebar Navigation
+    setupSidebarNavigation();
+
+    // Drag & Drop sidebar listeners
+    setupDragAndDrop();
+
+    // Dashboard Quick Actions
+    document.getElementById('qa-add-password').addEventListener('click', showAddPassword);
+    document.getElementById('qa-watchtower').addEventListener('click', openSecurityAudit);
+    document.getElementById('qa-export').addEventListener('click', () => {
+        const exportBtn = document.getElementById('show-export-btn');
+        if (exportBtn) exportBtn.click();
+    });
+
+    // Product Hunt Banner
+    document.getElementById('ph-rate-btn').addEventListener('click', () => {
+        window.api.openExternal('https://www.producthunt.com');
+        localStorage.setItem('ph_dismissed', 'true');
+        checkProductHuntBanner();
+    });
+    document.getElementById('ph-later-btn').addEventListener('click', () => {
+        const snoozeUntil = Date.now() + 2 * 24 * 60 * 60 * 1000;
+        localStorage.setItem('ph_snoozed_until', snoozeUntil.toString());
+        checkProductHuntBanner();
+    });
+    document.getElementById('ph-dismiss-btn').addEventListener('click', () => {
+        localStorage.setItem('ph_dismissed', 'true');
+        checkProductHuntBanner();
+    });
+
+    // Monthly Report Close & Delete
+    document.getElementById('report-close-btn').addEventListener('click', () => {
+        showReportsScreen();
+        currentActiveReport = null;
+    });
+    document.getElementById('report-cancel-btn').addEventListener('click', () => {
+        showReportsScreen();
+        currentActiveReport = null;
+    });
+    document.getElementById('report-delete-btn').addEventListener('click', handleDeleteReport);
+
+    // Empty Trash
+    document.getElementById('empty-trash-btn').addEventListener('click', handleEmptyTrash);
+
+    // Search Box Inputs
+    document.getElementById('trash-search-input').addEventListener('input', renderTrashList);
+    document.getElementById('ids-search-input').addEventListener('input', renderIdsList);
+    document.getElementById('docs-search-input').addEventListener('input', renderDocumentsList);
+    document.getElementById('cards-search-input').addEventListener('input', renderCardsList);
+
+    // ID Screen Actions
+    document.getElementById('add-id-btn').addEventListener('click', showAddId);
+    document.getElementById('save-id-btn').addEventListener('click', handleSaveId);
+    document.getElementById('delete-id-btn').addEventListener('click', handleDeleteId);
+    document.getElementById('cancel-id-btn').addEventListener('click', showIdsScreen);
+    document.getElementById('close-edit-id-btn').addEventListener('click', showIdsScreen);
+    document.getElementById('upload-id-file-btn').addEventListener('click', handleIdFileUpload);
+
+    // Document Screen Actions
+    document.getElementById('add-document-btn').addEventListener('click', showAddDocument);
+    document.getElementById('save-doc-btn').addEventListener('click', handleSaveDocument);
+    document.getElementById('delete-doc-btn').addEventListener('click', handleDeleteDocument);
+    document.getElementById('cancel-doc-btn').addEventListener('click', showDocumentsScreen);
+    document.getElementById('close-edit-doc-btn').addEventListener('click', showDocumentsScreen);
+    document.getElementById('upload-doc-file-btn').addEventListener('click', handleDocFileUpload);
+
+    // Credit Card Actions
+    document.getElementById('add-card-btn').addEventListener('click', showAddCard);
+    document.getElementById('save-card-btn').addEventListener('click', handleSaveCard);
+    document.getElementById('delete-card-btn').addEventListener('click', handleDeleteCard);
+    document.getElementById('cancel-card-btn').addEventListener('click', showCardsScreen);
+    document.getElementById('close-edit-card-btn').addEventListener('click', showCardsScreen);
+}
+
+function setupSidebarNavigation() {
+    document.querySelectorAll('#sidebar .nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const navId = item.getAttribute('data-nav');
+            if (navId === 'dashboard') {
+                showDashboard();
+            } else if (navId === 'passwords') {
+                currentFolder = null;
+                showMainScreen();
+            } else if (navId === 'trash') {
+                showTrashScreen();
+            } else if (navId === 'watchtower') {
+                openSecurityAudit();
+            } else if (navId === 'ids') {
+                showIdsScreen();
+            } else if (navId === 'documents') {
+                showDocumentsScreen();
+            } else if (navId === 'cards') {
+                showCardsScreen();
+            } else if (navId === 'reports') {
+                showReportsScreen();
+            } else if (navId === 'import') {
+                document.getElementById('import-password').value = '';
+                document.getElementById('import-file-path').textContent = currentLanguage === 'de' ? 'Keine Datei ausgewählt' : 'No file selected';
+                document.getElementById('import-file-path').dataset.path = '';
+                showScreen('import-screen');
+                updateSidebarActive('import');
+            } else if (navId === 'export') {
+                document.getElementById('export-password').value = '';
+                showScreen('export-screen');
+                updateSidebarActive('export');
+            } else if (navId === 'csv-import') {
+                document.getElementById('csv-file-path').textContent = currentLanguage === 'de' ? 'Keine Datei ausgewählt' : 'No file selected';
+                document.getElementById('csv-file-path').dataset.path = '';
+                showScreen('csv-import-screen');
+                updateSidebarActive('csv-import');
+            } else if (navId === 'settings') {
+                showSettings();
+            }
+        });
+    });
+}
+
+function updateSidebarActive(navId) {
+    document.querySelectorAll('#sidebar .nav-item').forEach(item => {
+        if (item.getAttribute('data-nav') === navId) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+}
+
+async function showDashboard() {
+    showScreen('dashboard-screen');
+    updateSidebarActive('dashboard');
+
+    const hour = new Date().getHours();
+    let greetingKey = 'dashboard_welcome_morning';
+    if (hour >= 12 && hour < 18) {
+        greetingKey = 'dashboard_welcome_afternoon';
+    } else if (hour >= 18 || hour < 5) {
+        greetingKey = 'dashboard_welcome_evening';
+    }
+    document.getElementById('dashboard-greeting').textContent = t(greetingKey, { username: currentUser });
+
+    const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const localeStr = currentLanguage === 'de' ? 'de-DE' : currentLanguage === 'es' ? 'es-ES' : currentLanguage === 'fr' ? 'fr-FR' : 'en-US';
+    document.getElementById('dashboard-date').textContent = new Date().toLocaleDateString(localeStr, dateOptions);
+
+    const totalPasswords = passwords.length;
+    const totalFolders = folders.length;
+
+    let weakCount = 0;
+    let reusedCount = 0;
+    let strongCount = 0;
+    let score = 100;
+
+    if (totalPasswords > 0) {
+        try {
+            const auditRes = await window.api.passwordAudit({ password: currentPassword });
+            if (auditRes.success) {
+                const results = auditRes.results;
+                weakCount = results.filter(r => r.issues.some(i => i.startsWith('weak'))).length;
+                reusedCount = results.filter(r => r.issues.includes('reused')).length;
+                strongCount = results.filter(r => r.issues.length === 0).length;
+                score = Math.round((strongCount / totalPasswords) * 100);
+            }
+        } catch (e) {
+            console.error('Failed to calculate dashboard security score:', e);
+        }
+    }
+
+    document.getElementById('stat-total-passwords').textContent = totalPasswords;
+    document.getElementById('stat-total-folders').textContent = totalFolders;
+    document.getElementById('stat-strong').textContent = `${totalPasswords > 0 ? Math.round((strongCount / totalPasswords) * 100) : 100}%`;
+    document.getElementById('stat-weak').textContent = weakCount + reusedCount;
+
+    document.getElementById('dashboard-score').textContent = score;
+    const ringFill = document.getElementById('score-ring-fill');
+    if (ringFill) {
+        const circumference = 2 * Math.PI * 52;
+        ringFill.style.strokeDasharray = circumference;
+        const offset = circumference - (score / 100) * circumference;
+        ringFill.style.strokeDashoffset = offset;
+        if (score >= 80) ringFill.style.stroke = '#22c55e';
+        else if (score >= 50) ringFill.style.stroke = '#ff8c00';
+        else ringFill.style.stroke = '#e74c3c';
+    }
+
+    const recentContainer = document.getElementById('recent-passwords');
+    recentContainer.innerHTML = '';
+    const recent = passwords.slice().reverse().slice(0, 5);
+    if (recent.length === 0) {
+        recentContainer.innerHTML = `<p class="hint">${t('msg_no_passwords')}</p>`;
+    } else {
+        recent.forEach(pwd => {
+            const card = document.createElement('div');
+            card.className = 'password-card';
+            card.innerHTML = `
+                <span class="password-card-name">${escapeHtml(pwd.app)}</span>
+                <span class="password-card-arrow">
+                    <img src="../logos/right.png" alt=">">
+                </span>
+            `;
+            const actualIndex = passwords.indexOf(pwd);
+            card.addEventListener('click', () => showPasswordDetail(actualIndex));
+            recentContainer.appendChild(card);
+        });
+    }
+
+    checkProductHuntBanner();
+    checkAndGenerateMonthlyReport(score, totalPasswords, strongCount, weakCount, reusedCount);
+}
+
+function checkProductHuntBanner() {
+    const banner = document.getElementById('producthunt-banner');
+    if (!banner) return;
+
+    if (licenseState.valid) {
+        banner.classList.add('hidden');
+        return;
+    }
+
+    const dismissed = localStorage.getItem('ph_dismissed') === 'true';
+    const snoozedUntil = localStorage.getItem('ph_snoozed_until');
+    const now = Date.now();
+
+    if (dismissed || (snoozedUntil && now < parseInt(snoozedUntil))) {
+        banner.classList.add('hidden');
+    } else {
+        banner.classList.remove('hidden');
+    }
+}
+
+function isLastDayOfMonth(date = new Date()) {
+    const tomorrow = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getDate();
+    return tomorrow === 1;
+}
+
+async function checkAndGenerateMonthlyReport(score, total, strong, weak, reused) {
+    const today = new Date();
+    if (isLastDayOfMonth(today)) {
+        const currentMonthKey = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+        
+        const reportExists = reports.some(r => {
+            const d = new Date(r.date);
+            const key = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+            return key === currentMonthKey;
+        });
+
+        if (!reportExists) {
+            const newReport = {
+                id: generateId(),
+                date: today.toISOString(),
+                score,
+                total,
+                strong,
+                weak,
+                reused
+            };
+
+            reports.unshift(newReport);
+            if (reports.length > 6) {
+                reports = reports.slice(0, 6);
+            }
+
+            await window.api.saveReports({ password: currentPassword, reports });
+            generateMonthlyReport(newReport);
+        }
+    }
+}
+
+async function generateManualReport() {
+    const totalPasswords = passwords.length;
+    let weakCount = 0;
+    let reusedCount = 0;
+    let strongCount = 0;
+    let score = 100;
+
+    if (totalPasswords > 0) {
+        try {
+            const auditRes = await window.api.passwordAudit({ password: currentPassword });
+            if (auditRes.success) {
+                const results = auditRes.results;
+                weakCount = results.filter(r => r.issues.some(i => i.startsWith('weak'))).length;
+                reusedCount = results.filter(r => r.issues.includes('reused')).length;
+                strongCount = results.filter(r => r.issues.length === 0).length;
+                score = Math.round((strongCount / totalPasswords) * 100);
+            }
+        } catch (e) {
+            console.error('Failed to calculate security score for manual report:', e);
+        }
+    }
+
+    const today = new Date();
+    const newReport = {
+        id: generateId(),
+        date: today.toISOString(),
+        score,
+        total: totalPasswords,
+        strong: strongCount,
+        weak: weakCount,
+        reused: reusedCount
+    };
+
+    reports.unshift(newReport);
+    if (reports.length > 6) {
+        reports = reports.slice(0, 6);
+    }
+
+    const saveResult = await window.api.saveReports({ password: currentPassword, reports });
+    if (saveResult.success) {
+        showToast('report_generated_success', 'success');
+        generateMonthlyReport(newReport);
+    } else {
+        showToast(saveResult.error || 'msg_error', 'error');
+    }
+}
+
+function generateMonthlyReport(report) {
+    currentActiveReport = report;
+    const detailScreen = document.getElementById('report-detail-screen');
+    if (!detailScreen) return;
+
+    document.getElementById('report-score').textContent = report.score;
+
+    const statsContainer = document.getElementById('report-stats');
+    statsContainer.innerHTML = `
+        <div class="report-stat-item" style="display:flex; justify-content:space-between; margin-bottom:8px;">
+            <span class="report-stat-label">${t('report_passwords_total') || 'Total Passwords'}:</span>
+            <span class="report-stat-val" style="font-weight:bold;">${report.total}</span>
+        </div>
+        <div class="report-stat-item" style="display:flex; justify-content:space-between; margin-bottom:8px;">
+            <span class="report-stat-label">${t('report_passwords_strong') || 'Strong Passwords'}:</span>
+            <span class="report-stat-val text-success" style="font-weight:bold; color:#22c55e;">${report.strong}</span>
+        </div>
+        <div class="report-stat-item" style="display:flex; justify-content:space-between; margin-bottom:8px;">
+            <span class="report-stat-label">${t('report_passwords_weak') || 'Weak Passwords'}:</span>
+            <span class="report-stat-val text-warning" style="font-weight:bold; color:#ff8c00;">${report.weak}</span>
+        </div>
+        <div class="report-stat-item" style="display:flex; justify-content:space-between; margin-bottom:8px;">
+            <span class="report-stat-label">${t('report_passwords_reused') || 'Reused Passwords'}:</span>
+            <span class="report-stat-val text-danger" style="font-weight:bold; color:#e74c3c;">${report.reused}</span>
+        </div>
+    `;
+
+    const recContainer = document.getElementById('report-recommendations');
+    recContainer.innerHTML = '';
+    
+    let recommendations = [];
+    if (report.weak > 0) {
+        recommendations.push(`<div class="report-rec-item text-warning" style="color:#ff8c00; margin-top:8px;">⚠️ ${t('report_recommendation_weak', { count: report.weak }) || (report.weak + ' passwords should be changed.')}</div>`);
+    }
+    if (report.reused > 0) {
+        recommendations.push(`<div class="report-rec-item text-danger" style="color:#e74c3c; margin-top:8px;">🔄 ${t('report_recommendation_reused', { count: report.reused }) || (report.reused + ' passwords are reused across accounts.')}</div>`);
+    }
+    if (report.weak === 0 && report.reused === 0) {
+        recommendations.push(`<div class="report-rec-item text-success" style="color:#22c55e; margin-top:8px;">✅ ${t('report_recommendation_good') || 'Your passwords are in good shape!'}</div>`);
+    }
+
+    recContainer.innerHTML = recommendations.join('');
+    showScreen('report-detail-screen');
+}
+
+async function handleDeleteReport() {
+    if (!currentActiveReport) return;
+
+    showConfirmationModal(
+        'modal_delete_report_title',
+        'modal_delete_report_desc',
+        async () => {
+            const idx = reports.findIndex(r => r.id === currentActiveReport.id);
+            if (idx !== -1) {
+                reports.splice(idx, 1);
+                const saveResult = await window.api.saveReports({ password: currentPassword, reports });
+                if (saveResult.success) {
+                    showToast('report_deleted_success', 'success');
+                    currentActiveReport = null;
+                    showReportsScreen();
+                } else {
+                    showToast(saveResult.error || 'msg_error', 'error');
+                }
+            }
+        }
+    );
+}
+
+function showReportsScreen() {
+    showScreen('reports-screen');
+    updateSidebarActive('reports');
+    renderReportsList();
+}
+
+function renderReportsList() {
+    const container = document.getElementById('reports-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (reports.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <p>${t('reports_empty') || 'No reports saved yet.'}</p>
+                <p class="hint">${t('reports_hint') || 'Reports are automatically generated at the end of each month.'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    reports.forEach((report) => {
+        const card = document.createElement('div');
+        card.className = 'password-card';
+
+        const reportDate = new Date(report.date);
+        const localeStr = currentLanguage === 'de' ? 'de-DE' : currentLanguage === 'es' ? 'es-ES' : currentLanguage === 'fr' ? 'fr-FR' : 'en-US';
+        const dateOptions = { year: 'numeric', month: 'long' };
+        const formattedDate = reportDate.toLocaleDateString(localeStr, dateOptions);
+
+        card.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
+                <span class="password-card-name" style="font-weight:bold;">${escapeHtml(formattedDate)}</span>
+                <span style="font-size:12px; color:var(--color-text-muted);">${t('report_passwords_total') || 'Total Passwords'}: ${report.total}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span class="badge" style="background:#ff8c00; color:white; padding:2px 6px; border-radius:4px; font-size:11px;">${t('dashboard_score_label') || 'Score'}: ${report.score}</span>
+                <span class="password-card-arrow">
+                    <img src="../logos/right.png" alt=">">
+                </span>
+            </div>
+        `;
+
+        card.addEventListener('click', () => {
+            generateMonthlyReport(report);
+        });
+
+        container.appendChild(card);
+    });
+}
+
+function showTrashScreen() {
+    showScreen('trash-screen');
+    updateSidebarActive('trash');
+    document.getElementById('trash-search-input').value = '';
+    renderTrashList();
+}
+
+function renderTrashList() {
+    const container = document.getElementById('trash-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const searchTerm = document.getElementById('trash-search-input').value.toLowerCase();
+    const filtered = trash.filter(item => {
+        const title = (item.app || item.name || '').toLowerCase();
+        const subtitle = (item.username || item.cardNumber || item.number || item.description || '').toLowerCase();
+        return title.includes(searchTerm) || subtitle.includes(searchTerm);
+    });
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <p>${t('trash_empty')}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach((item) => {
+        const index = trash.indexOf(item);
+        const deletedDate = new Date(item.deletedAt);
+        const expiryDate = new Date(deletedDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const timeDiff = expiryDate.getTime() - Date.now();
+        const daysLeft = Math.max(0, Math.ceil(timeDiff / (24 * 60 * 60 * 1000)));
+
+        const card = document.createElement('div');
+        card.className = 'trash-card';
+        
+        const badgeClass = daysLeft <= 7 ? 'badge-danger' : 'badge-warning';
+
+        let displayName = item.app || item.name || '';
+        let displaySubtitle = item.username || '';
+        let typeBadgeKey = 'nav_passwords';
+
+        if (item.type === 'card') {
+            const maskedNumber = item.cardNumber ? ('•••• ' + item.cardNumber.replace(/\s+/g, '').slice(-4)) : '';
+            const brandLabel = item.brand ? item.brand.toUpperCase() : '';
+            displaySubtitle = `${brandLabel} ${maskedNumber}`.trim();
+            typeBadgeKey = 'nav_cards';
+        } else if (item.type === 'id') {
+            displaySubtitle = item.number || '';
+            typeBadgeKey = 'nav_ids';
+        } else if (item.type === 'document') {
+            displaySubtitle = item.description || '';
+            typeBadgeKey = 'nav_documents';
+        }
+
+        card.innerHTML = `
+            <div class="trash-card-info" style="display:flex; flex-direction:column; gap:4px; flex:1;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="trash-card-name" style="font-weight:bold;">${escapeHtml(displayName)}</span>
+                    <span class="badge" style="background:var(--color-border); color:var(--color-text-muted); padding:2px 6px; border-radius:4px; font-size:10px;">${t(typeBadgeKey)}</span>
+                </div>
+                <span class="trash-card-user" style="font-size:12px; color:var(--color-text-muted);">${escapeHtml(displaySubtitle)}</span>
+            </div>
+            <div class="trash-card-actions" style="display:flex; align-items:center; gap:8px;">
+                <span class="trash-days-badge ${badgeClass}">${t('trash_days_left', { days: daysLeft })}</span>
+                <button class="button small secondary restore-btn">${t('trash_restore')}</button>
+                <button class="button small danger delete-permanent-btn">${t('trash_delete_permanent')}</button>
+            </div>
+        `;
+
+        card.querySelector('.restore-btn').addEventListener('click', () => {
+            restoreFromTrash(index);
+        });
+
+        card.querySelector('.delete-permanent-btn').addEventListener('click', () => {
+            showConfirmationModal(
+                'trash_confirm_delete',
+                '',
+                async () => {
+                    await permanentlyDelete(index);
+                }
+            );
+        });
+
+        container.appendChild(card);
+    });
+}
+
+async function moveToTrash(index) {
+    const pwd = passwords[index];
+    if (!pwd) return;
+
+    pwd.deletedAt = new Date().toISOString();
+    trash.push(pwd);
+    passwords.splice(index, 1);
+
+    const result = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+    if (result.success) {
+        showToast('msg_saved', 'success');
+        showMainScreen();
+        updateTrashBadge();
+    } else {
+        showToast('msg_error', 'error');
+    }
+}
+
+async function restoreFromTrash(index) {
+    const item = trash[index];
+    if (!item) return;
+
+    const type = item.type;
+    delete item.deletedAt;
+    delete item.type;
+
+    let result;
+    if (type === 'card') {
+        cards.push(item);
+        trash.splice(index, 1);
+        const saveCardsResult = await window.api.saveCards({ password: currentPassword, cards });
+        const savePwdResult = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+        result = { success: saveCardsResult.success && savePwdResult.success };
+    } else if (type === 'id') {
+        ids.push(item);
+        trash.splice(index, 1);
+        const saveIdsResult = await window.api.saveIds({ password: currentPassword, ids });
+        const savePwdResult = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+        result = { success: saveIdsResult.success && savePwdResult.success };
+    } else if (type === 'document') {
+        documents.push(item);
+        trash.splice(index, 1);
+        const saveDocsResult = await window.api.saveDocuments({ password: currentPassword, documents });
+        const savePwdResult = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+        result = { success: saveDocsResult.success && savePwdResult.success };
+    } else {
+        passwords.push(item);
+        trash.splice(index, 1);
+        result = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+    }
+
+    if (result.success) {
+        showToast('trash_restored', 'success');
+        renderTrashList();
+        updateTrashBadge();
+    } else {
+        showToast('msg_error', 'error');
+    }
+}
+
+async function permanentlyDelete(index) {
+    trash.splice(index, 1);
+
+    const result = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+    if (result.success) {
+        showToast('trash_deleted', 'success');
+        renderTrashList();
+        updateTrashBadge();
+    } else {
+        showToast('msg_error', 'error');
+    }
+}
+
+async function handleEmptyTrash() {
+    showConfirmationModal(
+        'trash_confirm_empty',
+        '',
+        async () => {
+            trash = [];
+            const result = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+            if (result.success) {
+                showToast('trash_emptied', 'success');
+                renderTrashList();
+                updateTrashBadge();
+            } else {
+                showToast('msg_error', 'error');
+            }
+        }
+    );
+}
+
+async function purgeExpiredTrash() {
+    const now = Date.now();
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    const initialLength = trash.length;
+
+    trash = trash.filter(item => {
+        const deletedDate = new Date(item.deletedAt);
+        return (now - deletedDate.getTime()) < thirtyDaysMs;
+    });
+
+    if (trash.length !== initialLength && currentPassword) {
+        await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+        updateTrashBadge();
+    }
+}
+
+function updateTrashBadge() {
+    const badge = document.getElementById('trash-badge');
+    if (badge) {
+        if (trash.length > 0) {
+            badge.textContent = trash.length;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.textContent = '';
+            badge.style.display = 'none';
+        }
+    }
+}
+
+function showIdsScreen() {
+    currentEditIdIndex = null;
+    showScreen('ids-screen');
+    updateSidebarActive('ids');
+    document.getElementById('ids-search-input').value = '';
+    renderIdsList();
+}
+
+function renderIdsList() {
+    const container = document.getElementById('ids-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const searchTerm = document.getElementById('ids-search-input').value.toLowerCase();
+    const filtered = ids.filter(item => 
+        item.name.toLowerCase().includes(searchTerm) || 
+        (item.number && item.number.toLowerCase().includes(searchTerm))
+    );
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <p data-i18n="ids_empty">${t('ids_empty')}</p>
+                <p class="hint" data-i18n="ids_hint">${t('ids_hint')}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach((idItem) => {
+        const index = ids.indexOf(idItem);
+        const card = document.createElement('div');
+        card.className = 'password-card';
+        
+        let warningBadge = '';
+        if (idItem.expiryDate) {
+            const expiry = new Date(idItem.expiryDate);
+            const today = new Date();
+            expiry.setHours(0,0,0,0);
+            today.setHours(0,0,0,0);
+            const timeDiff = expiry.getTime() - today.getTime();
+            const daysLeft = Math.ceil(timeDiff / (24 * 60 * 60 * 1000));
+            
+            if (daysLeft < 0) {
+                warningBadge = `<span class="badge badge-danger" style="background:#e74c3c; color:white; padding:2px 6px; border-radius:4px; font-size:11px;">${t('id_expired')}</span>`;
+            } else if (daysLeft <= 30) {
+                warningBadge = `<span class="badge badge-warning" style="background:#ff8c00; color:white; padding:2px 6px; border-radius:4px; font-size:11px;">${t('id_expiring_soon', { days: daysLeft })}</span>`;
+            } else {
+                const localeStr = currentLanguage === 'de' ? 'de-DE' : currentLanguage === 'es' ? 'es-ES' : currentLanguage === 'fr' ? 'fr-FR' : 'en-US';
+                warningBadge = `<span class="badge badge-success" style="background:#22c55e; color:white; padding:2px 6px; border-radius:4px; font-size:11px;">${expiry.toLocaleDateString(localeStr)}</span>`;
+            }
+        }
+
+        const typeLabel = t(`id_type_${idItem.type.replace('drivers_license', 'drivers')}`) || idItem.type;
+
+        card.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
+                <span class="password-card-name" style="font-weight:bold;">${escapeHtml(idItem.name)}</span>
+                <span style="font-size:12px; color:var(--color-text-muted);">${escapeHtml(typeLabel)} ${idItem.number ? '• ' + escapeHtml(idItem.number) : ''}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                ${warningBadge}
+                <span class="password-card-arrow">
+                    <img src="../logos/right.png" alt=">">
+                </span>
+            </div>
+        `;
+
+        card.addEventListener('click', () => {
+            showEditId(index);
+        });
+
+        container.appendChild(card);
+    });
+}
+
+function showAddId() {
+    currentEditIdIndex = null;
+    currentFiles = [];
+
+    document.getElementById('edit-id-title').textContent = t('title_add') + ' ID';
+    document.getElementById('edit-id-name').value = '';
+    document.getElementById('edit-id-type').value = 'national_id';
+    document.getElementById('edit-id-number').value = '';
+    document.getElementById('edit-id-issue').value = '';
+    document.getElementById('edit-id-expiry').value = '';
+    document.getElementById('edit-id-notes').value = '';
+
+    document.getElementById('delete-id-btn').classList.add('hidden');
+
+    renderEditIdFileList();
+    showScreen('edit-id-screen');
+}
+
+function showEditId(index) {
+    currentEditIdIndex = index;
+    const idItem = ids[index];
+
+    currentFiles = idItem.files || [];
+
+    document.getElementById('edit-id-title').textContent = t('btn_edit') + ' ID';
+    document.getElementById('edit-id-name').value = idItem.name || '';
+    document.getElementById('edit-id-type').value = idItem.type || 'national_id';
+    document.getElementById('edit-id-number').value = idItem.number || '';
+    document.getElementById('edit-id-issue').value = idItem.issueDate || '';
+    document.getElementById('edit-id-expiry').value = idItem.expiryDate || '';
+    document.getElementById('edit-id-notes').value = idItem.notes || '';
+
+    document.getElementById('delete-id-btn').classList.remove('hidden');
+
+    renderEditIdFileList();
+    showScreen('edit-id-screen');
+}
+
+async function handleSaveId() {
+    const name = document.getElementById('edit-id-name').value.trim();
+    const type = document.getElementById('edit-id-type').value;
+    const number = document.getElementById('edit-id-number').value.trim();
+    const issueDate = document.getElementById('edit-id-issue').value;
+    const expiryDate = document.getElementById('edit-id-expiry').value;
+    const notes = document.getElementById('edit-id-notes').value.trim();
+
+    if (!name) {
+        showToast('Document Name is required!', 'error');
+        return;
+    }
+
+    const idItem = {
+        id: currentEditIdIndex !== null ? ids[currentEditIdIndex].id : generateId(),
+        name,
+        type,
+        number,
+        issueDate,
+        expiryDate,
+        notes,
+        files: currentFiles
+    };
+
+    if (currentEditIdIndex !== null) {
+        ids[currentEditIdIndex] = idItem;
+    } else {
+        ids.push(idItem);
+    }
+
+    const result = await window.api.saveIds({ password: currentPassword, ids });
+    if (result.success) {
+        showToast('id_saved', 'success');
+        showIdsScreen();
+    } else {
+        showToast(result.error || 'msg_error', 'error');
+    }
+}
+
+async function handleDeleteId() {
+    if (currentEditIdIndex === null) return;
+    
+    showConfirmationModal(
+        'modal_delete_id_title',
+        'modal_delete_id_desc',
+        async () => {
+            const item = ids[currentEditIdIndex];
+            item.type = 'id';
+            item.deletedAt = new Date().toISOString();
+            trash.push(item);
+            ids.splice(currentEditIdIndex, 1);
+
+            const resultIds = await window.api.saveIds({ password: currentPassword, ids });
+            const resultPwd = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+            
+            if (resultIds.success && resultPwd.success) {
+                showToast('id_deleted', 'success');
+                showIdsScreen();
+                updateTrashBadge();
+            } else {
+                showToast('msg_error', 'error');
+            }
+        }
+    );
+}
+
+async function handleIdFileUpload() {
+    if (currentFiles.length >= 5) {
+        showToast('Maximum 5 files allowed!', 'error');
+        return;
+    }
+
+    const { filePaths } = await window.api.showOpenDialog({
+        title: 'Select Scan/Photo to Attach',
+        properties: ['openFile']
+    });
+
+    if (filePaths && filePaths.length > 0) {
+        const filePath = filePaths[0];
+        const result = await window.api.readFile(filePath);
+
+        if (result.success) {
+            currentFiles.push({ data: result.data, name: result.fileName });
+            renderEditIdFileList();
+            showToast('File attached!', 'success');
+        } else {
+            showToast(result.error || 'Error reading file!', 'error');
+        }
+    }
+}
+
+function renderEditIdFileList() {
+    const container = document.getElementById('edit-id-file-list');
+    const hint = document.getElementById('edit-id-file-hint');
+    if (!container || !hint) return;
+    container.innerHTML = '';
+
+    if (currentFiles.length === 0) {
+        hint.textContent = 'No files selected';
+        hint.style.display = '';
+        return;
+    }
+
+    hint.style.display = 'none';
+
+    currentFiles.forEach((file, index) => {
+        const item = document.createElement('div');
+        item.className = 'file-list-item';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'file-item-name';
+        nameSpan.textContent = file.name;
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.display = 'flex';
+        actionsDiv.style.gap = '8px';
+
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'file-download-btn';
+        downloadBtn.type = 'button';
+        downloadBtn.title = 'Download';
+        downloadBtn.innerHTML = '<img src="../logos/download.png" style="width:14px;height:14px;" alt="D">';
+        downloadBtn.addEventListener('click', () => handleIdFileDownloadByIndex(index));
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'file-delete-btn';
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = '✕';
+        deleteBtn.title = 'Remove file';
+        deleteBtn.addEventListener('click', () => {
+            currentFiles.splice(index, 1);
+            renderEditIdFileList();
+        });
+
+        actionsDiv.appendChild(downloadBtn);
+        actionsDiv.appendChild(deleteBtn);
+        item.appendChild(nameSpan);
+        item.appendChild(actionsDiv);
+        container.appendChild(item);
+    });
+}
+
+async function handleIdFileDownloadByIndex(fileIndex) {
+    const file = currentFiles[fileIndex];
+    if (!file) return;
+
+    const { filePath } = await window.api.showSaveDialog({
+        title: 'Save Attached File',
+        defaultPath: file.name
+    });
+
+    if (filePath) {
+        const result = await window.api.writeFile({ filePath, data: file.data });
+        if (result.success) {
+            showToast('File saved!', 'success');
+        } else {
+            showToast('Error saving file!', 'error');
+        }
+    }
+}
+
+function showDocumentsScreen() {
+    currentEditDocIndex = null;
+    showScreen('documents-screen');
+    updateSidebarActive('documents');
+    document.getElementById('docs-search-input').value = '';
+    renderDocumentsList();
+}
+
+function renderDocumentsList() {
+    const container = document.getElementById('documents-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const searchTerm = document.getElementById('docs-search-input').value.toLowerCase();
+    const filtered = documents.filter(item => 
+        item.name.toLowerCase().includes(searchTerm) || 
+        (item.description && item.description.toLowerCase().includes(searchTerm))
+    );
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <p data-i18n="docs_empty">${t('docs_empty')}</p>
+                <p class="hint" data-i18n="docs_hint">${t('docs_hint')}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach((doc) => {
+        const index = documents.indexOf(doc);
+        const card = document.createElement('div');
+        card.className = 'password-card';
+
+        let totalBytes = 0;
+        if (doc.files) {
+            doc.files.forEach(f => {
+                const approxSize = f.data ? Math.round((f.data.length * 3) / 4) : 0;
+                totalBytes += approxSize;
+            });
+        }
+        const sizeStr = formatBytes(totalBytes);
+        const fileCount = doc.files ? doc.files.length : 0;
+
+        card.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
+                <span class="password-card-name" style="font-weight:bold;">${escapeHtml(doc.name)}</span>
+                <span style="font-size:12px; color:var(--color-text-muted);">${escapeHtml(doc.description || '')}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span class="badge badge-secondary" style="background:#555; color:white; padding:2px 6px; border-radius:4px; font-size:11px;">${fileCount} ${fileCount === 1 ? 'file' : 'files'} (${sizeStr})</span>
+                <span class="password-card-arrow">
+                    <img src="../logos/right.png" alt=">">
+                </span>
+            </div>
+        `;
+
+        card.addEventListener('click', () => {
+            showEditDocument(index);
+        });
+
+        container.appendChild(card);
+    });
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function showAddDocument() {
+    currentEditDocIndex = null;
+    currentFiles = [];
+
+    document.getElementById('edit-doc-title').textContent = t('title_add') + ' Document';
+    document.getElementById('edit-doc-name').value = '';
+    document.getElementById('edit-doc-description').value = '';
+
+    document.getElementById('delete-doc-btn').classList.add('hidden');
+
+    renderEditDocFileList();
+    showScreen('edit-document-screen');
+}
+
+function showEditDocument(index) {
+    currentEditDocIndex = index;
+    const doc = documents[index];
+
+    currentFiles = doc.files || [];
+
+    document.getElementById('edit-doc-title').textContent = t('btn_edit') + ' Document';
+    document.getElementById('edit-doc-name').value = doc.name || '';
+    document.getElementById('edit-doc-description').value = doc.description || '';
+
+    document.getElementById('delete-doc-btn').classList.remove('hidden');
+
+    renderEditDocFileList();
+    showScreen('edit-document-screen');
+}
+
+async function handleSaveDocument() {
+    const name = document.getElementById('edit-doc-name').value.trim();
+    const description = document.getElementById('edit-doc-description').value.trim();
+
+    if (!name) {
+        showToast('Document Name is required!', 'error');
+        return;
+    }
+
+    const docItem = {
+        id: currentEditDocIndex !== null ? documents[currentEditDocIndex].id : generateId(),
+        name,
+        description,
+        uploadedAt: currentEditDocIndex !== null ? documents[currentEditDocIndex].uploadedAt : new Date().toISOString(),
+        files: currentFiles
+    };
+
+    if (currentEditDocIndex !== null) {
+        documents[currentEditDocIndex] = docItem;
+    } else {
+        documents.push(docItem);
+    }
+
+    const result = await window.api.saveDocuments({ password: currentPassword, documents });
+    if (result.success) {
+        showToast('doc_saved', 'success');
+        showDocumentsScreen();
+    } else {
+        showToast(result.error || 'msg_error', 'error');
+    }
+}
+
+async function handleDeleteDocument() {
+    if (currentEditDocIndex === null) return;
+
+    showConfirmationModal(
+        'modal_delete_doc_title',
+        'modal_delete_doc_desc',
+        async () => {
+            const item = documents[currentEditDocIndex];
+            item.type = 'document';
+            item.deletedAt = new Date().toISOString();
+            trash.push(item);
+            documents.splice(currentEditDocIndex, 1);
+
+            const resultDocs = await window.api.saveDocuments({ password: currentPassword, documents });
+            const resultPwd = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+            
+            if (resultDocs.success && resultPwd.success) {
+                showToast('doc_deleted', 'success');
+                showDocumentsScreen();
+                updateTrashBadge();
+            } else {
+                showToast('msg_error', 'error');
+            }
+        }
+    );
+}
+
+async function handleDocFileUpload() {
+    const { filePaths } = await window.api.showOpenDialog({
+        title: 'Select Document to Attach',
+        properties: ['openFile']
+    });
+
+    if (filePaths && filePaths.length > 0) {
+        const filePath = filePaths[0];
+        const result = await window.api.readFile(filePath);
+
+        if (result.success) {
+            currentFiles.push({ data: result.data, name: result.fileName });
+            renderEditDocFileList();
+            showToast('File attached!', 'success');
+        } else {
+            showToast(result.error || 'Error reading file!', 'error');
+        }
+    }
+}
+
+function renderEditDocFileList() {
+    const container = document.getElementById('edit-doc-file-list');
+    const hint = document.getElementById('edit-doc-file-hint');
+    if (!container || !hint) return;
+    container.innerHTML = '';
+
+    if (currentFiles.length === 0) {
+        hint.textContent = 'No files selected';
+        hint.style.display = '';
+        return;
+    }
+
+    hint.style.display = 'none';
+
+    currentFiles.forEach((file, index) => {
+        const item = document.createElement('div');
+        item.className = 'file-list-item';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'file-item-name';
+        nameSpan.textContent = file.name;
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.display = 'flex';
+        actionsDiv.style.gap = '8px';
+
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'file-download-btn';
+        downloadBtn.type = 'button';
+        downloadBtn.title = 'Download';
+        downloadBtn.innerHTML = '<img src="../logos/download.png" style="width:14px;height:14px;" alt="D">';
+        downloadBtn.addEventListener('click', () => handleDocFileDownloadByIndex(index));
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'file-delete-btn';
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = '✕';
+        deleteBtn.title = 'Remove file';
+        deleteBtn.addEventListener('click', () => {
+            currentFiles.splice(index, 1);
+            renderEditDocFileList();
+        });
+
+        actionsDiv.appendChild(downloadBtn);
+        actionsDiv.appendChild(deleteBtn);
+        item.appendChild(nameSpan);
+        item.appendChild(actionsDiv);
+        container.appendChild(item);
+    });
+}
+
+async function handleDocFileDownloadByIndex(fileIndex) {
+    const file = currentFiles[fileIndex];
+    if (!file) return;
+
+    const { filePath } = await window.api.showSaveDialog({
+        title: 'Save Attached File',
+        defaultPath: file.name
+    });
+
+    if (filePath) {
+        const result = await window.api.writeFile({ filePath, data: file.data });
+        if (result.success) {
+            showToast('File saved!', 'success');
+        } else {
+            showToast('Error saving file!', 'error');
+        }
+    }
+}
+
+function showCardsScreen() {
+    currentEditCardIndex = null;
+    showScreen('cards-screen');
+    updateSidebarActive('cards');
+    document.getElementById('cards-search-input').value = '';
+    renderCardsList();
+}
+
+function renderCardsList() {
+    const container = document.getElementById('cards-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const searchTerm = document.getElementById('cards-search-input').value.toLowerCase();
+    const filtered = cards.filter(c => 
+        c.name.toLowerCase().includes(searchTerm) || 
+        (c.cardholderName && c.cardholderName.toLowerCase().includes(searchTerm)) ||
+        (c.cardNumber && c.cardNumber.includes(searchTerm))
+    );
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <p>${t('cards_empty') || 'No credit cards saved.'}</p>
+                <p class="hint">${t('cards_hint') || 'Click + to save a credit card.'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach((cardItem) => {
+        const index = cards.indexOf(cardItem);
+        const card = document.createElement('div');
+        card.className = 'password-card';
+
+        let maskedNumber = '';
+        if (cardItem.cardNumber) {
+            const clean = cardItem.cardNumber.replace(/\s+/g, '');
+            if (clean.length > 4) {
+                maskedNumber = '•••• ' + clean.slice(-4);
+            } else {
+                maskedNumber = clean;
+            }
+        }
+
+        const expiryStr = (cardItem.expiryMonth && cardItem.expiryYear) 
+            ? `${cardItem.expiryMonth.padStart(2, '0')}/${cardItem.expiryYear}` 
+            : '';
+
+        const brandLabel = cardItem.brand ? cardItem.brand.toUpperCase() : '';
+
+        card.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
+                <span class="password-card-name" style="font-weight:bold;">${escapeHtml(cardItem.name)}</span>
+                <span style="font-size:12px; color:var(--color-text-muted);">${escapeHtml(brandLabel)} ${escapeHtml(maskedNumber)}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                ${expiryStr ? `<span class="badge badge-secondary" style="background:#555; color:white; padding:2px 6px; border-radius:4px; font-size:11px;">${expiryStr}</span>` : ''}
+                <span class="password-card-arrow">
+                    <img src="../logos/right.png" alt=">">
+                </span>
+            </div>
+        `;
+
+        card.addEventListener('click', () => {
+            showEditCard(index);
+        });
+
+        container.appendChild(card);
+    });
+}
+
+function showAddCard() {
+    currentEditCardIndex = null;
+
+    document.getElementById('edit-card-title').textContent = t('title_add_card') || 'Add Credit Card';
+    document.getElementById('edit-card-name').value = '';
+    document.getElementById('edit-cardholder').value = '';
+    document.getElementById('edit-card-number').value = '';
+    document.getElementById('edit-card-brand').value = 'visa';
+    document.getElementById('edit-card-expiry-month').value = '';
+    document.getElementById('edit-card-expiry-year').value = '';
+    document.getElementById('edit-card-cvv').value = '';
+    document.getElementById('edit-card-notes').value = '';
+
+    document.getElementById('delete-card-btn').classList.add('hidden');
+
+    showScreen('edit-card-screen');
+}
+
+function showEditCard(index) {
+    currentEditCardIndex = index;
+    const cardItem = cards[index];
+
+    document.getElementById('edit-card-title').textContent = t('title_edit_card') || 'Edit Credit Card';
+    document.getElementById('edit-card-name').value = cardItem.name || '';
+    document.getElementById('edit-cardholder').value = cardItem.cardholderName || '';
+    document.getElementById('edit-card-number').value = cardItem.cardNumber || '';
+    document.getElementById('edit-card-brand').value = cardItem.brand || 'visa';
+    document.getElementById('edit-card-expiry-month').value = cardItem.expiryMonth || '';
+    document.getElementById('edit-card-expiry-year').value = cardItem.expiryYear || '';
+    document.getElementById('edit-card-cvv').value = cardItem.cvv || '';
+    document.getElementById('edit-card-notes').value = cardItem.notes || '';
+
+    document.getElementById('delete-card-btn').classList.remove('hidden');
+
+    showScreen('edit-card-screen');
+}
+
+async function handleSaveCard() {
+    const name = document.getElementById('edit-card-name').value.trim();
+    const cardholderName = document.getElementById('edit-cardholder').value.trim();
+    const cardNumber = document.getElementById('edit-card-number').value.trim();
+    const brand = document.getElementById('edit-card-brand').value;
+    const expiryMonth = document.getElementById('edit-card-expiry-month').value.trim();
+    const expiryYear = document.getElementById('edit-card-expiry-year').value.trim();
+    const cvv = document.getElementById('edit-card-cvv').value.trim();
+    const notes = document.getElementById('edit-card-notes').value.trim();
+
+    if (!name) {
+        showToast('card_name_required', 'error');
+        return;
+    }
+
+    const cardItem = {
+        id: currentEditCardIndex !== null ? cards[currentEditCardIndex].id : generateId(),
+        name,
+        cardholderName,
+        cardNumber,
+        brand,
+        expiryMonth,
+        expiryYear,
+        cvv,
+        notes
+    };
+
+    if (currentEditCardIndex !== null) {
+        cards[currentEditCardIndex] = cardItem;
+    } else {
+        cards.push(cardItem);
+    }
+
+    const result = await window.api.saveCards({ password: currentPassword, cards });
+    if (result.success) {
+        showToast('card_saved', 'success');
+        showCardsScreen();
+    } else {
+        showToast(result.error || 'msg_error', 'error');
+    }
+}
+
+async function handleDeleteCard() {
+    if (currentEditCardIndex === null) return;
+
+    showConfirmationModal(
+        'modal_delete_card_title',
+        'modal_delete_card_desc',
+        async () => {
+            const item = cards[currentEditCardIndex];
+            item.type = 'card';
+            item.deletedAt = new Date().toISOString();
+            trash.push(item);
+            cards.splice(currentEditCardIndex, 1);
+
+            const resultCards = await window.api.saveCards({ password: currentPassword, cards });
+            const resultPwd = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+            
+            if (resultCards.success && resultPwd.success) {
+                showToast('card_deleted', 'success');
+                showCardsScreen();
+                updateTrashBadge();
+            } else {
+                showToast('msg_error', 'error');
+            }
+        }
+    );
+}
+
+function setupDragAndDrop() {
+    const passwordsNavItem = document.querySelector('#sidebar .nav-item[data-nav="passwords"]');
+    if (passwordsNavItem) {
+        passwordsNavItem.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            passwordsNavItem.classList.add('drag-over');
+        });
+        passwordsNavItem.addEventListener('dragleave', () => {
+            passwordsNavItem.classList.remove('drag-over');
+        });
+        passwordsNavItem.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            passwordsNavItem.classList.remove('drag-over');
+            const passwordIndex = parseInt(e.dataTransfer.getData('text/plain'));
+            if (!isNaN(passwordIndex) && passwords[passwordIndex]) {
+                const pwd = passwords[passwordIndex];
+                if (pwd.folderId !== null) {
+                    pwd.folderId = null;
+                    const result = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
+                    if (result.success) {
+                        showToast(t('msg_moved_to_root', { app: pwd.app }), 'success', true);
+                        renderPasswordList();
+                    } else {
+                        showToast('msg_error', 'error');
+                    }
+                }
+            }
+        });
+    }
 }

@@ -9,6 +9,72 @@
 </head>
 
 <body>
+    <!-- App Shell (wraps sidebar + content) -->
+    <div id="app-shell">
+        <!-- Left Sidebar -->
+        <nav id="sidebar" class="sidebar hidden">
+            <div class="sidebar-logo">
+                <img src="../logos/locked.ico" alt="PassSafer" class="sidebar-logo-img">
+                <span class="sidebar-logo-text">Pass<span class="accent">Safer</span></span>
+            </div>
+            <div class="sidebar-nav">
+                <div class="nav-item active" data-nav="dashboard">
+                    <span class="nav-icon"><img src="../logos/dashboard.png" alt="Dashboard"></span>
+                    <span class="nav-label" data-i18n="nav_dashboard">Dashboard</span>
+                </div>
+                <div class="nav-item" data-nav="passwords">
+                    <span class="nav-icon"><img src="../logos/password.png" alt="Passwords"></span>
+                    <span class="nav-label" data-i18n="nav_passwords">Passwords</span>
+                </div>
+                <div class="nav-item" data-nav="cards">
+                    <span class="nav-icon"><img src="../logos/credit_card.png" alt="Cards"></span>
+                    <span class="nav-label" data-i18n="nav_cards">Credit Cards</span>
+                </div>
+                <div class="nav-item" data-nav="ids">
+                    <span class="nav-icon"><img src="../logos/id.png" alt="IDs"></span>
+                    <span class="nav-label" data-i18n="nav_ids">IDs</span>
+                </div>
+                <div class="nav-item" data-nav="documents">
+                    <span class="nav-icon"><img src="../logos/documents.png" alt="Documents"></span>
+                    <span class="nav-label" data-i18n="nav_documents">Documents</span>
+                </div>
+                <div class="nav-item" data-nav="watchtower">
+                    <span class="nav-icon"><img src="../logos/shield.png" alt="Watchtower"></span>
+                    <span class="nav-label" data-i18n="nav_watchtower">Watchtower</span>
+                </div>
+                <div class="nav-item" data-nav="reports">
+                    <span class="nav-icon"><img src="../logos/report.png" alt="Reports"></span>
+                    <span class="nav-label" data-i18n="nav_reports">Reports</span>
+                </div>
+                <div class="nav-item" data-nav="trash">
+                    <span class="nav-icon"><img src="../logos/garbage.png" alt="Trash"></span>
+                    <span class="nav-label" data-i18n="nav_trash">Trash</span>
+                    <span class="nav-badge" id="trash-badge"></span>
+                </div>
+                <div style="border-top: 1px solid var(--color-border); margin: 8px 0;"></div>
+                <div class="nav-item" data-nav="import">
+                    <span class="nav-icon"><img src="../logos/import.png" alt="Import"></span>
+                    <span class="nav-label" data-i18n="settings_import">Import Passwords</span>
+                </div>
+                <div class="nav-item" data-nav="export">
+                    <span class="nav-icon"><img src="../logos/export.png" alt="Export"></span>
+                    <span class="nav-label" data-i18n="settings_export">Export Passwords</span>
+                </div>
+                <div class="nav-item" data-nav="csv-import">
+                    <span class="nav-icon"><img src="../logos/import.png" alt="CSV Import"></span>
+                    <span class="nav-label" data-i18n="settings_import_csv">Import from CSV (Browser)</span>
+                </div>
+            </div>
+            <div class="sidebar-bottom">
+                <div class="nav-item" data-nav="settings">
+                    <span class="nav-icon"><img src="../logos/settings.png" alt="Settings"></span>
+                    <span class="nav-label" data-i18n="title_settings">Settings</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Content Area -->
+        <div id="content-area">
     <!-- Login Screen -->
     <div id="login-screen" class="screen hidden">
         <div class="auth-container">
@@ -123,7 +189,7 @@
     <div id="main-screen" class="screen hidden">
         <!-- Header -->
         <header class="app-header">
-            <button class="icon-button" id="settings-btn" data-i18n="title_settings" title="Settings">
+            <button class="icon-button" id="settings-btn" data-i18n="title_settings" title="Settings" style="display: none;">
                 <img src="../logos/settings.png" alt="Settings">
             </button>
             <h1 class="header-title" id="header-title" data-i18n="header_passwords">Passwords</h1>
@@ -150,7 +216,7 @@
         <div class="main-controls" id="main-controls">
             <div class="search-container">
                 <img src="../logos/search.png" alt="Search" class="search-icon">
-                <input type="text" id="search-input" data-i18n="placeholder_search" placeholder="Search passwords or folders...">
+                <input type="text" id="search-input" data-i18n="placeholder_search" placeholder="Search passwords or folders..." class="search-input">
             </div>
             <button class="button primary folder-btn" id="create-folder-btn" data-i18n="btn_create_folder" title="Create Folder">
                 <img src="../logos/folder.png" alt="Folder">
@@ -338,9 +404,13 @@
                     <img src="../logos/settings.png" alt="Settings" class="btn-icon">
                     <span data-i18n="settings_change_master">Change Master Password</span>
                 </button>
-                <button class="settings-option" id="security-audit-btn" style="border-left: 3px solid var(--color-accent);">
-                    <img src="../logos/settings.png" alt="Audit" class="btn-icon">
-                    <span>🛡️ Password Security Audit</span>
+                <button class="settings-option" id="generate-report-btn">
+                    <img src="../logos/report.png" alt="Report" class="btn-icon">
+                    <span data-i18n="settings_generate_report">Generate Security Report</span>
+                </button>
+                <button class="settings-option" id="security-audit-btn" style="display: none;">
+                    <img src="../logos/settings.png" alt="Watchtower" class="btn-icon">
+                    <span data-i18n="nav_watchtower">🛡️ Watchtower</span>
                 </button>
             </div>
 
@@ -370,7 +440,7 @@
                 </button>
             </div>
 
-            <div class="settings-section">
+            <div class="settings-section" style="display: none;">
                 <h3 class="settings-section-title" data-i18n="settings_data">Data Management</h3>
                 <button class="settings-option" id="show-export-btn">
                     <img src="../logos/export.png" alt="Export" class="btn-icon">
@@ -395,14 +465,6 @@
                         <option value="de">Deutsch</option>
                         <option value="es">Español</option>
                         <option value="fr">Français</option>
-                        <option value="zh">中文 (Chinese)</option>
-                        <option value="hi">हिन्दी (Hindi)</option>
-                        <option value="ar">العربية (Arabic)</option>
-                        <option value="pt">Português</option>
-                        <option value="ru">Русский (Russian)</option>
-                        <option value="ja">日本語 (Japanese)</option>
-                        <option value="bn">বাংলা (Bengali)</option>
-                        <option value="ur">اردو (Urdu)</option>
                     </select>
                 </div>
                 <button class="settings-option" id="check-updates-btn">
@@ -430,7 +492,7 @@
     <!-- Security Audit Screen -->
     <div id="audit-screen" class="screen hidden">
         <header class="app-header">
-            <h1 class="header-title">🛡️ Security Audit</h1>
+            <h1 class="header-title" data-i18n="nav_watchtower">🛡️ Watchtower</h1>
             <button class="icon-button close-btn" id="close-audit-btn">✕</button>
         </header>
         <div class="settings-content" style="padding-bottom: 30px;">
@@ -632,6 +694,365 @@
             </div>
         </div>
     </div>
+
+    <!-- Dashboard Screen -->
+    <div id="dashboard-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" data-i18n="nav_dashboard">Dashboard</h1>
+        </header>
+        <div class="dashboard-content">
+            <!-- Product Hunt Banner (for free users) -->
+            <div id="producthunt-banner" class="producthunt-banner hidden">
+                <div class="ph-content">
+                    <span class="ph-icon">🐱</span>
+                    <span class="ph-text" data-i18n="ph_banner_text">Enjoying PassSafer? Rate us on Product Hunt!</span>
+                </div>
+                <div class="ph-actions">
+                    <button class="button small primary" id="ph-rate-btn" data-i18n="ph_rate_now">Rate Now</button>
+                    <button class="button small secondary" id="ph-later-btn" data-i18n="ph_later">Later</button>
+                    <button class="icon-button close-btn" id="ph-dismiss-btn">✕</button>
+                </div>
+            </div>
+
+            <!-- Welcome -->
+            <div class="dashboard-welcome">
+                <h2 id="dashboard-greeting">Welcome back!</h2>
+                <p class="dashboard-date" id="dashboard-date"></p>
+            </div>
+
+            <!-- Security Score Ring -->
+            <div class="dashboard-score-section">
+                <div class="security-ring-container">
+                    <svg class="security-ring" viewBox="0 0 120 120">
+                        <circle class="ring-bg" cx="60" cy="60" r="52" />
+                        <circle class="ring-fill" id="score-ring-fill" cx="60" cy="60" r="52" />
+                    </svg>
+                    <div class="ring-label">
+                        <span class="ring-score" id="dashboard-score">0</span>
+                        <span class="ring-text" data-i18n="dashboard_score_label">Score</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="dashboard-stats">
+                <div class="stat-card">
+                    <div class="stat-icon"><img src="../logos/password_color.png" alt="Passwords"></div>
+                    <div class="stat-value" id="stat-total-passwords">0</div>
+                    <div class="stat-label" data-i18n="dashboard_total_passwords">Total Passwords</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><img src="../logos/folder_color.png" alt="Folders"></div>
+                    <div class="stat-value" id="stat-total-folders">0</div>
+                    <div class="stat-label" data-i18n="dashboard_total_folders">Folders</div>
+                </div>
+                <div class="stat-card stat-card-success">
+                    <div class="stat-icon"><img src="../logos/strong_color.png" alt="Strong"></div>
+                    <div class="stat-value" id="stat-strong">0%</div>
+                    <div class="stat-label" data-i18n="dashboard_strong">Strong</div>
+                </div>
+                <div class="stat-card stat-card-warning">
+                    <div class="stat-icon"><img src="../logos/danger_color.png" alt="At Risk"></div>
+                    <div class="stat-value" id="stat-weak">0</div>
+                    <div class="stat-label" data-i18n="dashboard_weak">At Risk</div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="dashboard-section">
+                <h3 class="dashboard-section-title" data-i18n="dashboard_quick_actions">Quick Actions</h3>
+                <div class="quick-actions">
+                    <button class="quick-action-btn" id="qa-add-password">
+                        <span class="qa-icon"><img src="../logos/password.png" alt="Add Password"></span>
+                        <span data-i18n="btn_add_password">Add Password</span>
+                    </button>
+                    <button class="quick-action-btn" id="qa-watchtower">
+                        <span class="qa-icon"><img src="../logos/shield.png" alt="Watchtower"></span>
+                        <span data-i18n="nav_watchtower">Watchtower</span>
+                    </button>
+                    <button class="quick-action-btn" id="qa-export">
+                        <span class="qa-icon"><img src="../logos/export.png" alt="Export"></span>
+                        <span data-i18n="settings_export">Export</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="dashboard-section">
+                <h3 class="dashboard-section-title" data-i18n="dashboard_recent">Recently Added</h3>
+                <div id="recent-passwords" class="recent-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trash Screen -->
+    <div id="trash-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" data-i18n="nav_trash">Trash</h1>
+            <button class="button small danger" id="empty-trash-btn" data-i18n="trash_empty_all">Empty Trash</button>
+        </header>
+        <div class="main-controls">
+            <div class="search-container">
+                <img src="../logos/search.png" alt="Search" class="search-icon">
+                <input type="text" id="trash-search-input" data-i18n="placeholder_search_trash" placeholder="Search trash..." class="search-input">
+            </div>
+        </div>
+        <div class="trash-info">
+            <span class="trash-info-icon">ℹ️</span>
+            <span data-i18n="trash_info">Items are automatically deleted after 30 days.</span>
+        </div>
+        <div id="trash-list" class="password-list">
+            <div class="empty-state">
+                <p data-i18n="trash_empty">Trash is empty.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- IDs Screen -->
+    <div id="ids-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" data-i18n="nav_ids">Identity Documents</h1>
+            <button class="icon-button" id="add-id-btn" title="Add ID">
+                <img src="../logos/plus.png" alt="Add">
+            </button>
+        </header>
+        <div class="main-controls">
+            <div class="search-container">
+                <img src="../logos/search.png" alt="Search" class="search-icon">
+                <input type="text" id="ids-search-input" data-i18n="placeholder_search_ids" placeholder="Search IDs..." class="search-input">
+            </div>
+        </div>
+        <div id="ids-list" class="password-list">
+            <div class="empty-state">
+                <p data-i18n="ids_empty">No IDs saved.</p>
+                <p class="hint" data-i18n="ids_hint">Click + to add an ID document.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit ID Screen -->
+    <div id="edit-id-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" id="edit-id-title">Add ID</h1>
+            <button class="icon-button close-btn" id="close-edit-id-btn">✕</button>
+        </header>
+        <div class="form-container">
+            <div class="form-group">
+                <label data-i18n="id_name">Document Name *</label>
+                <input type="text" id="edit-id-name" placeholder="e.g. Passport">
+            </div>
+            <div class="form-group">
+                <label data-i18n="id_type">Document Type</label>
+                <select id="edit-id-type" class="folder-select">
+                    <option value="national_id" data-i18n="id_type_national">National ID</option>
+                    <option value="passport" data-i18n="id_type_passport">Passport</option>
+                    <option value="drivers_license" data-i18n="id_type_drivers">Driver's License</option>
+                    <option value="other" data-i18n="id_type_other">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label data-i18n="id_number">Document Number</label>
+                <input type="text" id="edit-id-number" placeholder="Document number">
+            </div>
+            <div class="form-group">
+                <label data-i18n="id_issue_date">Issue Date</label>
+                <input type="date" id="edit-id-issue">
+            </div>
+            <div class="form-group">
+                <label data-i18n="id_expiry_date">Expiry Date</label>
+                <input type="date" id="edit-id-expiry">
+            </div>
+            <div class="form-group">
+                <label data-i18n="label_notes">Notes</label>
+                <textarea id="edit-id-notes" placeholder="Optional notes" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+                <label data-i18n="id_files">Scans / Photos (max. 5)</label>
+                <div class="file-upload-row">
+                    <button class="icon-button" id="upload-id-file-btn" type="button" title="Upload File">
+                        <img src="../logos/upload.png" alt="Upload">
+                    </button>
+                    <span id="edit-id-file-hint" class="file-name-display">No files selected</span>
+                </div>
+                <div id="edit-id-file-list" class="file-list"></div>
+            </div>
+            <div class="button-group">
+                <button class="button primary" id="save-id-btn" data-i18n="btn_save">Save</button>
+                <button class="button danger hidden" id="delete-id-btn" data-i18n="btn_delete">Delete</button>
+                <button class="button secondary" id="cancel-id-btn" data-i18n="btn_cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Documents Screen -->
+    <div id="documents-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" data-i18n="nav_documents">Secure Documents</h1>
+            <button class="icon-button" id="add-document-btn" title="Add Document">
+                <img src="../logos/plus.png" alt="Add">
+            </button>
+        </header>
+        <div class="main-controls">
+            <div class="search-container">
+                <img src="../logos/search.png" alt="Search" class="search-icon">
+                <input type="text" id="docs-search-input" data-i18n="placeholder_search_docs" placeholder="Search documents..." class="search-input">
+            </div>
+        </div>
+        <div id="documents-list" class="password-list">
+            <div class="empty-state">
+                <p data-i18n="docs_empty">No documents saved.</p>
+                <p class="hint" data-i18n="docs_hint">Click + to upload a secure document (max 100MB).</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Document Screen -->
+    <div id="edit-document-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" id="edit-doc-title">Add Document</h1>
+            <button class="icon-button close-btn" id="close-edit-doc-btn">✕</button>
+        </header>
+        <div class="form-container">
+            <div class="form-group">
+                <label data-i18n="doc_name">Document Name *</label>
+                <input type="text" id="edit-doc-name" placeholder="e.g. Tax Return 2025">
+            </div>
+            <div class="form-group">
+                <label data-i18n="doc_description">Description</label>
+                <textarea id="edit-doc-description" placeholder="Optional description" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+                <label data-i18n="doc_files">Files (max 100MB per file)</label>
+                <div class="file-upload-row">
+                    <button class="icon-button" id="upload-doc-file-btn" type="button" title="Upload File">
+                        <img src="../logos/upload.png" alt="Upload">
+                    </button>
+                    <span id="edit-doc-file-hint" class="file-name-display">No files selected</span>
+                </div>
+                <div id="edit-doc-file-list" class="file-list"></div>
+            </div>
+            <div class="button-group">
+                <button class="button primary" id="save-doc-btn" data-i18n="btn_save">Save</button>
+                <button class="button danger hidden" id="delete-doc-btn" data-i18n="btn_delete">Delete</button>
+                <button class="button secondary" id="cancel-doc-btn" data-i18n="btn_cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Credit Cards Screen -->
+    <div id="cards-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" data-i18n="nav_cards">Credit Cards</h1>
+            <button class="icon-button" id="add-card-btn" title="Add Credit Card">
+                <img src="../logos/plus.png" alt="Add">
+            </button>
+        </header>
+        <div class="main-controls">
+            <div class="search-container">
+                <img src="../logos/search.png" alt="Search" class="search-icon">
+                <input type="text" id="cards-search-input" data-i18n="placeholder_search_cards" placeholder="Search credit cards..." class="search-input">
+            </div>
+        </div>
+        <div id="cards-list" class="password-list">
+            <div class="empty-state">
+                <p data-i18n="cards_empty">No credit cards saved.</p>
+                <p class="hint" data-i18n="cards_hint">Click + to save a credit card.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Credit Card Screen -->
+    <div id="edit-card-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" id="edit-card-title">Add Credit Card</h1>
+            <button class="icon-button close-btn" id="close-edit-card-btn">✕</button>
+        </header>
+        <div class="form-container">
+            <div class="form-group">
+                <label data-i18n="card_name">Card Name *</label>
+                <input type="text" id="edit-card-name" placeholder="e.g. Personal Visa">
+            </div>
+            <div class="form-group">
+                <label data-i18n="cardholder_name">Cardholder Name</label>
+                <input type="text" id="edit-cardholder" placeholder="Name on card">
+            </div>
+            <div class="form-group">
+                <label data-i18n="card_number">Card Number</label>
+                <input type="text" id="edit-card-number" placeholder="Card number">
+            </div>
+            <div class="form-group" style="display: flex; gap: 10px;">
+                <div style="flex: 1;">
+                    <label data-i18n="card_brand">Brand</label>
+                    <select id="edit-card-brand" class="folder-select">
+                        <option value="visa">Visa</option>
+                        <option value="mastercard">Mastercard</option>
+                        <option value="amex">American Express</option>
+                        <option value="discover">Discover</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label data-i18n="card_expiry">Expiry Date</label>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <input type="text" id="edit-card-expiry-month" placeholder="MM" style="width: 50px; text-align: center;">
+                        <span>/</span>
+                        <input type="text" id="edit-card-expiry-year" placeholder="YY" style="width: 60px; text-align: center;">
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label data-i18n="card_cvv">CVV</label>
+                <input type="password" id="edit-card-cvv" placeholder="CVV (3-4 digits)" style="width: 120px;">
+            </div>
+            <div class="form-group">
+                <label data-i18n="label_notes">Notes</label>
+                <textarea id="edit-card-notes" placeholder="Optional notes" rows="2"></textarea>
+            </div>
+            <div class="button-group">
+                <button class="button primary" id="save-card-btn" data-i18n="btn_save">Save</button>
+                <button class="button danger hidden" id="delete-card-btn" data-i18n="btn_delete">Delete</button>
+                <button class="button secondary" id="cancel-card-btn" data-i18n="btn_cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reports Screen -->
+    <div id="reports-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" data-i18n="nav_reports">Monthly Security Reports</h1>
+        </header>
+        <div id="reports-list" class="password-list">
+            <div class="empty-state">
+                <p data-i18n="reports_empty">No reports saved yet.</p>
+                <p class="hint" data-i18n="reports_hint">Reports are automatically generated at the end of each month.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Detail Screen -->
+    <div id="report-detail-screen" class="screen hidden">
+        <header class="app-header">
+            <h1 class="header-title" data-i18n="report_title">Monthly Security Report</h1>
+            <button class="icon-button close-btn" id="report-close-btn">✕</button>
+        </header>
+        <div class="form-container" style="max-width: 550px; margin: 20px auto; padding: 20px; background: var(--color-dark); border-radius: 12px; border: 1px solid var(--color-border);">
+            <div class="report-content">
+                <div class="report-score-section" style="text-align: center; margin-bottom: 24px;">
+                    <div class="report-score" id="report-score" style="font-size: 48px; font-weight: bold; color: var(--color-accent);">0</div>
+                    <div class="report-score-label" data-i18n="report_score_label" style="font-size: 14px; color: var(--color-text-muted);">Security Score</div>
+                </div>
+                <div class="report-stats" id="report-stats"></div>
+                <div class="report-recommendations" id="report-recommendations" style="margin-top: 16px; border-top: 1px solid var(--color-border); padding-top: 16px;"></div>
+            </div>
+            <div class="button-group" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
+                <button class="button danger" id="report-delete-btn" data-i18n="btn_delete">Delete</button>
+                <button class="button secondary" id="report-cancel-btn" data-i18n="btn_close">Close</button>
+            </div>
+        </div>
+    </div>
+
+        </div><!-- #content-area -->
+    </div><!-- #app-shell -->
 
     <!-- Toast Notification -->
     <div id="toast" class="toast hidden">

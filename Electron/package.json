@@ -67,20 +67,20 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "../logos/newlocked3.png"
+      "icon": "../logos/logo_win_linx.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "installerIcon": "../logos/newlocked3.ico",
-      "uninstallerIcon": "../logos/newlocked3.ico",
+      "installerIcon": "../logos/logo_win_linx.ico",
+      "uninstallerIcon": "../logos/logo_win_linx.ico",
       "deleteAppDataOnUninstall": true,
       "include": "build/installer.nsh"
     },
     "mac": {
       "target": "dmg",
-      "icon": "../logos/newlocked2.png"
+      "icon": "../logos/logo_mac.png"
     },
     "dmg": {
       "contents": [
@@ -99,7 +99,7 @@
     },
     "linux": {
       "target": "AppImage",
-      "icon": "../logos/newlocked3.png",
+      "icon": "../logos/logo_win.png",
       "category": "Utility"
     }
   }

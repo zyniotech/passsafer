@@ -16,6 +16,14 @@ contextBridge.exposeInMainWorld('api', {
     writeFile: (data) => ipcRenderer.invoke('write-file', data),
     showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
     showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
+    loadIds: (data) => ipcRenderer.invoke('load-ids', data),
+    saveIds: (data) => ipcRenderer.invoke('save-ids', data),
+    loadDocuments: (data) => ipcRenderer.invoke('load-documents', data),
+    saveDocuments: (data) => ipcRenderer.invoke('save-documents', data),
+    loadCards: (data) => ipcRenderer.invoke('load-cards', data),
+    saveCards: (data) => ipcRenderer.invoke('save-cards', data),
+    loadReports: (data) => ipcRenderer.invoke('load-reports', data),
+    saveReports: (data) => ipcRenderer.invoke('save-reports', data),
 
     // Utilities
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
