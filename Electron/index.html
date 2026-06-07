@@ -49,7 +49,6 @@
                 <div class="nav-item" data-nav="trash">
                     <span class="nav-icon"><img src="../logos/garbage.png" alt="Trash"></span>
                     <span class="nav-label" data-i18n="nav_trash">Trash</span>
-                    <span class="nav-badge" id="trash-badge"></span>
                 </div>
                 <div style="border-top: 1px solid var(--color-border); margin: 8px 0;"></div>
                 <div class="nav-item" data-nav="import">
@@ -189,9 +188,7 @@
     <div id="main-screen" class="screen hidden">
         <!-- Header -->
         <header class="app-header">
-            <button class="icon-button" id="settings-btn" data-i18n="title_settings" title="Settings" style="display: none;">
-                <img src="../logos/settings.png" alt="Settings">
-            </button>
+
             <h1 class="header-title" id="header-title" data-i18n="header_passwords">Passwords</h1>
             <button class="icon-button" id="add-password-btn" data-i18n="title_add" title="Add Password">
                 <img src="../logos/plus.png" alt="Add">
@@ -408,10 +405,7 @@
                     <img src="../logos/report.png" alt="Report" class="btn-icon">
                     <span data-i18n="settings_generate_report">Generate Security Report</span>
                 </button>
-                <button class="settings-option" id="security-audit-btn" style="display: none;">
-                    <img src="../logos/settings.png" alt="Watchtower" class="btn-icon">
-                    <span data-i18n="nav_watchtower">🛡️ Watchtower</span>
-                </button>
+
             </div>
 
             <div class="settings-section">
@@ -440,21 +434,7 @@
                 </button>
             </div>
 
-            <div class="settings-section" style="display: none;">
-                <h3 class="settings-section-title" data-i18n="settings_data">Data Management</h3>
-                <button class="settings-option" id="show-export-btn">
-                    <img src="../logos/export.png" alt="Export" class="btn-icon">
-                    <span data-i18n="settings_export">Export Passwords</span>
-                </button>
-                <button class="settings-option" id="show-import-btn">
-                    <img src="../logos/import.png" alt="Import" class="btn-icon">
-                    <span data-i18n="settings_import">Import Passwords</span>
-                </button>
-                <button class="settings-option" id="show-csv-import-btn">
-                    <img src="../logos/import.png" alt="Import CSV" class="btn-icon">
-                    <span data-i18n="settings_import_csv">Import from CSV (Browser)</span>
-                </button>
-            </div>
+
 
             <div class="settings-section">
                 <h3 class="settings-section-title" data-i18n="settings_app">Application</h3>
@@ -493,7 +473,6 @@
     <div id="audit-screen" class="screen hidden">
         <header class="app-header">
             <h1 class="header-title" data-i18n="nav_watchtower">🛡️ Watchtower</h1>
-            <button class="icon-button close-btn" id="close-audit-btn">✕</button>
         </header>
         <div class="settings-content" style="padding-bottom: 30px;">
             <!-- Summary Cards -->
@@ -545,16 +524,18 @@
     <div id="export-screen" class="screen hidden">
         <header class="app-header">
             <h1 class="header-title" data-i18n="header_export">Export Passwords</h1>
-            <button class="icon-button close-btn" id="close-export-btn">✕</button>
         </header>
         <div class="form-container">
+            <div class="settings-info-box" style="margin-bottom: 20px;">
+                <p>Exports: Passwords, Folders, IDs, Documents & Cards</p>
+                <p class="hint">Trash and Security Reports are not included.</p>
+            </div>
             <div class="form-group">
                 <label data-i18n="label_password">Set Export Password</label>
                 <input type="password" id="export-password" data-i18n="placeholder_password" placeholder="Password for export file">
             </div>
             <div class="button-group">
                 <button class="button primary" id="do-export-btn" data-i18n="settings_export">Export</button>
-                <button class="button secondary" id="cancel-export-btn" data-i18n="btn_cancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -563,9 +544,12 @@
     <div id="import-screen" class="screen hidden">
         <header class="app-header">
             <h1 class="header-title" data-i18n="header_import">Import Passwords</h1>
-            <button class="icon-button close-btn" id="close-import-btn">✕</button>
         </header>
         <div class="form-container">
+            <div class="settings-info-box" style="margin-bottom: 20px;">
+                <p>Imports: Passwords, Folders, IDs, Documents & Cards</p>
+                <p class="hint">Existing entries with the same name will be skipped.</p>
+            </div>
             <div class="form-group">
                 <label data-i18n="settings_import">Select File</label>
                 <div class="file-input-wrapper">
@@ -579,7 +563,6 @@
             </div>
             <div class="button-group">
                 <button class="button primary" id="do-import-btn" data-i18n="settings_import">Import</button>
-                <button class="button secondary" id="cancel-import-btn" data-i18n="btn_cancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -620,7 +603,6 @@
     <div id="csv-import-screen" class="screen hidden">
         <header class="app-header">
             <h1 class="header-title" data-i18n="settings_import_csv">Import from CSV (Browser)</h1>
-            <button class="icon-button close-btn" id="close-csv-import-btn">✕</button>
         </header>
         <div class="form-container">
             <div class="settings-info-box" style="margin-bottom: 20px;">
@@ -633,7 +615,6 @@
             </div>
             <div class="button-group">
                 <button class="button primary" id="do-csv-import-btn">Start Import</button>
-                <button class="button secondary" id="cancel-csv-import-btn">Cancel</button>
             </div>
         </div>
     </div>
@@ -1035,7 +1016,7 @@
             <h1 class="header-title" data-i18n="report_title">Monthly Security Report</h1>
             <button class="icon-button close-btn" id="report-close-btn">✕</button>
         </header>
-        <div class="form-container" style="max-width: 550px; margin: 20px auto; padding: 20px; background: var(--color-dark); border-radius: 12px; border: 1px solid var(--color-border);">
+        <div class="report-detail-container">
             <div class="report-content">
                 <div class="report-score-section" style="text-align: center; margin-bottom: 24px;">
                     <div class="report-score" id="report-score" style="font-size: 48px; font-weight: bold; color: var(--color-accent);">0</div>

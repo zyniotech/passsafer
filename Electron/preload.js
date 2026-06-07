@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('api', {
 
     // Utilities
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
+    copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
+    clearClipboard: () => ipcRenderer.invoke('clear-clipboard'),
 
     // Auto-Update
     downloadUpdate: () => ipcRenderer.invoke('download-update'),

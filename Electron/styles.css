@@ -662,8 +662,6 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    align-items: center;
-    justify-content: space-between;
     gap: 16px;
 }
 
@@ -859,95 +857,6 @@ textarea {
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Custom Modal */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 2000;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(5px);
-}
-
-.modal-overlay.show {
-    opacity: 1;
-    visibility: visible;
-}
-
-.modal-content {
-    background: var(--color-dark);
-    padding: 2rem;
-    border-radius: 16px;
-    width: 90%;
-    max-width: 400px;
-    border: 1px solid var(--color-border);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    transform: translateY(20px);
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    text-align: center;
-}
-
-.modal-overlay.show .modal-content {
-    transform: translateY(0);
-}
-
-.modal-title {
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-    color: var(--color-text);
-}
-
-.modal-description {
-    color: var(--color-text-secondary);
-    margin-bottom: 2rem;
-    line-height: 1.5;
-}
-
-.modal-actions {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-}
-
-/* Updated Button Styles for Copy/View */
-.button.icon-only-modern {
-    background: transparent;
-    border: 1px solid var(--color-border);
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    transition: all 0.2s ease;
-}
-
-.button.icon-only-modern:hover {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 145, 0, 0.3);
-}
-
-.button.icon-only-modern img {
-    width: 20px;
-    height: 20px;
-    opacity: 0.8;
-    filter: brightness(0) invert(1);
-}
-
-.button.icon-only-modern:hover img {
-    opacity: 1;
-}
 
 /* Custom Modal */
 .modal-overlay {
@@ -1161,17 +1070,6 @@ textarea {
     letter-spacing: 0.5px;
 }
 
-.audit-card-total .audit-card-number { color: var(--color-accent); }
-.audit-card-strong .audit-card-number { color: #22c55e; }
-.audit-card-weak .audit-card-number { color: #f59e0b; }
-.audit-card-reused .audit-card-number { color: #8b5cf6; }
-.audit-card-leaked .audit-card-number { color: #ef4444; }
-
-.audit-card-total { border-top: 3px solid var(--color-accent); }
-.audit-card-strong { border-top: 3px solid #22c55e; }
-.audit-card-weak { border-top: 3px solid #f59e0b; }
-.audit-card-reused { border-top: 3px solid #8b5cf6; }
-.audit-card-leaked { border-top: 3px solid #ef4444; }
 
 /* Scanning Spinner */
 .audit-spinner {
@@ -1449,10 +1347,6 @@ textarea {
     align-items: center;
     justify-content: center;
     padding: 0 6px;
-}
-
-.nav-badge.visible {
-    display: flex;
 }
 
 /* Content Area */
@@ -1902,6 +1796,14 @@ textarea {
     margin-bottom: 1.5rem;
 }
 
+.report-detail-container {
+    width: 100%;
+    padding: 20px;
+    background: var(--color-dark);
+    border-radius: 12px;
+    border: 1px solid var(--color-border);
+}
+
 .report-score-section {
     text-align: center;
     margin-bottom: 1.5rem;
@@ -1929,26 +1831,6 @@ textarea {
     margin-bottom: 16px;
 }
 
-.report-stat {
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    padding: 12px;
-    text-align: center;
-}
-
-.report-stat-value {
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--color-text);
-}
-
-.report-stat-label {
-    font-size: 11px;
-    color: var(--color-text-secondary);
-    text-transform: uppercase;
-    margin-top: 2px;
-}
 
 .report-recommendations {
     background: rgba(255, 140, 0, 0.06);

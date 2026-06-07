@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Tray, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Tray, Menu, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
@@ -820,6 +820,17 @@ ipcMain.handle('open-external', async (event, url) => {
     } catch (err) {
         console.error('Invalid URL passed to open-external:', url, err);
     }
+});
+
+// Clipboard operations (for secure clipboard access from renderer)
+ipcMain.handle('copy-to-clipboard', (event, text) => {
+    clipboard.writeText(text);
+    return { success: true };
+});
+
+ipcMain.handle('clear-clipboard', () => {
+    clipboard.writeText('');
+    return { success: true };
 });
 
 // Licensing Helpers

@@ -225,7 +225,6 @@ function setupEventListeners() {
     document.getElementById('show-login-btn').addEventListener('click', () => showScreen('login-screen'));
 
     // Main Screen
-    document.getElementById('settings-btn').addEventListener('click', showSettings);
     document.getElementById('add-password-btn').addEventListener('click', showAddPassword);
     document.getElementById('create-folder-btn').addEventListener('click', showCreateFolder);
     document.getElementById('back-btn').addEventListener('click', handleBackToRoot);
@@ -274,10 +273,6 @@ function setupEventListeners() {
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
     document.getElementById('check-updates-btn').addEventListener('click', handleManualUpdateCheck);
     
-    // Security Audit
-    document.getElementById('security-audit-btn').addEventListener('click', openSecurityAudit);
-    document.getElementById('close-audit-btn').addEventListener('click', () => showScreen('settings-screen'));
-    
     // License Listeners
     document.getElementById('activate-license-btn').addEventListener('click', handleActivateLicense);
     document.getElementById('get-trial-btn').addEventListener('click', () => {
@@ -299,14 +294,6 @@ function setupEventListeners() {
         showScreen('license-screen');
     });
 
-    document.getElementById('show-csv-import-btn').addEventListener('click', () => {
-        document.getElementById('csv-file-path').textContent = 'No file selected';
-        document.getElementById('csv-file-path').dataset.path = '';
-        showScreen('csv-import-screen');
-    });
-
-    document.getElementById('close-csv-import-btn').addEventListener('click', () => showScreen('settings-screen'));
-    document.getElementById('cancel-csv-import-btn').addEventListener('click', () => showScreen('settings-screen'));
     document.getElementById('select-csv-file-btn').addEventListener('click', selectCsvFile);
     document.getElementById('do-csv-import-btn').addEventListener('click', handleCsvImport);
 
@@ -334,12 +321,6 @@ function setupEventListeners() {
     }
 
     // Export Screen
-    document.getElementById('show-export-btn').addEventListener('click', () => {
-        document.getElementById('export-password').value = '';
-        showScreen('export-screen');
-    });
-    document.getElementById('close-export-btn').addEventListener('click', () => showScreen('settings-screen'));
-    document.getElementById('cancel-export-btn').addEventListener('click', () => showScreen('settings-screen'));
     document.getElementById('do-export-btn').addEventListener('click', handleExport);
 
     // Delete Account Screen
@@ -352,14 +333,6 @@ function setupEventListeners() {
     document.getElementById('confirm-delete-account-btn').addEventListener('click', handleDeleteAccount);
 
     // Import Screen
-    document.getElementById('show-import-btn').addEventListener('click', () => {
-        document.getElementById('import-password').value = '';
-        document.getElementById('import-file-path').textContent = 'Keine Datei ausgewählt';
-        document.getElementById('import-file-path').dataset.path = '';
-        showScreen('import-screen');
-    });
-    document.getElementById('close-import-btn').addEventListener('click', () => showScreen('settings-screen'));
-    document.getElementById('cancel-import-btn').addEventListener('click', () => showScreen('settings-screen'));
     document.getElementById('select-import-file-btn').addEventListener('click', selectImportFile);
     document.getElementById('do-import-btn').addEventListener('click', handleImport);
 
@@ -920,9 +893,6 @@ function closeAllSelect(elmnt) {
     }
 
     for (let i = 0; i < x.length; i++) {
-        if (elmnt == y.length /* logic slightly wrong in strict sense but effectively works for single select in click outside */) {
-            // logic to keep open if clicked inside ignored here since stopPropagation used on trigger
-        }
         x[i].classList.add("select-hide");
     }
 }
@@ -942,33 +912,49 @@ function togglePasswordVisibility() {
 
 // Auto-clear clipboard after timeout
 let clipboardClearTimer = null;
-function scheduleClipboardClear() {
+async function scheduleClipboardClear() {
     if (clipboardClearTimer) clearTimeout(clipboardClearTimer);
-    clipboardClearTimer = setTimeout(() => {
-        navigator.clipboard.writeText('').catch(() => { });
+    clipboardClearTimer = setTimeout(async () => {
+        try {
+            await window.api.clearClipboard();
+        } catch (e) {
+            console.error('Failed to clear clipboard:', e);
+        }
     }, 30000); // 30 seconds
 }
 
-function copyUsername() {
+async function copyUsername() {
     const username = document.getElementById('detail-username').textContent;
-    navigator.clipboard.writeText(username);
-    showToast('msg_copied', 'success');
-    scheduleClipboardClear();
+    try {
+        await window.api.copyToClipboard(username);
+        showToast('msg_copied', 'success');
+        await scheduleClipboardClear();
+    } catch (e) {
+        showToast('Copy failed!', 'error');
+    }
 }
 
-function copyLink() {
+async function copyLink() {
     const link = document.getElementById('detail-link').textContent;
-    navigator.clipboard.writeText(link);
-    showToast('msg_copied', 'success');
-    scheduleClipboardClear();
+    try {
+        await window.api.copyToClipboard(link);
+        showToast('msg_copied', 'success');
+        await scheduleClipboardClear();
+    } catch (e) {
+        showToast('Copy failed!', 'error');
+    }
 }
 
-function copyPassword() {
+async function copyPassword() {
     const pwdElement = document.getElementById('detail-password');
     const password = pwdElement.dataset.password;
-    navigator.clipboard.writeText(password);
-    showToast('msg_copied', 'success');
-    scheduleClipboardClear();
+    try {
+        await window.api.copyToClipboard(password);
+        showToast('msg_copied', 'success');
+        await scheduleClipboardClear();
+    } catch (e) {
+        showToast('Copy failed!', 'error');
+    }
 }
 
 async function savePasswordFolder() {
@@ -1288,7 +1274,6 @@ async function handleDeleteAccount() {
 }
 
 // Logout
-// Logout
 function handleLogout(force = false) {
     if (force) {
         performLogout();
@@ -1314,6 +1299,11 @@ function performLogout() {
     reports = [];
     currentActiveReport = null;
     currentFolder = null;
+
+    if (clipboardClearTimer) {
+        clearTimeout(clipboardClearTimer);
+        clipboardClearTimer = null;
+    }
 
     // Clear input fields
     const loginPwd = document.getElementById('login-password');
@@ -1394,7 +1384,10 @@ async function handleExport() {
         // Prepare data for export
         const exportData = {
             passwords,
-            folders
+            folders,
+            ids,
+            documents,
+            cards
         };
 
         const result = await window.api.exportPasswords({
@@ -1477,11 +1470,8 @@ async function handleImport() {
         const importedPasswords = importedData.passwords || importedData.data || [];
 
         importedPasswords.forEach(impPwd => {
-            // Simple duplicate check (app + username)
-            const exists = passwords.some(p =>
-                p.app === impPwd.app &&
-                p.username === impPwd.username
-            );
+            // Simple duplicate check (app name only as requested)
+            const exists = passwords.some(p => p.app === impPwd.app);
 
             if (!exists) {
                 // Map folder ID if it exists
@@ -1496,15 +1486,52 @@ async function handleImport() {
             }
         });
 
+        // 3. Handle IDs
+        const importedIds = importedData.ids || [];
+        let addedIdsCount = 0;
+        importedIds.forEach(impId => {
+            const exists = ids.some(item => item.name === impId.name);
+            if (!exists) {
+                ids.push(impId);
+                addedIdsCount++;
+            }
+        });
+
+        // 4. Handle Documents
+        const importedDocs = importedData.documents || [];
+        let addedDocsCount = 0;
+        importedDocs.forEach(impDoc => {
+            const exists = documents.some(item => item.name === impDoc.name);
+            if (!exists) {
+                documents.push(impDoc);
+                addedDocsCount++;
+            }
+        });
+
+        // 5. Handle Cards
+        const importedCards = importedData.cards || [];
+        let addedCardsCount = 0;
+        importedCards.forEach(impCard => {
+            const exists = cards.some(item => item.name === impCard.name);
+            if (!exists) {
+                cards.push(impCard);
+                addedCardsCount++;
+            }
+        });
+
         // Save merged data
         const saveResult = await window.api.savePasswords({
             password: currentPassword,
             passwords,
-            folders
+            folders,
+            trash // Fix Bug A: pass trash parameter
         });
+        const saveIdsResult = await window.api.saveIds({ password: currentPassword, ids });
+        const saveDocsResult = await window.api.saveDocuments({ password: currentPassword, documents });
+        const saveCardsResult = await window.api.saveCards({ password: currentPassword, cards });
 
-        if (saveResult.success) {
-            showToast(`${addedCount} passwords imported successfully!`, 'success');
+        if (saveResult.success && saveIdsResult.success && saveDocsResult.success && saveCardsResult.success) {
+            showToast(`${addedCount} passwords, ${addedIdsCount} IDs, ${addedDocsCount} documents, and ${addedCardsCount} cards imported successfully!`, 'success');
             renderPasswordList();
             showScreen('settings-screen');
         } else {
@@ -1797,7 +1824,8 @@ async function handleCsvImport() {
         // Merge with existing
         let added = 0;
         importedData.forEach(imp => {
-            const exists = passwords.some(p => p.app === imp.app && p.username === imp.username);
+            // Simple duplicate check (app name only as requested)
+            const exists = passwords.some(p => p.app === imp.app);
             if (!exists) {
                 passwords.push(imp);
                 added++;
@@ -1807,7 +1835,8 @@ async function handleCsvImport() {
         const saveResult = await window.api.savePasswords({
             password: currentPassword,
             passwords,
-            folders
+            folders,
+            trash // Fix Bug A: pass trash parameter
         });
 
         if (saveResult.success) {
@@ -2086,8 +2115,8 @@ let auditResults = [];
 let auditLeakedSet = new Set();
 
 async function openSecurityAudit() {
-    if (!licenseState.valid || !licenseState.features || !licenseState.features.securityAudit) {
-        showToast('Password security audit requires a Premium license.', 'warning', true);
+    if (!hasPaidAccess()) {
+        showToast('Watchtower requires a Premium or Lifetime license.', 'warning', true);
         return;
     }
     showScreen('audit-screen');
@@ -2320,7 +2349,6 @@ if (window.api && window.api.onNativeRequest) {
                         response: {
                             action: "vault-response",
                             success: true,
-                            masterPassword: currentPassword,
                             vault: {
                                 passwords: loadResult.data,
                                 folders: loadResult.folders
@@ -2356,8 +2384,9 @@ function setupNewEventListeners() {
     document.getElementById('qa-add-password').addEventListener('click', showAddPassword);
     document.getElementById('qa-watchtower').addEventListener('click', openSecurityAudit);
     document.getElementById('qa-export').addEventListener('click', () => {
-        const exportBtn = document.getElementById('show-export-btn');
-        if (exportBtn) exportBtn.click();
+        document.getElementById('export-password').value = '';
+        showScreen('export-screen');
+        updateSidebarActive('export');
     });
 
     // Product Hunt Banner
@@ -2420,6 +2449,11 @@ function setupNewEventListeners() {
     document.getElementById('close-edit-card-btn').addEventListener('click', showCardsScreen);
 }
 
+function hasPaidAccess() {
+    return licenseState.valid &&
+           (licenseState.plan === 'premium' || licenseState.plan === 'lifetime');
+}
+
 function setupSidebarNavigation() {
     document.querySelectorAll('#sidebar .nav-item').forEach(item => {
         item.addEventListener('click', () => {
@@ -2430,10 +2464,22 @@ function setupSidebarNavigation() {
                 currentFolder = null;
                 showMainScreen();
             } else if (navId === 'trash') {
+                if (!hasPaidAccess()) {
+                    showToast('Trash requires a Premium or Lifetime license.', 'warning', true);
+                    return;
+                }
                 showTrashScreen();
             } else if (navId === 'watchtower') {
+                if (!hasPaidAccess()) {
+                    showToast('Watchtower requires a Premium or Lifetime license.', 'warning', true);
+                    return;
+                }
                 openSecurityAudit();
             } else if (navId === 'ids') {
+                if (!hasPaidAccess()) {
+                    showToast('IDs require a Premium or Lifetime license.', 'warning', true);
+                    return;
+                }
                 showIdsScreen();
             } else if (navId === 'documents') {
                 showDocumentsScreen();
@@ -2817,7 +2863,7 @@ function renderTrashList() {
         const card = document.createElement('div');
         card.className = 'trash-card';
         
-        const badgeClass = daysLeft <= 7 ? 'badge-danger' : 'badge-warning';
+        const badgeClass = daysLeft <= 7 ? 'danger' : 'warn';
 
         let displayName = item.app || item.name || '';
         let displaySubtitle = item.username || '';
@@ -2881,7 +2927,6 @@ async function moveToTrash(index) {
     if (result.success) {
         showToast('msg_saved', 'success');
         showMainScreen();
-        updateTrashBadge();
     } else {
         showToast('msg_error', 'error');
     }
@@ -2923,7 +2968,6 @@ async function restoreFromTrash(index) {
     if (result.success) {
         showToast('trash_restored', 'success');
         renderTrashList();
-        updateTrashBadge();
     } else {
         showToast('msg_error', 'error');
     }
@@ -2936,7 +2980,6 @@ async function permanentlyDelete(index) {
     if (result.success) {
         showToast('trash_deleted', 'success');
         renderTrashList();
-        updateTrashBadge();
     } else {
         showToast('msg_error', 'error');
     }
@@ -2952,7 +2995,6 @@ async function handleEmptyTrash() {
             if (result.success) {
                 showToast('trash_emptied', 'success');
                 renderTrashList();
-                updateTrashBadge();
             } else {
                 showToast('msg_error', 'error');
             }
@@ -2972,20 +3014,6 @@ async function purgeExpiredTrash() {
 
     if (trash.length !== initialLength && currentPassword) {
         await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
-        updateTrashBadge();
-    }
-}
-
-function updateTrashBadge() {
-    const badge = document.getElementById('trash-badge');
-    if (badge) {
-        if (trash.length > 0) {
-            badge.textContent = trash.length;
-            badge.style.display = 'inline-block';
-        } else {
-            badge.textContent = '';
-            badge.style.display = 'none';
-        }
     }
 }
 
@@ -3161,7 +3189,6 @@ async function handleDeleteId() {
             if (resultIds.success && resultPwd.success) {
                 showToast('id_deleted', 'success');
                 showIdsScreen();
-                updateTrashBadge();
             } else {
                 showToast('msg_error', 'error');
             }
@@ -3418,7 +3445,6 @@ async function handleDeleteDocument() {
             if (resultDocs.success && resultPwd.success) {
                 showToast('doc_deleted', 'success');
                 showDocumentsScreen();
-                updateTrashBadge();
             } else {
                 showToast('msg_error', 'error');
             }
@@ -3686,7 +3712,6 @@ async function handleDeleteCard() {
             if (resultCards.success && resultPwd.success) {
                 showToast('card_deleted', 'success');
                 showCardsScreen();
-                updateTrashBadge();
             } else {
                 showToast('msg_error', 'error');
             }
