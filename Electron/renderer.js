@@ -172,7 +172,7 @@ function validateUsername(username) {
 
 function generateStrongPassword() {
     if (!licenseState.valid || !licenseState.features || !licenseState.features.passwordGenerator) {
-        showToast('Password generator requires a Premium license.', 'warning', true);
+        showToast('Password generator requires a Premium or Lifetime license.', 'warning', true);
         return;
     }
     const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -1932,10 +1932,19 @@ async function checkLicenseStatus(forceSync = false) {
                 if (response.ok) {
                     const data = await response.json();
                     if (data.valid) {
+                        const isPremiumOrLifetime = data.plan !== 'free' && data.plan !== 'trial' && data.plan !== 'none';
+                        const enforcedFeatures = data.features ? {
+                            ...data.features,
+                            passwordGenerator: isPremiumOrLifetime || data.features.passwordGenerator,
+                            securityAudit: isPremiumOrLifetime || data.features.securityAudit
+                        } : {
+                            passwordGenerator: isPremiumOrLifetime,
+                            securityAudit: isPremiumOrLifetime
+                        };
                         const updatedLicense = {
                             licenseKey: cached.licenseKey,
                             plan: data.plan,
-                            features: data.features,
+                            features: enforcedFeatures,
                             expiryDate: data.expiryDate,
                             lastSync: Date.now()
                         };
@@ -1943,7 +1952,7 @@ async function checkLicenseStatus(forceSync = false) {
                         licenseState = {
                             valid: true,
                             plan: data.plan,
-                            features: data.features,
+                            features: enforcedFeatures,
                             expiryDate: data.expiryDate,
                             lastSync: Date.now()
                         };
@@ -2061,10 +2070,19 @@ async function handleActivateLicense() {
 
         const data = await response.json();
         if (data.valid) {
+            const isPremiumOrLifetime = data.plan !== 'free' && data.plan !== 'trial' && data.plan !== 'none';
+            const enforcedFeatures = data.features ? {
+                ...data.features,
+                passwordGenerator: isPremiumOrLifetime || data.features.passwordGenerator,
+                securityAudit: isPremiumOrLifetime || data.features.securityAudit
+            } : {
+                passwordGenerator: isPremiumOrLifetime,
+                securityAudit: isPremiumOrLifetime
+            };
             const licenseData = {
                 licenseKey,
                 plan: data.plan,
-                features: data.features,
+                features: enforcedFeatures,
                 expiryDate: data.expiryDate,
                 lastSync: Date.now()
             };
@@ -2073,7 +2091,7 @@ async function handleActivateLicense() {
                 licenseState = {
                     valid: true,
                     plan: data.plan,
-                    features: data.features,
+                    features: enforcedFeatures,
                     expiryDate: data.expiryDate,
                     lastSync: Date.now()
                 };
