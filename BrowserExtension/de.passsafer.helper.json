@@ -1,0 +1,10 @@
+{
+  "name": "de.passsafer.helper",
+  "description": "PassSafer Native Messaging Host",
+  "path": "C:\\Users\\domin\\Documents\\Programmieren\\Apps\\PassSafer\\BrowserExtension\\native-host.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://iimaibjnobgoecdbaeojkaikbkfbdhme/",
+    "chrome-extension://pgccapkkkbbfeoafdmjibnjkiplnnffn/"
+  ]
+}
