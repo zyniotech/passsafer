@@ -12,9 +12,9 @@
 
 Get started with PassSafer in less than 2 minutes:
 
-*   🚀 **[Register for a 1-Month Free Trial](https://zynio-tech.web.app/register)** - No credit card required.
-*   💻 **[Download PassSafer for Desktop](https://zynio-tech.web.app/download)** - Available for Windows, macOS, and Linux.
-*   💳 **[View Premium Plans & Lifetime Options](https://zynio-tech.web.app/pricing)** - Pay once, use forever across up to 100 devices.
+*   🚀 **[Register for a 1-Month Free Trial](https://passsafer.com/register)** - No credit card required.
+*   💻 **[Download PassSafer for Desktop](https://passsafer.com/download)** - Available for Windows, macOS, and Linux.
+*   💳 **[View Premium Plans & Lifetime Options](https://passsafer.com/pricing)** - Pay once, use forever across up to 100 devices.
 
 ---
 
