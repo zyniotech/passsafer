@@ -108,6 +108,11 @@
         if (processedFields.has(field)) continue;
         processedFields.add(field);
 
+        // Suppress browser native password manager
+        if (field.type === 'password') {
+          field.setAttribute('autocomplete', 'new-password');
+        }
+
         // --- Focus-Listener: Dropdown anzeigen ---
         field.addEventListener('focus', () => {
           // Browser native autocomplete Vorschläge unterdrücken
@@ -194,6 +199,88 @@
     } catch (err) {
       if (err.message && err.message.includes('context invalidated')) return;
       console.warn('[PassSafer] Fehler beim Anzeigen des Dropdowns:', err);
+    }
+  }
+
+  /**
+   * Automatically shows credential suggestions below the login field
+   * after a short delay, without requiring user interaction.
+   * This provides a NordPass-style auto-suggest experience.
+   */
+  async function autoShowCredentials() {
+    try {
+      // Wait for page to stabilize
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      // Don't show if a dropdown is already visible
+      if (UI.isDropdownVisible()) return;
+
+      // Don't show on ignored sites
+      const ignoredResponse = await StorageClient.checkIgnored(currentDomain);
+      if (ignoredResponse && ignoredResponse.ignored) return;
+
+      // Fetch credentials for this domain
+      const loginsResponse = await StorageClient.getLogins(currentDomain);
+      const credentials =
+        loginsResponse && loginsResponse.credentials
+          ? loginsResponse.credentials
+          : [];
+
+      // Only show if there are saved credentials
+      if (credentials.length === 0) return;
+
+      // Find the first login form
+      let formGroups;
+      try {
+        formGroups = FieldDetection.findLoginForms();
+      } catch (_) {
+        return;
+      }
+      if (!formGroups || formGroups.length === 0) return;
+
+      const group = formGroups[0];
+      // Prefer username field as anchor; fall back to password field
+      const anchorField = group.usernameField || group.passwordField;
+      if (!anchorField || !anchorField.isConnected) return;
+
+      // Only show if the field is visible
+      const rect = anchorField.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      // Suppress browser autocomplete on login fields
+      if (!originalAutocompletes.has(anchorField)) {
+        originalAutocompletes.set(anchorField, anchorField.getAttribute('autocomplete'));
+      }
+      anchorField.setAttribute('autocomplete', 'one-time-code');
+      if (group.passwordField) {
+        group.passwordField.setAttribute('autocomplete', 'new-password');
+      }
+
+      // Show the dropdown automatically
+      UI.showDropdown(anchorField, credentials, {
+        showGenerator: false,
+        onSelect(selected) {
+          if (!selected) return;
+          Autofill.fillCredentials(
+            group.usernameField,
+            group.passwordField,
+            selected.username,
+            selected.password
+          );
+        },
+      });
+
+      savePromptShown = false; // reset so save prompt can still show later
+
+      // Close dropdown when user starts typing in any input field
+      const onTyping = () => {
+        UI.closeDropdown();
+      };
+      document.addEventListener('keydown', onTyping, { once: true, passive: true, capture: true });
+
+    } catch (err) {
+      if (err.message && err.message.includes('context invalidated')) return;
+      console.warn('[PassSafer] autoShowCredentials error:', err);
     }
   }
 
@@ -312,7 +399,7 @@
           }
         });
       }
-    }, 1500);
+    }, 3000);
   }
 
   /**
@@ -437,7 +524,9 @@
             pendingData.username,
             pendingData.password,
             !!pendingData.isUpdate,
-          ).catch((err) => console.warn('[PassSafer] Fehler beim Speichern:', err));
+          ).then(() => {
+            UI.showToast(pendingData.isUpdate ? 'Password updated!' : 'Password saved!');
+          }).catch((err) => console.warn('[PassSafer] Fehler beim Speichern:', err));
         },
 
         /** Benutzer schließt das Banner */
@@ -539,6 +628,7 @@
       scanAndAttach();
       attachSubmitListeners();
       checkForPendingSave();
+      autoShowCredentials();
       startObserver();
       console.log('[PassSafer] Extension initialized on', currentDomain);
     } catch (err) {

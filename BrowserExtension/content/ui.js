@@ -17,20 +17,20 @@ window.PassSafer.UI = (() => {
   // ─── Konstanten ──────────────────────────────────────────────────────────────
 
   const COLORS = {
-    bg:          '#1e1e1e',
-    bgHover:     '#2a2a2a',
-    border:      '#3a3a3a',
-    accent:      '#f97316',
-    accentHover: '#fb923c',
+    bg:          '#2d2d2d',
+    bgHover:     '#363636',
+    border:      '#404040',
+    accent:      '#ff8c00',
+    accentHover: '#ff9f26',
     text:        '#e5e5e5',
-    textMuted:   '#a3a3a3',
+    textMuted:   '#888888',
     success:     '#22c55e',
     warning:     '#eab308',
-    danger:      '#ef4444'
+    danger:      '#e74c3c'
   };
 
   const FONT_STACK =
-    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+    "'DM Sans', -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif";
 
   // Icon-URLs über chrome.runtime.getURL (Web-Accessible-Resources)
   const ICON_16 = chrome.runtime.getURL('icons/icon16.png');
@@ -64,6 +64,33 @@ window.PassSafer.UI = (() => {
       .replace(/'/g,  '&#039;');
   }
 
+  /**
+   * Generates a favicon URL for a given domain using Google's Favicon service.
+   * @param {string} domain 
+   * @returns {string|null}
+   */
+  function getFaviconUrl(domain) {
+    if (!domain) return null;
+    try {
+        let domainStr = domain.toString();
+        let d = domainStr.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split('?')[0];
+        if (!d) return null;
+        
+        let targetUrl = domainStr.startsWith('http') ? domainStr : 'https://' + d;
+        if (!d.includes('.')) {
+            targetUrl = domainStr.startsWith('https') ? 'https://' + d : 'http://' + d;
+        }
+
+        const url = new URL(chrome.runtime.getURL("/_favicon/"));
+        url.searchParams.set("pageUrl", targetUrl);
+        url.searchParams.set("size", "64");
+        return url.toString();
+    } catch (err) {
+        console.error('[getFaviconUrl] error:', err);
+        return null;
+    }
+  }
+
   // ─── Gemeinsame Styles ──────────────────────────────────────────────────────
 
   /**
@@ -71,6 +98,7 @@ window.PassSafer.UI = (() => {
    */
   function _buildDropdownStyles() {
     return `
+      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap');
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
       @keyframes ps-fadeIn {
@@ -195,6 +223,7 @@ window.PassSafer.UI = (() => {
    */
   function _buildBannerStyles() {
     return `
+      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap');
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
       @keyframes ps-slideIn {
@@ -393,6 +422,7 @@ window.PassSafer.UI = (() => {
    */
   function _buildToastStyles() {
     return `
+      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap');
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
       @keyframes ps-toastIn {
@@ -494,11 +524,24 @@ window.PassSafer.UI = (() => {
       const item = document.createElement('div');
       item.className = 'ps-dropdown-item';
       item.setAttribute('data-index', String(idx));
+      
+      const domain = cred.domain || cred.url || cred.link || '';
+      const faviconUrl = getFaviconUrl(domain);
+      const firstLetter = (cred.username || cred.app || '?').charAt(0).toUpperCase();
+      
+      const iconHtml = faviconUrl
+        ? `<div class="ps-item-icon" style="background:transparent;padding:0;">
+             <img src="${faviconUrl}" alt="" width="20" height="20"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+               style="border-radius:4px;object-fit:cover;display:block;">
+             <span class="ps-item-icon-letter" style="display:none;font-weight:700;color:var(--accent);">${firstLetter}</span>
+           </div>`
+        : `<div class="ps-item-icon" style="font-weight:700;color:var(--accent);">${firstLetter}</div>`;
+      
       item.innerHTML = `
-        <div class="ps-item-icon">👤</div>
-        <div class="ps-item-info">
-          <span class="ps-item-username">${_escapeHtml(cred.username)}</span>
-          <span class="ps-item-domain">Saved Login</span>
+        ${iconHtml}
+        <div class="ps-item-details" style="display:flex; flex-direction:column; justify-content:center; overflow:hidden;">
+          <span class="ps-item-username" style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${_escapeHtml(cred.app || cred.username || 'Saved Login')}</span>
         </div>
       `;
 
@@ -524,7 +567,7 @@ window.PassSafer.UI = (() => {
       const genItem = document.createElement('div');
       genItem.className = 'ps-dropdown-item ps-generate-item';
       genItem.innerHTML = `
-        <div class="ps-item-icon">🔑</div>
+        <div class="ps-item-icon"><svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='width:16px;height:16px;display:block'><circle cx='7.5' cy='15.5' r='5.5'/><path d='M21 2l-9.6 9.6'/><path d='M15.5 7.5l3 3L22 7l-3-3'/></svg></div>
         <div class="ps-item-info">
           <span class="ps-item-username">Generate strong password</span>
           <span class="ps-item-domain">20 characters, secure</span>
@@ -557,7 +600,8 @@ window.PassSafer.UI = (() => {
     /** Klick ausserhalb des Shadow DOM schliesst Dropdown */
     const onClickOutside = (e) => {
       // Klick innerhalb des Hosts ignorieren
-      if (host.contains(e.target)) return;
+      if (e.composedPath && e.composedPath().includes(host)) return;
+      if (!e.composedPath && host.contains(e.target)) return;
       closeDropdown();
     };
 
@@ -666,7 +710,7 @@ window.PassSafer.UI = (() => {
       <div class="ps-banner-field-label">Password</div>
       <div class="ps-banner-field">
         <span class="ps-banner-field-value ps-pw-display">${_escapeHtml(maskedPw)}</span>
-        <button class="ps-reveal-btn" type="button" aria-label="Passwort anzeigen">👁</button>
+        <button class="ps-reveal-btn" type="button" aria-label="Show password">Show</button>
       </div>
 
       <div class="ps-banner-actions">
@@ -690,7 +734,7 @@ window.PassSafer.UI = (() => {
         pwDisplay.textContent = passwordRevealed
           ? data.password
           : maskedPw;
-        revealBtn.textContent = passwordRevealed ? '🔒' : '👁';
+        revealBtn.textContent = passwordRevealed ? 'Hide' : 'Show';
       });
     }
 
@@ -717,7 +761,7 @@ window.PassSafer.UI = (() => {
         // Erfolgs-Zustand anzeigen
         banner.innerHTML = `
           <div class="ps-success-state">
-            <div class="ps-success-check">✓</div>
+            <div class="ps-success-check"><svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M20 6L9 17l-5-5'/></svg></div>
             <div class="ps-success-text">Saved!</div>
           </div>
         `;
@@ -800,11 +844,20 @@ window.PassSafer.UI = (() => {
     }, 2500);
   }
 
+  /**
+   * Returns true if a dropdown is currently visible.
+   * @returns {boolean}
+   */
+  function isDropdownVisible() {
+    return _activeDropdown !== null;
+  }
+
   // ─── Öffentliches API ───────────────────────────────────────────────────────
 
   return {
     showDropdown,
     closeDropdown,
+    isDropdownVisible,
     showSaveBanner,
     closeBanner,
     showToast,

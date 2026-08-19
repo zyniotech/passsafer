@@ -50,6 +50,9 @@ const REPORTS_FILE = path.join(DATA_DIR, '.report');
 
 // In-Memory Master Key für Sync-Push an Browser-Erweiterung
 let inMemoryMasterPassword = null;
+let pendingExtensionCredentials = [];
+let isSavingPasswords = false;
+let pendingSaveQueue = [];
 
 let mainWindow;
 
@@ -98,9 +101,9 @@ function createWindow() {
                 ...details.responseHeaders,
                 'Content-Security-Policy': [
                     "default-src 'self'; " +
-                    "script-src 'self'; " +
+                    "script-src 'self' 'unsafe-inline'; " +
                     "style-src 'self' 'unsafe-inline'; " +
-                    "img-src 'self' data:; " +
+                    "img-src 'self' data: https: http:; " +
                     "font-src 'self'; " +
                     "connect-src 'self' https://passsafer-api.zyniotech.workers.dev https://api.pwnedpasswords.com;"
                 ]
@@ -412,7 +415,7 @@ function decryptExport(encryptedData, password) {
         const exportSalt = Buffer.from(parts[0], 'hex');
         const iv = Buffer.from(parts[1], 'hex');
         const authTag = Buffer.from(parts[2], 'hex');
-        const encrypted = parts[3];
+        const encrypted = parts[3];   
         const key = crypto.pbkdf2Sync(password, exportSalt, 100000, 32, 'sha256');
         const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
         decipher.setAuthTag(authTag);
@@ -586,6 +589,10 @@ ipcMain.handle('load-passwords', async (event, { password }) => {
 
 // Speichere Passwörter + Sync-Push an Browser-Erweiterung
 ipcMain.handle('save-passwords', async (event, { password, passwords, folders, trash }) => {
+    if (isSavingPasswords) {
+        await new Promise(resolve => pendingSaveQueue.push(resolve));
+    }
+    isSavingPasswords = true;
     try {
         const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
         const salt = fileData.salt;
@@ -602,6 +609,12 @@ ipcMain.handle('save-passwords', async (event, { password, passwords, folders, t
         return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
+    } finally {
+        isSavingPasswords = false;
+        if (pendingSaveQueue.length > 0) {
+            const next = pendingSaveQueue.shift();
+            next();
+        }
     }
 });
 
@@ -661,6 +674,8 @@ ipcMain.handle('change-password', async (event, { currentPassword, currentPin, n
         const encrypted = encrypt(decryptedData, newPassword, newStorageSalt);
         await fs.writeFile(PASSWORDS_FILE, JSON.stringify({ salt: newStorageSalt, data: encrypted }));
         await setSecurePermissions(PASSWORDS_FILE);
+
+        inMemoryMasterPassword = newPassword; // Keep in sync with renderer
 
         return { success: true };
     } catch (error) {
@@ -1230,12 +1245,22 @@ function startIpcServer(authToken) {
                     const timeout = setTimeout(() => {
                         if (pendingExtensionRequests.has(requestId)) {
                             pendingExtensionRequests.delete(requestId);
-                            socket.write(JSON.stringify({ success: false, error: 'Timeout waiting for desktop app' }) + '\n');
-                            socket.end();
+                            if (parsed.action === 'save-credential') {
+                                pendingExtensionCredentials.push(parsed);
+                                if (socket && !socket.destroyed) {
+                                    socket.write(JSON.stringify({ success: true, message: 'Saved to pending credentials' }) + '\n');
+                                    socket.end();
+                                }
+                            } else {
+                                if (socket && !socket.destroyed) {
+                                    socket.write(JSON.stringify({ success: false, error: 'Timeout waiting for desktop app' }) + '\n');
+                                    socket.end();
+                                }
+                            }
                         }
                     }, 5000);
 
-                    pendingExtensionRequests.set(requestId, { socket, timeout });
+                    pendingExtensionRequests.set(requestId, { socket, timeout, request: parsed });
 
                     // Send request to renderer
                     mainWindow.webContents.send('native-request', { id: requestId, request: parsed });
@@ -1266,16 +1291,298 @@ ipcMain.on('native-response', (event, { id, response }) => {
     if (pending) {
         clearTimeout(pending.timeout);
         pendingExtensionRequests.delete(id);
-        pending.socket.write(JSON.stringify(response) + '\n');
-        pending.socket.end();
+        
+        if (pending.request && pending.request.action === 'save-credential' && response && response.error === 'Locked') {
+            pendingExtensionCredentials.push(pending.request);
+            response = { success: true, message: 'Saved to pending credentials' };
+        }
+        
+        if (pending.socket && !pending.socket.destroyed) {
+            pending.socket.write(JSON.stringify(response) + '\n');
+            pending.socket.end();
+        }
     }
 });
 
+ipcMain.handle('get-pending-extension-credentials', async () => {
+    const creds = [...pendingExtensionCredentials];
+    pendingExtensionCredentials = [];
+    return creds;
+});
+
+ipcMain.handle('clear-master-password', async () => {
+    inMemoryMasterPassword = null;
+    return { success: true };
+});
+
+const dgram = require('dgram');
+const tls = require('tls');
+
+let syncState = 'idle';
+let syncServer = null;
+let syncUdpSocket = null;
+let mDnsInterval = null;
+let syncTimeout = null;
+let syncPin = null;
+let syncSharedSecret = null;
+let syncAttempts = 0;
+let syncPort = 0;
+
+function updateSyncState(state) {
+    syncState = state;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('sync-status-update', state);
+    }
+}
+
+function mergeArrays(local, remote) {
+    const map = new Map();
+    local.forEach(item => {
+        if (item.id) map.set(item.id, item);
+    });
+    
+    remote.forEach(item => {
+        if (item.id) {
+            const existing = map.get(item.id);
+            if (!existing) {
+                map.set(item.id, item);
+            } else {
+                const timeLocal = existing.updatedAt || 0;
+                const timeRemote = item.updatedAt || 0;
+                if (timeRemote > timeLocal) {
+                    map.set(item.id, item);
+                }
+            }
+        }
+    });
+    
+    return Array.from(map.values());
+}
+
+async function getAllLocalData() {
+    let result = {};
+    if (!inMemoryMasterPassword) return result;
+    try {
+        const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
+        result.pw = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+    } catch(e){}
+    try {
+        const fileData = JSON.parse(await fs.readFile(IDS_FILE, 'utf8'));
+        result.id = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+    } catch(e){}
+    try {
+        const fileData = JSON.parse(await fs.readFile(DOCUMENTS_FILE, 'utf8'));
+        result.doc = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+    } catch(e){}
+    try {
+        const fileData = JSON.parse(await fs.readFile(CARDS_FILE, 'utf8'));
+        result.card = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+    } catch(e){}
+    return result;
+}
+
+async function mergeAllFiles(clientData) {
+    if (!inMemoryMasterPassword) return;
+    if (clientData.pw) {
+        try {
+            const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
+            let localData = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+            localData.passwords = mergeArrays(localData.passwords || [], clientData.pw.passwords || []);
+            localData.folders = mergeArrays(localData.folders || [], clientData.pw.folders || []);
+            localData.trash = mergeArrays(localData.trash || [], clientData.pw.trash || []);
+            const newSalt = crypto.randomBytes(16).toString('hex');
+            await fs.writeFile(PASSWORDS_FILE, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(localData), inMemoryMasterPassword, newSalt), kdf: 'scrypt' }));
+        } catch(e){}
+    }
+    if (clientData.id) {
+        try {
+            const fileData = JSON.parse(await fs.readFile(IDS_FILE, 'utf8'));
+            let localData = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+            let merged = mergeArrays(localData, clientData.id);
+            const newSalt = crypto.randomBytes(16).toString('hex');
+            await fs.writeFile(IDS_FILE, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), inMemoryMasterPassword, newSalt), kdf: 'scrypt' }));
+        } catch(e){}
+    }
+    if (clientData.doc) {
+        try {
+            const fileData = JSON.parse(await fs.readFile(DOCUMENTS_FILE, 'utf8'));
+            let localData = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+            let merged = mergeArrays(localData, clientData.doc);
+            const newSalt = crypto.randomBytes(16).toString('hex');
+            await fs.writeFile(DOCUMENTS_FILE, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), inMemoryMasterPassword, newSalt), kdf: 'scrypt' }));
+        } catch(e){}
+    }
+    if (clientData.card) {
+        try {
+            const fileData = JSON.parse(await fs.readFile(CARDS_FILE, 'utf8'));
+            let localData = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+            let merged = mergeArrays(localData, clientData.card);
+            const newSalt = crypto.randomBytes(16).toString('hex');
+            await fs.writeFile(CARDS_FILE, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), inMemoryMasterPassword, newSalt), kdf: 'scrypt' }));
+        } catch(e){}
+    }
+}
+
+function stopSyncServer() {
+    if (mDnsInterval) clearInterval(mDnsInterval);
+    if (syncTimeout) clearTimeout(syncTimeout);
+    if (syncUdpSocket) {
+        try { syncUdpSocket.close(); } catch(e){}
+    }
+    if (syncServer) {
+        try { syncServer.close(); } catch(e){}
+    }
+    mDnsInterval = null;
+    syncTimeout = null;
+    syncUdpSocket = null;
+    syncServer = null;
+    syncPin = null;
+    if (syncSharedSecret) {
+        syncSharedSecret.fill(0);
+        syncSharedSecret = null;
+    }
+    syncAttempts = 0;
+    syncPort = 0;
+    updateSyncState('idle');
+}
+
+ipcMain.handle('sync-start-server', async () => {
+    if (syncState !== 'idle') return { success: false, error: 'Already running' };
+    
+    syncPin = crypto.randomInt(100000, 999999).toString();
+    syncAttempts = 0;
+    
+    syncServer = net.createServer((socket) => {
+        let ecdh = crypto.createECDH('prime256v1');
+        ecdh.generateKeys();
+        
+        let buffer = '';
+        socket.on('data', async (data) => {
+            buffer += data.toString();
+            if (!buffer.includes('\n')) return;
+            
+            const messages = buffer.split('\n');
+            buffer = messages.pop();
+            
+            for (const msgStr of messages) {
+                if (!msgStr.trim()) continue;
+                try {
+                    const msg = JSON.parse(msgStr);
+                    
+                    if (msg.type === 'hello') {
+                        updateSyncState('pairing');
+                        const clientKey = Buffer.from(msg.publicKey, 'hex');
+                        socket.sharedSecret = ecdh.computeSecret(clientKey);
+                        
+                        socket.write(JSON.stringify({
+                            type: 'hello_reply',
+                            publicKey: ecdh.getPublicKey('hex')
+                        }) + '\n');
+                    } else if (msg.type === 'auth') {
+                        if (msg.pin !== syncPin) {
+                            socket.write(JSON.stringify({ type: 'auth_reply', success: false }) + '\n');
+                            socket.destroy();
+                            return;
+                        }
+                        
+                        const sessionKey = crypto.pbkdf2Sync(syncPin, 'PassSaferSync2024', 100000, 32, 'sha256');
+                        socket.sharedSecret.fill(0);
+                        socket.sessionPassword = sessionKey.toString('hex');
+                        sessionKey.fill(0);
+                        
+                        updateSyncState('syncing');
+                        socket.write(JSON.stringify({ type: 'auth_reply', success: true }) + '\n');
+                    } else if (msg.type === 'sync') {
+                        if (!socket.sessionPassword) return;
+                        const decryptedStr = decryptExport(msg.data, socket.sessionPassword);
+                        const clientData = JSON.parse(decryptedStr);
+                        
+                        await mergeAllFiles(clientData);
+                        const localData = await getAllLocalData();
+                        const serverEncrypted = encryptExport(JSON.stringify(localData), socket.sessionPassword);
+                        
+                        socket.write(JSON.stringify({ type: 'sync_reply', success: true, data: serverEncrypted }) + '\n');
+                        updateSyncState('complete');
+                        setTimeout(() => stopSyncServer(), 3000);
+                    }
+                } catch (err) {
+                    updateSyncState('error');
+                }
+            }
+        });
+    });
+    
+    await new Promise((resolve) => {
+        syncServer.listen(0, '0.0.0.0', () => {
+            syncPort = syncServer.address().port;
+            
+            syncUdpSocket = dgram.createSocket('udp4');
+            syncUdpSocket.bind(() => {
+                syncUdpSocket.setBroadcast(true);
+                syncUdpSocket.setMulticastTTL(128);
+                syncUdpSocket.addMembership('224.0.0.251');
+                
+                mDnsInterval = setInterval(() => {
+                    const payload = JSON.stringify({
+                        service: '_passsafer-sync._tcp.local',
+                        port: syncPort,
+                        device: os.hostname()
+                    });
+                    try {
+                        syncUdpSocket.send(payload, 0, payload.length, 5353, '224.0.0.251');
+                        syncUdpSocket.send(payload, 0, payload.length, 41234, '255.255.255.255');
+                    } catch(e){}
+                }, 2000);
+            });
+            
+            updateSyncState('waiting');
+            
+            syncTimeout = setTimeout(() => {
+                stopSyncServer();
+            }, 5 * 60 * 1000);
+            
+            resolve();
+        });
+    });
+    
+    let localIps = [];
+    const interfaces = os.networkInterfaces();
+    for (const devName in interfaces) {
+        const iface = interfaces[devName];
+        for (let i = 0; i < iface.length; i++) {
+            const alias = iface[i];
+            if (alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal) {
+                localIps.push(alias.address);
+            }
+        }
+    }
+    const ipString = localIps.length > 0 ? localIps.join(', ') : '127.0.0.1';
+    const primaryIp = localIps.length > 0 ? localIps[0] : '127.0.0.1';
+    
+    const qrPayload = `passsafer://sync?ip=${primaryIp}&port=${syncPort}&pin=${syncPin}`;
+    let qrDataUrl = null;
+    try {
+        const QRCode = require('qrcode');
+        qrDataUrl = await QRCode.toDataURL(qrPayload, { width: 300, margin: 2, color: { dark: '#000000', light: '#FFFFFF' } });
+    } catch(e) {}
+    
+    return { success: true, pin: syncPin, port: syncPort, deviceName: os.hostname(), ip: ipString, qrDataUrl, qrPayload };
+});
+
+ipcMain.handle('sync-stop-server', async () => {
+    stopSyncServer();
+    return { success: true };
+});
+
+ipcMain.handle('sync-get-status', async () => {
+    return { success: true, state: syncState };
+});
+
 app.on('will-quit', () => {
+    stopSyncServer();
     if (ipcServer) {
         ipcServer.close();
     }
-    // Speicher bereinigen
     inMemoryMasterPassword = null;
 });
 
@@ -1288,21 +1595,9 @@ app.on('will-quit', () => {
  * an die verbundene Browser-Erweiterung, damit diese ihren Cache aktualisieren kann.
  */
 function pushSyncToExtension(salt, encryptedData) {
-    try {
-        const client = net.connect(PIPE_PATH, () => {
-            const syncMessage = JSON.stringify({
-                action: 'sync-vault-push',
-                vault: { salt, data: encryptedData }
-            }) + '\n';
-            client.write(syncMessage);
-            client.end();
-        });
-        client.on('error', () => {
-            // Extension nicht verbunden – ignorieren (ist normal wenn kein native-host läuft)
-        });
-    } catch (e) {
-        // Stille Fehler – Sync-Push ist best-effort
-    }
+    // Note: Push to extension via self-connect is not supported.
+    // The extension pulls data when needed via pull-vault-from-app.
+    console.log('[PassSafer] Sync push to extension is handled by extension pull mechanism.');
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1465,5 +1760,40 @@ ipcMain.handle('save-reports', async (event, { password, reports }) => {
         return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
+    }
+});
+
+// Fetch local favicon (bypassing CORS)
+ipcMain.handle('fetch-local-favicon', async (event, domainStr) => {
+    try {
+        let d = domainStr.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split('?')[0];
+        let targetUrl = domainStr.startsWith('https') ? 'https://' + d : 'http://' + d;
+        
+        // Timeout 3 seconds so we don't hang if IP is dead
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        
+        const response = await fetch(targetUrl, { signal: controller.signal });
+        clearTimeout(timeout);
+        
+        const html = await response.text();
+        const match = html.match(/<link[^>]*rel=["'](?:shortcut )?icon["'][^>]*href=["']([^"']+)["']/i);
+        let iconUrl = match && match[1] ? new URL(match[1], response.url).href : new URL('favicon.ico', response.url).href;
+        
+        // Fetch the actual image to return a Data URI (bypasses all renderer CSP/CORS issues)
+        const iconCtrl = new AbortController();
+        const iconTimeout = setTimeout(() => iconCtrl.abort(), 2000);
+        const iconRes = await fetch(iconUrl, { signal: iconCtrl.signal });
+        clearTimeout(iconTimeout);
+        
+        if (!iconRes.ok) return null;
+        
+        const buffer = await iconRes.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString('base64');
+        const mimeType = iconRes.headers.get('content-type') || 'image/x-icon';
+        
+        return `data:${mimeType};base64,${base64}`;
+    } catch (err) {
+        return null; // Let the frontend fallback to the letter
     }
 });

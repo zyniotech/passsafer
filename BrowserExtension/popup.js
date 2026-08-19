@@ -74,6 +74,19 @@ function initPinInputGroup(containerId, onComplete) {
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Backspace' && !input.value && index > 0) {
         inputs[index - 1].focus();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (containerId === 'pin-unlock-inputs') {
+          const pin = inputs.map(i => i.value).join('');
+          if (pin.length === 6) {
+            elements.btnUnlock.disabled = false;
+            elements.btnUnlock.click();
+          }
+        } else if (containerId === 'pin-setup-inputs' || containerId === 'pin-confirm-inputs') {
+          if (!elements.btnSavePin.disabled) {
+            elements.btnSavePin.click();
+          }
+        }
       }
     });
 

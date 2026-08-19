@@ -63,7 +63,11 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 // 3. Inaktivitäts-Timer für Timeout-Sperren
 // ─────────────────────────────────────────────
 
-chrome.alarms.create('lock-check', { periodInMinutes: 1 });
+chrome.alarms.get('lock-check', (existingAlarm) => {
+  if (!existingAlarm) {
+    chrome.alarms.create('lock-check', { periodInMinutes: 1 });
+  }
+});
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== 'lock-check') return;
@@ -466,8 +470,19 @@ async function handleSaveCredential(message, sendResponse) {
     });
     sendResponse(response);
   } catch (err) {
-    // Wenn der Cache aktualisiert wurde, trotzdem Erfolg melden
+    // Desktop app is offline – credential was saved to local cache if unlocked
     if (isUnlocked()) {
+      // Add to pending push queue so it gets synced when app comes online
+      try {
+        const queueData = await chrome.storage.local.get('pending_push_queue');
+        const queue = queueData.pending_push_queue || [];
+        // Avoid duplicates: remove existing entry for same domain+username
+        const filtered = queue.filter(q => !(q.domain === domain && q.username === username));
+        filtered.push({ domain, username, password, isUpdate: !!isUpdate, savedAt: Date.now() });
+        await chrome.storage.local.set({ pending_push_queue: filtered });
+      } catch (qErr) {
+        console.warn('[PassSafer] Could not save to pending push queue:', qErr);
+      }
       sendResponse({ success: true, cachedOnly: true });
     } else {
       sendResponse({ success: false, error: 'AppOffline' });
@@ -563,8 +578,10 @@ async function handleGetVaultStatus(sendResponse) {
   const hasVault = !!data.encrypted_vault;
   const hasPinSetup = !!data.pin_encrypted_master_key;
 
-  // App-Verbindung prüfen (im Hintergrund)
-  checkAppConnection().catch(() => {});
+  // Check app connection synchronously so status is current
+  try {
+    await checkAppConnection();
+  } catch (_) {}
 
   sendResponse({
     hasVault,
@@ -747,7 +764,38 @@ async function handlePullVaultFromApp(sendResponse) {
 
     // Master-Passwort und entschlüsselte Credentials im Speicher halten
     masterPassword = response.masterPassword;
-    decryptedCredentials = response.vault.passwords || [];
+    const appCredentials = Array.isArray(response.vault) ? response.vault : (response.vault && Array.isArray(response.vault.passwords) ? response.vault.passwords : []);
+    
+    // Merge any pending credentials that were saved while app was offline
+    const queueData = await chrome.storage.local.get('pending_push_queue');
+    const pendingQueue = queueData.pending_push_queue || [];
+    let mergedCredentials = [...appCredentials];
+    
+    for (const pending of pendingQueue) {
+      const existingIdx = mergedCredentials.findIndex(c => {
+        const cDomain = (c.domain || c.url || '').toLowerCase().replace(/^www\./, '').replace(/^https?:\/\//, '');
+        const pDomain = pending.domain.toLowerCase().replace(/^www\./, '');
+        return cDomain === pDomain && (c.username || c.user || '') === pending.username;
+      });
+      if (existingIdx >= 0) {
+        mergedCredentials[existingIdx].password = pending.password;
+        if (mergedCredentials[existingIdx].pass !== undefined) mergedCredentials[existingIdx].pass = pending.password;
+      } else {
+        mergedCredentials.push({
+          domain: pending.domain.toLowerCase().replace(/^www\./, ''),
+          app: pending.domain.charAt(0).toUpperCase() + pending.domain.slice(1),
+          link: pending.domain.startsWith('http') ? pending.domain : 'https://' + pending.domain,
+          username: pending.username,
+          password: pending.password,
+          notes: 'Saved automatically by PassSafer Browser Extension.',
+          folderId: null,
+          files: []
+        });
+      }
+    }
+    decryptedCredentials = mergedCredentials;
+    // Clear the pending queue after merging
+    await chrome.storage.local.remove('pending_push_queue');
 
     // Vault lokal verschlüsseln und speichern
     let encryptedVault;
@@ -813,6 +861,9 @@ async function handleResetVault(sendResponse) {
     'pin_salt',
     'pin_iv',
     'last_sync',
+    'pin_fail_count',
+    'pin_lockout_until',
+    'pending_push_queue',
   ]);
 
   console.log('[PassSafer] PIN and cache reset.');
@@ -835,24 +886,26 @@ async function handleSyncVault(message, sendResponse) {
     return;
   }
 
-  // Verschlüsselten Vault im Cache speichern
-  await chrome.storage.local.set({
-    encrypted_vault: vault,
-    last_sync: Date.now(),
-  });
+  // vault is a plain JS object/array from the desktop app
+  const credentials = Array.isArray(vault) ? vault : (vault.passwords || []);
 
-  // Wenn ein Master-Passwort mitgeliefert wurde, auch das aktualisieren
-  if (mp) {
-    masterPassword = mp;
+  // Update in-memory credentials if vault is unlocked
+  if (masterPassword || mp) {
+    if (mp) masterPassword = mp;
+    decryptedCredentials = credentials;
+    console.log(`[PassSafer] Vault sync: ${decryptedCredentials.length} entries updated.`);
   }
 
-  // Wenn der Tresor entsperrt ist, den Cache neu entschlüsseln
-  if (masterPassword) {
+  // Re-encrypt and store locally
+  if (masterPassword && decryptedCredentials) {
     try {
-      decryptedCredentials = await decryptVault(vault, masterPassword);
-      console.log(`[PassSafer] Vault sync: ${decryptedCredentials.length} entries updated.`);
+      const encryptedVault = await encryptVault(decryptedCredentials, masterPassword);
+      await chrome.storage.local.set({
+        encrypted_vault: encryptedVault,
+        last_sync: Date.now(),
+      });
     } catch (err) {
-      console.warn('[PassSafer] Vault sync: decryption failed.', err);
+      console.warn('[PassSafer] Vault sync: local cache update failed.', err);
     }
   }
 

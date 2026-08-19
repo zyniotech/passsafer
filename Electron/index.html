@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PassSafer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -80,7 +83,7 @@
             <div class="auth-header">
 
 
-                <h1 class="app-title">PassSafer</h1>
+                <h1 class="app-title">Pass<span class="accent">Safer</span></h1>
                 <h2 data-i18n="login_title">Login</h2>
             </div>
             <div class="auth-form">
@@ -108,25 +111,25 @@
     <div id="register-screen" class="screen hidden">
         <div class="auth-container">
             <div class="auth-header">
-                <h1 class="app-title">PassSafer</h1>
+                <h1 class="app-title">Pass<span class="accent">Safer</span></h1>
                 <h2 data-i18n="register_title">Registration</h2>
             </div>
             <div class="auth-form">
                 <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" id="register-username" placeholder="Username" autocomplete="username">
+                    <label data-i18n="label_username">Username</label>
+                    <input type="text" id="register-username" data-i18n="placeholder_username" placeholder="Username" autocomplete="username">
                 </div>
                 <div class="form-group">
-                    <label>Master Password (min. 10 chars)</label>
-                    <input type="password" id="register-password" placeholder="Password" autocomplete="new-password">
+                    <label data-i18n="label_master_password">Master Password (min. 10 chars)</label>
+                    <input type="password" id="register-password" data-i18n="placeholder_password" placeholder="Password" autocomplete="new-password">
                 </div>
                 <div class="form-group">
-                    <label>Repeat Password</label>
-                    <input type="password" id="register-password-repeat" placeholder="Repeat Password"
+                    <label data-i18n="label_repeat_password">Repeat Password</label>
+                    <input type="password" id="register-password-repeat" data-i18n="label_repeat_password" placeholder="Repeat Password"
                         autocomplete="new-password">
                 </div>
                 <div class="form-group">
-                    <label>PIN (6 digits)</label>
+                    <label data-i18n="label_pin">PIN (6 digits)</label>
                     <input type="password" id="register-pin" placeholder="000000" maxlength="6" autocomplete="off">
                 </div>
                 <div class="button-group">
@@ -144,21 +147,21 @@
             <div class="auth-header" style="margin-bottom: 2rem; text-align: center;">
                 <img src="../logos/locked.png" alt="PassSafer" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.9;">
                 <h1 class="app-title" style="font-size: 2rem; margin-bottom: 0.25rem;"><span style="color: var(--color-accent);">Pass</span>Safer</h1>
-                <p style="font-size: 0.9rem; color: var(--color-text-muted); font-weight: 400; margin: 0;">Enter your license key to unlock the app</p>
+                <p style="font-size: 0.9rem; color: var(--color-text-muted); font-weight: 400; margin: 0;" data-i18n="license_required_desc">Enter your license key to unlock the app</p>
             </div>
 
             <div class="auth-form">
                 <!-- Info Box -->
                 <div style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(255, 140, 0, 0.08) 0%, rgba(255, 140, 0, 0.02) 100%); border: 1px solid rgba(255, 140, 0, 0.2); padding: 1rem 1.2rem; border-radius: 10px;">
-                    <p style="font-size: 0.88rem; font-weight: 700; color: var(--color-accent); margin: 0 0 6px 0;">License Required</p>
-                    <p style="font-size: 0.82rem; line-height: 1.55; color: var(--color-text-secondary); margin: 0;">
-                        Get a <strong style="color: var(--color-text);">free 1-month trial</strong> for single-device use, or upgrade to <strong style="color: var(--color-text);">Premium</strong> for 50 devices (100 for Lifetime) and the password generator.
+                    <p style="font-size: 0.88rem; font-weight: 700; color: var(--color-accent); margin: 0 0 6px 0;" data-i18n="license_required_title">License Required</p>
+                    <p style="font-size: 0.82rem; line-height: 1.55; color: var(--color-text-secondary); margin: 0;" data-i18n="license_info_text">
+                        Get a free 1-month trial for single-device use, or upgrade to Premium for 50 devices (100 for Lifetime) and the password generator.
                     </p>
                 </div>
 
                 <!-- License Key Input -->
                 <div class="form-group" style="margin-bottom: 1.25rem;">
-                    <label style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.4rem; display: block; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px;">License Key</label>
+                    <label style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.4rem; display: block; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="license_key_label">License Key</label>
                     <input type="text" id="license-key-input" placeholder="PSAF-XXXX-XXXX-XXXX-XXXX" autocomplete="off" style="text-align: center; letter-spacing: 2.5px; font-family: 'Consolas', 'Courier New', monospace; font-size: 1.1rem; padding: 0.85rem 0.75rem; border-radius: 8px; border: 2px solid var(--color-border); background: rgba(0,0,0,0.25); color: #fff; transition: border-color 0.3s ease; width: 100%; box-sizing: border-box;">
                 </div>
 
@@ -167,17 +170,17 @@
 
                 <!-- Buttons -->
                 <div class="button-group" style="flex-direction: column; gap: 10px;">
-                    <button class="button primary" id="activate-license-btn" style="width: 100%; padding: 0.85rem; font-size: 1rem; font-weight: 700; border-radius: 8px;">Activate License</button>
+                    <button class="button primary" id="activate-license-btn" style="width: 100%; padding: 0.85rem; font-size: 1rem; font-weight: 700; border-radius: 8px;" data-i18n="btn_activate_license">Activate License</button>
 
                     <div style="display: flex; align-items: center; gap: 10px; margin: 0.4rem 0;">
                         <div style="flex: 1; height: 1px; background: var(--color-border);"></div>
-                        <span style="font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 1px;">or</span>
+                        <span style="font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 1px;" data-i18n="label_or">or</span>
                         <div style="flex: 1; height: 1px; background: var(--color-border);"></div>
                     </div>
 
                     <div style="display: flex; gap: 10px; width: 100%;">
-                        <button class="button secondary" id="get-trial-btn" style="flex: 1; font-size: 0.82rem; font-weight: 600; padding: 0.7rem; border-radius: 6px;">Get Free Trial</button>
-                        <button class="button secondary" id="buy-premium-btn" style="flex: 1; font-size: 0.82rem; font-weight: 600; padding: 0.7rem; border-radius: 6px; border-color: rgba(255, 140, 0, 0.35); color: var(--color-accent);">Buy Premium</button>
+                        <button class="button secondary" id="get-trial-btn" style="flex: 1; font-size: 0.82rem; font-weight: 600; padding: 0.7rem; border-radius: 6px;" data-i18n="btn_get_trial">Get Free Trial</button>
+                        <button class="button secondary" id="buy-premium-btn" style="flex: 1; font-size: 0.82rem; font-weight: 600; padding: 0.7rem; border-radius: 6px; border-color: rgba(255, 140, 0, 0.35); color: var(--color-accent);" data-i18n="btn_buy_premium">Buy Premium</button>
                     </div>
                 </div>
             </div>
@@ -317,24 +320,24 @@
     <!-- Add/Edit Password Screen -->
     <div id="edit-password-screen" class="screen hidden">
         <header class="app-header">
-            <h1 class="header-title" id="edit-title">Add Password</h1>
+            <h1 class="header-title" id="edit-title" data-i18n="btn_add_password">Add Password</h1>
             <button class="icon-button close-btn" id="close-edit-btn">✕</button>
         </header>
         <div class="form-container">
             <div class="form-group">
-                <label>Application *</label>
+                <label data-i18n="label_application">Application *</label>
                 <input type="text" id="edit-app" placeholder="e.g. Gmail">
             </div>
             <div class="form-group">
-                <label>Link / URL</label>
+                <label data-i18n="label_link">Link / URL</label>
                 <input type="url" id="edit-link" placeholder="https://example.com">
             </div>
             <div class="form-group">
-                <label>Username</label>
+                <label data-i18n="label_username">Username</label>
                 <input type="text" id="edit-username" placeholder="Username">
             </div>
             <div class="form-group">
-                <label>Password</label>
+                <label data-i18n="label_password">Password</label>
                 <div class="detail-row"
                     style="background: transparent; border: none; padding: 0; gap: 8px; justify-content: flex-start;">
                     <input type="text" id="edit-password" placeholder="Password" style="flex:1;">
@@ -345,22 +348,22 @@
                 </div>
             </div>
             <div class="form-group">
-                <label>Notes</label>
+                <label data-i18n="label_notes">Notes</label>
                 <textarea id="edit-notes" placeholder="Optional notes" rows="3"></textarea>
             </div>
             <div class="form-group">
-                <label>Files (max. 5)</label>
+                <label data-i18n="label_files">Files (max. 5)</label>
                 <div class="file-upload-row">
                     <button class="icon-button" id="upload-file-btn" type="button" title="Upload File">
                         <img src="../logos/upload.png" alt="Upload">
                     </button>
-                    <span id="edit-file-hint" class="file-name-display">No files selected</span>
+                    <span id="edit-file-hint" class="file-name-display" data-i18n="label_no_file_selected">No files selected</span>
                 </div>
                 <div id="edit-file-list" class="file-list"></div>
             </div>
             <div class="button-group">
-                <button class="button primary" id="save-password-btn">Save</button>
-                <button class="button secondary" id="cancel-edit-btn">Cancel</button>
+                <button class="button primary" id="save-password-btn" data-i18n="btn_save">Save</button>
+                <button class="button secondary" id="cancel-edit-btn" data-i18n="btn_cancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -368,18 +371,18 @@
     <!-- Create/Edit Folder Screen -->
     <div id="folder-screen" class="screen hidden">
         <header class="app-header">
-            <h1 class="header-title" id="folder-title">Create Folder</h1>
+            <h1 class="header-title" id="folder-title" data-i18n="btn_create_folder">Create Folder</h1>
             <button class="icon-button close-btn" id="close-folder-btn">✕</button>
         </header>
         <div class="form-container">
             <div class="form-group">
-                <label>Folder Name *</label>
+                <label data-i18n="label_folder">Folder Name *</label>
                 <input type="text" id="folder-name" placeholder="e.g. Work, Private...">
             </div>
             <div class="button-group">
-                <button class="button primary" id="save-folder-btn-main">Save</button>
-                <button class="button danger hidden" id="delete-folder-btn">Delete Folder</button>
-                <button class="button secondary" id="cancel-folder-btn">Cancel</button>
+                <button class="button primary" id="save-folder-btn-main" data-i18n="btn_save">Save</button>
+                <button class="button danger hidden" id="delete-folder-btn" data-i18n="btn_delete">Delete Folder</button>
+                <button class="button secondary" id="cancel-folder-btn" data-i18n="btn_cancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -387,7 +390,7 @@
     <!-- Settings Screen -->
     <div id="settings-screen" class="screen hidden">
         <header class="app-header">
-            <h1 class="header-title">Settings</h1>
+            <h1 class="header-title" data-i18n="settings_title">Settings</h1>
             <button class="icon-button close-btn" id="close-settings-btn">✕</button>
         </header>
         <div class="settings-content">
@@ -409,28 +412,28 @@
             </div>
 
             <div class="settings-section">
-                <h3 class="settings-section-title">License</h3>
+                <h3 class="settings-section-title" data-i18n="settings_license_section">License</h3>
                 <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 15px; background: rgba(255, 255, 255, 0.03); border-radius: 6px; border: 1px solid var(--color-border); margin-bottom: 12px;">
                     <div style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
-                        <span style="color: var(--color-text-secondary);">Status:</span>
+                        <span style="color: var(--color-text-secondary);" data-i18n="settings_license_status_label">Status:</span>
                         <strong id="settings-license-status" style="color: var(--color-accent);">Checking...</strong>
                     </div>
                     <div style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
-                        <span style="color: var(--color-text-secondary);">Plan:</span>
+                        <span style="color: var(--color-text-secondary);" data-i18n="settings_license_plan_label">Plan:</span>
                         <strong id="settings-license-plan">-</strong>
                     </div>
                     <div id="settings-license-expiry-row" style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
-                        <span style="color: var(--color-text-secondary);">Expires:</span>
+                        <span style="color: var(--color-text-secondary);" data-i18n="settings_license_expires_label">Expires:</span>
                         <strong id="settings-license-expiry">-</strong>
                     </div>
                     <div id="settings-license-sync-row" style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
-                        <span style="color: var(--color-text-secondary);">Last Synced:</span>
+                        <span style="color: var(--color-text-secondary);" data-i18n="settings_license_sync_label">Last Synced:</span>
                         <strong id="settings-license-sync">-</strong>
                     </div>
                 </div>
                 <button class="settings-option" id="settings-activate-license-btn">
                     <img src="../logos/settings.png" alt="License" class="btn-icon">
-                    <span>Manage / Change License</span>
+                    <span data-i18n="settings_manage_license">Manage / Change License</span>
                 </button>
             </div>
 
@@ -447,6 +450,10 @@
                         <option value="fr">Français</option>
                     </select>
                 </div>
+                <button class="settings-option" id="restart-onboarding-btn">
+                    <img src="../logos/shield.png" alt="Tour" class="btn-icon">
+                    <span data-i18n="settings_onboarding">Restart Onboarding</span>
+                </button>
                 <button class="settings-option" id="check-updates-btn">
                     <img src="../logos/reload.png" alt="Update" class="btn-icon">
                     <span data-i18n="settings_updates">Check for Updates</span>
@@ -479,40 +486,40 @@
             <div id="audit-summary" class="audit-summary" style="display: none;">
                 <div class="audit-card audit-card-total">
                     <div class="audit-card-number" id="audit-total">0</div>
-                    <div class="audit-card-label">Total Passwords</div>
+                    <div class="audit-card-label" data-i18n="audit_total">Total Passwords</div>
                 </div>
                 <div class="audit-card audit-card-strong">
                     <div class="audit-card-number" id="audit-strong">0</div>
-                    <div class="audit-card-label">Strong</div>
+                    <div class="audit-card-label" data-i18n="audit_strong">Strong</div>
                 </div>
                 <div class="audit-card audit-card-weak">
                     <div class="audit-card-number" id="audit-weak">0</div>
-                    <div class="audit-card-label">Weak</div>
+                    <div class="audit-card-label" data-i18n="audit_weak">Weak</div>
                 </div>
                 <div class="audit-card audit-card-reused">
                     <div class="audit-card-number" id="audit-reused">0</div>
-                    <div class="audit-card-label">Reused</div>
+                    <div class="audit-card-label" data-i18n="audit_reused">Reused</div>
                 </div>
                 <div class="audit-card audit-card-leaked">
                     <div class="audit-card-number" id="audit-leaked">0</div>
-                    <div class="audit-card-label">Leaked</div>
+                    <div class="audit-card-label" data-i18n="audit_leaked">Leaked</div>
                 </div>
             </div>
 
             <!-- Scanning State -->
             <div id="audit-scanning" style="text-align: center; padding: 60px 20px;">
                 <div class="audit-spinner"></div>
-                <p style="color: var(--color-text-muted); margin-top: 20px; font-size: 0.95rem;">Analyzing your passwords...</p>
-                <p id="audit-progress" style="color: var(--color-text-secondary); font-size: 0.85rem;">Preparing...</p>
+                <p style="color: var(--color-text-muted); margin-top: 20px; font-size: 0.95rem;" data-i18n="audit_analyzing">Analyzing your passwords...</p>
+                <p id="audit-progress" style="color: var(--color-text-secondary); font-size: 0.85rem;" data-i18n="audit_preparing">Preparing...</p>
             </div>
 
             <!-- Filter Tabs -->
             <div id="audit-filters" class="audit-filters" style="display: none;">
-                <button class="audit-filter-btn active" data-filter="all">All</button>
-                <button class="audit-filter-btn" data-filter="weak">⚠️ Weak</button>
-                <button class="audit-filter-btn" data-filter="reused">🔄 Reused</button>
-                <button class="audit-filter-btn" data-filter="leaked">🔓 Leaked</button>
-                <button class="audit-filter-btn" data-filter="strong">✅ Strong</button>
+                <button class="audit-filter-btn active" data-filter="all" data-i18n="audit_filter_all">All</button>
+                <button class="audit-filter-btn" data-filter="weak" data-i18n="audit_filter_weak">⚠️ Weak</button>
+                <button class="audit-filter-btn" data-filter="reused" data-i18n="audit_filter_reused">🔄 Reused</button>
+                <button class="audit-filter-btn" data-filter="leaked" data-i18n="audit_filter_leaked">🔓 Leaked</button>
+                <button class="audit-filter-btn" data-filter="strong" data-i18n="audit_filter_strong">✅ Strong</button>
             </div>
 
             <!-- Results List -->
@@ -527,11 +534,11 @@
         </header>
         <div class="form-container">
             <div class="settings-info-box" style="margin-bottom: 20px;">
-                <p>Exports: Passwords, Folders, IDs, Documents & Cards</p>
-                <p class="hint">Trash and Security Reports are not included.</p>
+                <p data-i18n="export_info_desc">Exports: Passwords, Folders, IDs, Documents & Cards</p>
+                <p class="hint" data-i18n="export_info_hint">Trash and Security Reports are not included.</p>
             </div>
             <div class="form-group">
-                <label data-i18n="label_password">Set Export Password</label>
+                <label data-i18n="export_pwd_label">Set Export Password</label>
                 <input type="password" id="export-password" data-i18n="placeholder_password" placeholder="Password for export file">
             </div>
             <div class="button-group">
@@ -547,18 +554,18 @@
         </header>
         <div class="form-container">
             <div class="settings-info-box" style="margin-bottom: 20px;">
-                <p>Imports: Passwords, Folders, IDs, Documents & Cards</p>
-                <p class="hint">Existing entries with the same name will be skipped.</p>
+                <p data-i18n="import_info_desc">Imports: Passwords, Folders, IDs, Documents & Cards</p>
+                <p class="hint" data-i18n="import_info_hint">Existing entries with the same name will be skipped.</p>
             </div>
             <div class="form-group">
-                <label data-i18n="settings_import">Select File</label>
+                <label data-i18n="btn_select_file">Select File</label>
                 <div class="file-input-wrapper">
-                    <button class="button secondary" id="select-import-file-btn" data-i18n="settings_import">Select File...</button>
-                    <span id="import-file-path" class="file-path" data-i18n="label_no_folder">No file selected</span>
+                    <button class="button secondary" id="select-import-file-btn" data-i18n="btn_select_file">Select File...</button>
+                    <span id="import-file-path" class="file-path" data-i18n="label_no_file_selected">No file selected</span>
                 </div>
             </div>
             <div class="form-group">
-                <label data-i18n="label_password">Import Password</label>
+                <label data-i18n="import_pwd_label">Import Password</label>
                 <input type="password" id="import-password" data-i18n="placeholder_password" placeholder="Password of export file">
             </div>
             <div class="button-group">
@@ -606,15 +613,15 @@
         </header>
         <div class="form-container">
             <div class="settings-info-box" style="margin-bottom: 20px;">
-                <p>Support for Google Chrome and Firefox CSV exports.</p>
-                <p class="hint">Your data will be encrypted and saved locally.</p>
+                <p data-i18n="csv_import_desc">Support for Google Chrome and Firefox CSV exports.</p>
+                <p class="hint" data-i18n="csv_import_hint">Your data will be encrypted and saved locally.</p>
             </div>
             <div class="form-group">
-                <button class="button primary" id="select-csv-file-btn">Select CSV File</button>
-                <p id="csv-file-path" class="file-name-display">No file selected</p>
+                <button class="button primary" id="select-csv-file-btn" data-i18n="btn_select_csv_file">Select CSV File</button>
+                <p id="csv-file-path" class="file-name-display" data-i18n="label_no_file_selected">No file selected</p>
             </div>
             <div class="button-group">
-                <button class="button primary" id="do-csv-import-btn">Start Import</button>
+                <button class="button primary" id="do-csv-import-btn" data-i18n="btn_start_import">Start Import</button>
             </div>
         </div>
     </div>
@@ -678,10 +685,19 @@
 
     <!-- Dashboard Screen -->
     <div id="dashboard-screen" class="screen hidden">
-        <header class="app-header">
-            <h1 class="header-title" data-i18n="nav_dashboard">Dashboard</h1>
-        </header>
         <div class="dashboard-content">
+            <!-- Global Dashboard Search -->
+            <div class="dashboard-search-wrapper">
+                <div class="dashboard-search-box">
+                    <img src="../logos/search.png" alt="Search" class="dashboard-search-icon">
+                    <input type="text" id="dashboard-search-input" data-i18n="placeholder_search_global" placeholder="Search passwords, IDs, cards, documents, settings..." class="dashboard-search-input" autocomplete="off">
+                    <button id="dashboard-search-clear" class="dashboard-search-clear hidden" type="button" title="Clear">✕</button>
+                </div>
+                <div id="dashboard-search-dropdown" class="dashboard-search-dropdown hidden">
+                    <div id="dashboard-search-results" class="dashboard-search-results"></div>
+                </div>
+            </div>
+
             <!-- Product Hunt Banner (for free users) -->
             <div id="producthunt-banner" class="producthunt-banner hidden">
                 <div class="ph-content">
@@ -835,13 +851,15 @@
                 <label data-i18n="id_number">Document Number</label>
                 <input type="text" id="edit-id-number" placeholder="Document number">
             </div>
-            <div class="form-group">
-                <label data-i18n="id_issue_date">Issue Date</label>
-                <input type="date" id="edit-id-issue">
-            </div>
-            <div class="form-group">
-                <label data-i18n="id_expiry_date">Expiry Date</label>
-                <input type="date" id="edit-id-expiry">
+            <div class="form-group" style="display: flex; gap: 10px;">
+                <div style="flex: 1;">
+                    <label data-i18n="id_issue_date">Issue Date</label>
+                    <input type="date" id="edit-id-issue">
+                </div>
+                <div style="flex: 1;">
+                    <label data-i18n="id_expiry_date">Expiry Date</label>
+                    <input type="date" id="edit-id-expiry">
+                </div>
             </div>
             <div class="form-group">
                 <label data-i18n="label_notes">Notes</label>
@@ -975,15 +993,15 @@
                 <div style="flex: 1;">
                     <label data-i18n="card_expiry">Expiry Date</label>
                     <div style="display: flex; gap: 5px; align-items: center;">
-                        <input type="text" id="edit-card-expiry-month" placeholder="MM" style="width: 50px; text-align: center;">
+                        <input type="text" id="edit-card-expiry-month" placeholder="MM" style="width: 80px; text-align: center; padding-left: 8px; padding-right: 8px;">
                         <span>/</span>
-                        <input type="text" id="edit-card-expiry-year" placeholder="YY" style="width: 60px; text-align: center;">
+                        <input type="text" id="edit-card-expiry-year" placeholder="YY" style="width: 80px; text-align: center; padding-left: 8px; padding-right: 8px;">
                     </div>
                 </div>
             </div>
             <div class="form-group">
                 <label data-i18n="card_cvv">CVV</label>
-                <input type="password" id="edit-card-cvv" placeholder="CVV (3-4 digits)" style="width: 120px;">
+                <input type="password" id="edit-card-cvv" placeholder="CVV" style="width: 120px;">
             </div>
             <div class="form-group">
                 <label data-i18n="label_notes">Notes</label>
@@ -1048,6 +1066,34 @@
             <div class="modal-actions">
                 <button class="button primary" id="modal-confirm-btn">Confirm</button>
                 <button class="button secondary" id="modal-cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onboarding Trail / Feature Tour Overlay -->
+    <div id="onboarding-overlay" class="onboarding-overlay hidden">
+        <div id="onboarding-spotlight-box" class="onboarding-spotlight-box hidden" title="Click to continue"></div>
+        <div class="onboarding-modal">
+            <div class="onboarding-header">
+                <span class="onboarding-step-label" id="onboarding-step-label">Step 1 of 5</span>
+                <button class="icon-button close-btn" id="onboarding-skip-btn" title="Skip Tour">✕</button>
+            </div>
+            <div class="onboarding-body">
+                <div class="onboarding-icon-container">
+                    <img src="../logos/locked.png" alt="Tour" class="onboarding-icon-img">
+                </div>
+                <h2 class="onboarding-title" id="onboarding-title">Welcome to PassSafer</h2>
+                <p class="onboarding-text" id="onboarding-text">Let's take a quick interactive tour through PassSafer.</p>
+            </div>
+            <div class="onboarding-dots" id="onboarding-dots">
+                <span class="onboarding-dot active"></span>
+                <span class="onboarding-dot"></span>
+                <span class="onboarding-dot"></span>
+                <span class="onboarding-dot"></span>
+                <span class="onboarding-dot"></span>
+            </div>
+            <div class="onboarding-footer">
+                <button class="button primary" id="onboarding-next-btn">Next</button>
             </div>
         </div>
     </div>

@@ -14,33 +14,27 @@ function sendMessage(msg) {
 }
 
 // Read from stdin (Chrome Native Messaging protocol)
-let chunks = [];
-let dataLen = 0;
+let stdinBuffer = Buffer.alloc(0);
 
 process.stdin.on('readable', () => {
     let chunk;
     while ((chunk = process.stdin.read()) !== null) {
-        chunks.push(chunk);
+        stdinBuffer = Buffer.concat([stdinBuffer, chunk]);
     }
     
-    let buffer = Buffer.concat(chunks);
-    
-    while (buffer.length >= 4) {
-        let msgLen = buffer.readUInt32LE(0);
-        if (buffer.length >= 4 + msgLen) {
-            let msgStr = buffer.toString('utf8', 4, 4 + msgLen);
+    while (stdinBuffer.length >= 4) {
+        const msgLen = stdinBuffer.readUInt32LE(0);
+        if (stdinBuffer.length >= 4 + msgLen) {
+            const msgStr = stdinBuffer.toString('utf8', 4, 4 + msgLen);
+            stdinBuffer = stdinBuffer.slice(4 + msgLen);
             try {
-                let msgObj = JSON.parse(msgStr);
-                // Send to Electron app via Named Pipe
+                const msgObj = JSON.parse(msgStr);
                 sendToElectron(msgObj);
             } catch (e) {
-                // Send parse error response back to Chrome if valid action can be inferred
+                // Ignore parse errors
             }
-            
-            buffer = buffer.slice(4 + msgLen);
-            chunks = [buffer];
         } else {
-            break; // Wait for more data
+            break;
         }
     }
 });
@@ -156,30 +150,45 @@ function sendToElectron(msgObj) {
     client.on('timeout', () => {
         client.destroy();
         sendMessage({
-            action: msgObj.action.replace('request', 'response'),
+            action: msgObj.action,
             success: false,
             error: 'Connection to Desktop App timed out.'
         });
     });
 
+    let responseBuffer = '';
     client.on('data', (data) => {
-        // Responses from Electron might be multiple JSONs separated by newline
-        const lines = data.toString().trim().split('\n');
-        for (let line of lines) {
-            if (line) {
+        responseBuffer += data.toString();
+        // Try to parse complete JSON lines
+        const lines = responseBuffer.split('\n');
+        // Keep last incomplete line in buffer
+        responseBuffer = lines.pop();
+        for (const line of lines) {
+            if (line.trim()) {
                 try {
-                    const respObj = JSON.parse(line);
+                    const respObj = JSON.parse(line.trim());
                     sendMessage(respObj);
                 } catch (e) {
-                    // Ignore parsing errors from incomplete lines if any
+                    // Ignore malformed lines
                 }
             }
         }
-        client.end();
+    });
+    client.on('end', () => {
+        // Process any remaining data in buffer
+        if (responseBuffer.trim()) {
+            try {
+                const respObj = JSON.parse(responseBuffer.trim());
+                sendMessage(respObj);
+            } catch (e) {
+                // Ignore
+            }
+        }
+        responseBuffer = '';
     });
 
     client.on('error', (err) => {
         autoLaunchApp();
-        sendMessage({ action: msgObj.action.replace('request', 'response'), success: false, error: 'PassSafer Desktop App is not running. Starting in background...' });
+        sendMessage({ action: msgObj.action, success: false, error: 'PassSafer Desktop App is not running. Starting in background...' });
     });
 }

@@ -1,6 +1,6 @@
 {
   "name": "passsafer-electron",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "description": "Secure Password Manager with Encryption",
   "main": "main.js",
   "scripts": {
@@ -24,7 +24,8 @@
     "electron-builder": "^24.13.3"
   },
   "dependencies": {
-    "electron-updater": "^6.3.0"
+    "electron-updater": "^6.3.0",
+    "qrcode": "^1.5.4"
   },
   "build": {
     "appId": "com.passsafer.app",

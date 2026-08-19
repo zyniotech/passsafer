@@ -22,6 +22,10 @@ let licenseState = { valid: false, plan: 'none', features: { passwordGenerator: 
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', async () => {
+    // Dark Mode is the default and only theme
+    document.body.classList.remove('light-mode');
+    localStorage.removeItem('app_theme');
+
     // Initialize Language
     const supportedLangs = ['en', 'de', 'es', 'fr'];
     const systemLang = navigator.language.split('-')[0];
@@ -50,10 +54,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
     setupAutoLogout();
     setupCustomSelect();
+    initializeCustomSelects();
+    setupDashboardSearch();
     
     // Set language select value
     const langSelect = document.getElementById('language-select');
-    if (langSelect) langSelect.value = currentLanguage;
+    if (langSelect) {
+        langSelect.value = currentLanguage;
+        syncCustomSelect('language-select');
+    }
 });
 
 // Screens where sidebar should be hidden (unauthenticated)
@@ -143,6 +152,17 @@ function applyTranslations() {
             }
         }
     });
+
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (translations[key]) {
+            el.placeholder = translations[key];
+        }
+    });
+
+    if (typeof initializeCustomSelects === 'function') {
+        initializeCustomSelects();
+    }
 }
 
 function t(key, variables = {}) {
@@ -172,7 +192,7 @@ function validateUsername(username) {
 
 function generateStrongPassword() {
     if (!licenseState.valid || !licenseState.features || !licenseState.features.passwordGenerator) {
-        showToast('Password generator requires a Premium or Lifetime license.', 'warning', true);
+        showToast('msg_license_req_pwd_gen', 'warning');
         return;
     }
     const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -216,6 +236,19 @@ function generateStrongPassword() {
     document.getElementById('edit-password').value = password;
 }
 
+// Helper for Enter key handling
+function addEnterKeyListener(elementId, callback) {
+    const el = document.getElementById(elementId);
+    if (el) {
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                callback();
+            }
+        });
+    }
+}
+
 // Event Listeners Setup
 function setupEventListeners() {
     // Login/Register
@@ -223,6 +256,16 @@ function setupEventListeners() {
     document.getElementById('register-btn').addEventListener('click', handleRegister);
     document.getElementById('show-register-btn').addEventListener('click', () => showScreen('register-screen'));
     document.getElementById('show-login-btn').addEventListener('click', () => showScreen('login-screen'));
+
+    // Enter key listeners on login & register
+    addEnterKeyListener('login-username', handleLogin);
+    addEnterKeyListener('login-password', handleLogin);
+    addEnterKeyListener('login-pin', handleLogin);
+    addEnterKeyListener('register-username', handleRegister);
+    addEnterKeyListener('register-password', handleRegister);
+    addEnterKeyListener('register-password-repeat', handleRegister);
+    addEnterKeyListener('register-pin', handleRegister);
+    addEnterKeyListener('license-key-input', handleActivateLicense);
 
     // Main Screen
     document.getElementById('add-password-btn').addEventListener('click', showAddPassword);
@@ -302,7 +345,7 @@ function setupEventListeners() {
         langSelect.addEventListener('change', async (e) => {
             currentLanguage = e.target.value;
             await loadTranslations(currentLanguage);
-            showToast(currentLanguage === 'de' ? 'Sprache geändert' : 'Language changed', 'success');
+            showToast('msg_lang_changed', 'success');
         });
     }
 
@@ -310,9 +353,16 @@ function setupEventListeners() {
     document.getElementById('close-change-pin-btn').addEventListener('click', () => showScreen('settings-screen'));
     document.getElementById('save-new-pin-btn').addEventListener('click', handleChangePin);
     document.getElementById('cancel-change-pin-btn').addEventListener('click', () => showScreen('settings-screen'));
+    addEnterKeyListener('current-pin', handleChangePin);
+    addEnterKeyListener('new-pin', handleChangePin);
+    addEnterKeyListener('repeat-pin', handleChangePin);
 
+    // Change Password Screen
     document.getElementById('save-new-password-btn').addEventListener('click', handleChangePassword);
     document.getElementById('cancel-change-password-btn').addEventListener('click', () => showScreen('settings-screen'));
+    addEnterKeyListener('current-password', handleChangePassword);
+    addEnterKeyListener('new-password', handleChangePassword);
+    addEnterKeyListener('repeat-password', handleChangePassword);
 
     // Generator
     const genBtn = document.getElementById('generate-password-btn');
@@ -331,6 +381,7 @@ function setupEventListeners() {
     document.getElementById('close-delete-account-btn').addEventListener('click', () => showScreen('settings-screen'));
     document.getElementById('cancel-delete-account-btn').addEventListener('click', () => showScreen('settings-screen'));
     document.getElementById('confirm-delete-account-btn').addEventListener('click', handleDeleteAccount);
+    addEnterKeyListener('delete-account-password', handleDeleteAccount);
 
     // Import Screen
     document.getElementById('select-import-file-btn').addEventListener('click', selectImportFile);
@@ -390,21 +441,13 @@ function setupAutoUpdate() {
             const manualBtn = document.getElementById('update-manual-btn');
             const installBtn = document.getElementById('update-install-btn');
 
-            let msg = t('msg_update_stalled');
-            if (msg === 'msg_update_stalled') {
-                msg = currentLanguage === 'de' ? 'Auto-Update hängt oder ist fehlgeschlagen. Bitte manuell aktualisieren.' : 'Auto-update stalled or failed. Please update manually.';
-            }
-            text.textContent = msg;
+            text.textContent = t('msg_update_stalled');
 
             if (downloadBtn) downloadBtn.classList.add('hidden');
             if (installBtn) installBtn.classList.add('hidden');
             if (manualBtn) {
                 manualBtn.classList.remove('hidden');
-                let btnText = t('btn_manual_download');
-                if (btnText === 'btn_manual_download') {
-                    btnText = currentLanguage === 'de' ? 'Manuell herunterladen' : 'Manual Download';
-                }
-                manualBtn.textContent = btnText;
+                manualBtn.textContent = t('btn_manual_download');
             }
         }
 
@@ -502,12 +545,12 @@ async function handleLogin() {
     const pin = document.getElementById('login-pin').value;
 
     if (!username || !password || !pin) {
-        showToast('Please fill in all fields!', 'error');
+        showToast('msg_fill_all_fields', 'error');
         return;
     }
 
     if (pin.length !== 6 || !/^\d+$/.test(pin)) {
-        showToast('PIN must be exactly 6 digits!', 'error');
+        showToast('msg_pin_format', 'error');
         return;
     }
 
@@ -544,13 +587,14 @@ async function handleLogin() {
             purgeExpiredTrash();
 
             showDashboard();
-            showToast('Login successful!', 'success');
+            showToast('msg_login_success', 'success');
             resetLogoutTimer();
+            checkOnboarding();
         } else {
-            showToast('Error loading passwords!', 'error');
+            showToast('msg_load_pwd_error', 'error');
         }
     } else {
-        showToast('Invalid credentials!', 'error');
+        showToast('msg_invalid_credentials', 'error');
     }
 }
 
@@ -562,37 +606,37 @@ async function handleRegister() {
     const pin = document.getElementById('register-pin').value;
 
     if (!username || !password || !passwordRepeat || !pin) {
-        showToast('Please fill in all fields!', 'error');
+        showToast('msg_fill_all_fields', 'error');
         return;
     }
 
     if (!validateUsername(username)) {
-        showToast('Username: 3-30 chars, letters/numbers/./_/- only', 'error');
+        showToast('msg_username_format', 'error');
         return;
     }
 
     if (!validatePassword(password)) {
-        showToast('Password: 10+ chars, Upper/Lower/Digit/Special!', 'error');
+        showToast('msg_pwd_requirements', 'error');
         return;
     }
 
     if (password !== passwordRepeat) {
-        showToast('Passwords do not match!', 'error');
+        showToast('msg_pwd_mismatch', 'error');
         return;
     }
 
     if (pin.length !== 6 || !/^\d+$/.test(pin)) {
-        showToast('PIN must be exactly 6 digits!', 'error');
+        showToast('msg_pin_format', 'error');
         return;
     }
 
     const result = await window.api.register({ username, password, pin });
 
     if (result.success) {
-        showToast('Account created! Please login.', 'success');
+        showToast('msg_account_created', 'success');
         showScreen('login-screen');
     } else {
-        showToast('Registration failed!', 'error');
+        showToast('msg_reg_failed', 'error');
     }
 }
 
@@ -700,16 +744,72 @@ function renderPasswordList() {
     });
 }
 
+function isLocalNetwork(domain) {
+    if (!domain) return false;
+    const d = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split('?')[0].split(':')[0];
+    if (d === 'localhost' || d.endsWith('.local') || d.endsWith('.lan') || d.endsWith('.home') || d.endsWith('.internal')) return true;
+    if (/^(?:127|10|192\.168|172\.(?:1[6-9]|2[0-9]|3[0-1]))\./.test(d)) return true;
+    return false;
+}
+
+function getFaviconUrl(domain) {
+    if (!domain) return null;
+    let d = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split('?')[0];
+    if (!d) return null;
+    if (isLocalNetwork(d)) {
+        return null;
+    }
+    if (!d.includes('.')) return null;
+    return 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(d) + '&sz=64';
+}
+
 function createPasswordCard(pwd, index) {
     const card = document.createElement('div');
     card.className = 'password-card';
     card.setAttribute('draggable', 'true');
+
+    const domain = pwd.domain || pwd.url || pwd.link || '';
+    const faviconUrl = getFaviconUrl(domain);
+    const firstLetter = (pwd.app || '?').charAt(0).toUpperCase();
+    const isLocal = isLocalNetwork(domain);
+    const cardIconId = 'pwd-icon-' + (pwd.id || index);
+
+    let iconHtml = '';
+    if (faviconUrl) {
+        iconHtml = `
+            <div class="password-card-icon" data-icon-id="${cardIconId}">
+                <img src="${faviconUrl}" alt="${firstLetter}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=&quot;password-card-icon-letter&quot;>${firstLetter}</span>';">
+            </div>
+        `;
+    } else {
+        iconHtml = `
+            <div class="password-card-icon" data-icon-id="${cardIconId}">
+                <span class="password-card-icon-letter">${firstLetter}</span>
+            </div>
+        `;
+    }
+
     card.innerHTML = `
-        <span class="password-card-name">${escapeHtml(pwd.app)}</span>
+        <div style="display: flex; align-items: center;">
+            ${iconHtml}
+            <span class="password-card-name">${escapeHtml(pwd.app)}</span>
+        </div>
         <span class="password-card-arrow">
             <img src="../logos/right.png" alt=">">
         </span>
     `;
+
+    if (!faviconUrl && isLocal && window.api && window.api.fetchLocalFavicon) {
+        window.api.fetchLocalFavicon(domain).then(localDataUrl => {
+            if (localDataUrl) {
+                const container = card.querySelector(`[data-icon-id="${cardIconId}"]`);
+                if (container) {
+                    container.innerHTML = `<img src="${localDataUrl}" alt="${firstLetter}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=&quot;password-card-icon-letter&quot;>${firstLetter}</span>';">`;
+                }
+            }
+        }).catch(() => {});
+    }
+
     card.addEventListener('click', () => showPasswordDetail(index));
     card.addEventListener('dragstart', (e) => {
         card.classList.add('dragging');
@@ -930,7 +1030,7 @@ async function copyUsername() {
         showToast('msg_copied', 'success');
         await scheduleClipboardClear();
     } catch (e) {
-        showToast('Copy failed!', 'error');
+        showToast('msg_copy_failed', 'error');
     }
 }
 
@@ -941,7 +1041,7 @@ async function copyLink() {
         showToast('msg_copied', 'success');
         await scheduleClipboardClear();
     } catch (e) {
-        showToast('Copy failed!', 'error');
+        showToast('msg_copy_failed', 'error');
     }
 }
 
@@ -953,7 +1053,7 @@ async function copyPassword() {
         showToast('msg_copied', 'success');
         await scheduleClipboardClear();
     } catch (e) {
-        showToast('Copy failed!', 'error');
+        showToast('msg_copy_failed', 'error');
     }
 }
 
@@ -969,9 +1069,9 @@ async function savePasswordFolder() {
     });
 
     if (result.success) {
-        showToast('Folder assignment saved!', 'success');
+        showToast('msg_folder_assignment_saved', 'success');
     } else {
-        showToast('Error saving!', 'error');
+        showToast('msg_save_error', 'error');
     }
 }
 
@@ -1035,7 +1135,7 @@ async function handleSavePassword() {
     const notes = document.getElementById('edit-notes').value;
 
     if (!app) {
-        showToast('Application name is required!', 'error');
+        showToast('msg_app_name_required', 'error');
         return;
     }
 
@@ -1065,10 +1165,10 @@ async function handleSavePassword() {
     });
 
     if (result.success) {
-        showToast('Entry saved!', 'success');
+        showToast('msg_saved', 'success');
         showMainScreen();
     } else {
-        showToast('Error saving!', 'error');
+        showToast('msg_save_error', 'error');
     }
 }
 
@@ -1093,13 +1193,13 @@ async function handleSaveFolder() {
     const name = document.getElementById('folder-name').value.trim();
 
     if (!name) {
-        showToast('Please enter a folder name!', 'error');
+        showToast('msg_folder_name_required', 'error');
         return;
     }
 
     // Check for duplicate name
     if (folders.some(f => f.name.toLowerCase() === name.toLowerCase() && f.id !== currentEditFolder?.id)) {
-        showToast('A folder with this name already exists!', 'error');
+        showToast('msg_folder_exists', 'error');
         return;
     }
 
@@ -1123,10 +1223,10 @@ async function handleSaveFolder() {
     });
 
     if (result.success) {
-        showToast(currentEditFolder ? 'Folder renamed!' : 'Folder created!', 'success');
+        showToast('msg_folder_saved', 'success');
         showMainScreen();
     } else {
-        showToast('Fehler beim Speichern!', 'error');
+        showToast('msg_save_error', 'error');
     }
 }
 
@@ -1153,10 +1253,10 @@ async function handleDeleteFolder() {
             });
 
             if (result.success) {
-                showToast('Folder deleted!', 'success');
+                showToast('msg_folder_deleted', 'success');
                 showMainScreen();
             } else {
-                showToast('Fehler beim Löschen!', 'error');
+                showToast('msg_delete_error', 'error');
             }
         }
     );
@@ -1170,17 +1270,17 @@ async function handleChangePin() {
     const newPinRepeat = document.getElementById('new-pin-repeat').value;
 
     if (!masterPwd || !currentPin || !newPin || !newPinRepeat) {
-        showToast('Bitte alle Felder ausfüllen!', 'error');
+        showToast('msg_fill_all_fields', 'error');
         return;
     }
 
     if (newPin.length !== 6 || !/^\d+$/.test(newPin)) {
-        showToast('New PIN must be exactly 6 digits!', 'error');
+        showToast('msg_pin_format', 'error');
         return;
     }
 
     if (newPin !== newPinRepeat) {
-        showToast('PINs do not match!', 'error');
+        showToast('msg_pin_mismatch', 'error');
         return;
     }
 
@@ -1191,7 +1291,7 @@ async function handleChangePin() {
     });
 
     if (result.success) {
-        showToast('PIN successfully changed!', 'success');
+        showToast('msg_pin_changed', 'success');
         // Clear fields
         document.getElementById('confirm-master-pwd-pin').value = '';
         document.getElementById('confirm-current-pin').value = '';
@@ -1211,17 +1311,17 @@ async function handleChangePassword() {
     const newPwdRepeat = document.getElementById('new-master-pwd-repeat').value;
 
     if (!currentPwd || !pin || !newPwd || !newPwdRepeat) {
-        showToast('Bitte alle Felder ausfüllen!', 'error');
+        showToast('msg_fill_all_fields', 'error');
         return;
     }
 
     if (!validatePassword(newPwd)) {
-        showToast('Passwort: 10+ Zeichen, Groß/Klein/Ziffer/Sonder!', 'error');
+        showToast('msg_pwd_requirements', 'error');
         return;
     }
 
     if (newPwd !== newPwdRepeat) {
-        showToast('Passwörter stimmen nicht überein!', 'error');
+        showToast('msg_pwd_mismatch', 'error');
         return;
     }
 
@@ -1233,7 +1333,7 @@ async function handleChangePassword() {
 
     if (result.success) {
         currentPassword = newPwd;
-        showToast('Master Password successfully changed!', 'success');
+        showToast('msg_pwd_changed', 'success');
         // Clear fields
         document.getElementById('confirm-current-pwd').value = '';
         document.getElementById('confirm-pin-pwd').value = '';
@@ -1251,19 +1351,19 @@ async function handleDeleteAccount() {
     const pin = document.getElementById('delete-account-pin').value;
 
     if (!password || !pin) {
-        showToast('Please enter master password and PIN!', 'error');
+        showToast('msg_enter_pwd_pin', 'error');
         return;
     }
 
     if (pin.length !== 6 || !/^\d+$/.test(pin)) {
-        showToast('PIN must be exactly 6 digits!', 'error');
+        showToast('msg_pin_format', 'error');
         return;
     }
 
     const result = await window.api.deleteAccount({ password, pin });
 
     if (result.success) {
-        showToast('Account deleted. Goodbye!', 'success');
+        showToast('msg_account_deleted', 'success');
         setTimeout(() => {
             // Force reload to reset state and show register screen
             location.reload();
@@ -1354,7 +1454,7 @@ function resetLogoutTimer() {
     clearTimeout(logoutTimer);
     logoutTimer = setTimeout(() => {
         if (currentUser) {
-            showToast('Automatically logged out (Inactivity)', 'info');
+            showToast('msg_inactivity_logout', 'info');
             handleLogout(true);
         }
     }, LOGOUT_TIMEOUT);
@@ -1364,13 +1464,13 @@ function resetLogoutTimer() {
 async function handleExport() {
     const exportPassword = document.getElementById('export-password').value;
     if (!exportPassword) {
-        showToast('Please set an export password!', 'error');
+        showToast('msg_export_pwd_required', 'error');
         return;
     }
 
     // [MITTEL-03] Export-Passwort muss gleiche Anforderungen erfüllen
     if (!validatePassword(exportPassword)) {
-        showToast('Export password: 10+ chars, Upper/Lower/Digit/Special!', 'error');
+        showToast('msg_export_pwd_format', 'error');
         return;
     }
 
@@ -1397,10 +1497,10 @@ async function handleExport() {
         });
 
         if (result.success) {
-            showToast(`Export erfolgreich!`, 'success');
+            showToast('msg_export_success', 'success');
             showScreen('settings-screen');
         } else {
-            showToast('Export fehlgeschlagen: ' + result.error, 'error');
+            showToast(result.error ? ('Export: ' + result.error) : 'msg_export_error', 'error', true);
         }
     }
 }
@@ -1425,12 +1525,12 @@ async function handleImport() {
     const importPassword = document.getElementById('import-password').value;
 
     if (!filePath) {
-        showToast('Please select a file!', 'error');
+        showToast('msg_select_file', 'error');
         return;
     }
 
     if (!importPassword) {
-        showToast('Please enter the import password!', 'error');
+        showToast('msg_import_pwd_required', 'error');
         return;
     }
 
@@ -1545,7 +1645,7 @@ async function handleImport() {
 // File Upload Handler
 async function handleFileUpload() {
     if (currentFiles.length >= 5) {
-        showToast('Maximum 5 files allowed!', 'error');
+        showToast('msg_max_files', 'error');
         return;
     }
 
@@ -1561,9 +1661,9 @@ async function handleFileUpload() {
         if (result.success) {
             currentFiles.push({ data: result.data, name: result.fileName });
             renderEditFileList();
-            showToast('File attached!', 'success');
+            showToast('msg_file_attached', 'success');
         } else {
-            showToast(result.error || 'Error reading file!', 'error');
+            showToast(result.error || 'msg_file_read_error', 'error');
         }
     }
 }
@@ -1638,7 +1738,7 @@ async function handleFileDownloadByIndex(fileIndex) {
     const file = files[fileIndex];
 
     if (!file) {
-        showToast('File not found!', 'error');
+        showToast('msg_file_not_found', 'error');
         return;
     }
 
@@ -1654,9 +1754,9 @@ async function handleFileDownloadByIndex(fileIndex) {
         });
 
         if (result.success) {
-            showToast('File saved!', 'success');
+            showToast('msg_file_saved', 'success');
         } else {
-            showToast('Error saving file!', 'error');
+            showToast('msg_file_save_error', 'error');
         }
     }
 }
@@ -1742,7 +1842,7 @@ async function selectCsvFile() {
 async function handleCsvImport() {
     const filePath = document.getElementById('csv-file-path').dataset.path;
     if (!filePath) {
-        showToast('Please select a CSV file!', 'error');
+        showToast('msg_select_csv', 'error');
         return;
     }
 
@@ -1754,7 +1854,7 @@ async function handleCsvImport() {
         const rows = parseCSV(content);
         
         if (rows.length < 2) {
-            showToast('CSV file seems empty or invalid.', 'error');
+            showToast('msg_csv_empty', 'error');
             return;
         }
 
@@ -1817,7 +1917,7 @@ async function handleCsvImport() {
         }
 
         if (importedData.length === 0) {
-            showToast('No valid entries found in CSV.', 'error');
+            showToast('msg_csv_no_valid', 'error');
             return;
         }
 
@@ -2096,7 +2196,7 @@ async function handleActivateLicense() {
                     lastSync: Date.now()
                 };
                 errorEl.classList.add('hidden');
-                showToast('License activated successfully!', 'success');
+                showToast('msg_license_activated', 'success');
                 
                 // License activated → proceed to login or register
                 const isFirstRun = await window.api.checkFirstRun();
@@ -2134,7 +2234,7 @@ let auditLeakedSet = new Set();
 
 async function openSecurityAudit() {
     if (!hasPaidAccess()) {
-        showToast('Watchtower requires a Premium or Lifetime license.', 'warning', true);
+        showToast('msg_license_req_watchtower', 'warning');
         return;
     }
     showScreen('audit-screen');
@@ -2145,7 +2245,7 @@ async function openSecurityAudit() {
     document.getElementById('audit-summary').style.display = 'none';
     document.getElementById('audit-filters').style.display = 'none';
     document.getElementById('audit-results').innerHTML = '';
-    document.getElementById('audit-progress').textContent = 'Analyzing password strength...';
+    document.getElementById('audit-progress').textContent = t('audit_analyzing');
     
     auditResults = [];
     auditLeakedSet = new Set();
@@ -2154,17 +2254,17 @@ async function openSecurityAudit() {
         // Step 1: Local audit (weak, reused)
         const auditRes = await window.api.passwordAudit({ password: currentPassword });
         if (!auditRes.success) {
-            showToast('Audit failed: ' + auditRes.error, 'error');
+            showToast(auditRes.error || 'msg_error', 'error');
             return;
         }
         auditResults = auditRes.results;
 
         // Step 2: HaveIBeenPwned Leak Check (K-Anonymity)
-        document.getElementById('audit-progress').textContent = 'Checking for leaked passwords (0/' + auditResults.length + ')...';
+        document.getElementById('audit-progress').textContent = t('audit_checking_leaks', { current: 0, total: auditResults.length });
         
         for (let i = 0; i < auditResults.length; i++) {
             const entry = auditResults[i];
-            document.getElementById('audit-progress').textContent = `Checking leaks (${i + 1}/${auditResults.length})...`;
+            document.getElementById('audit-progress').textContent = t('audit_checking_leaks', { current: i + 1, total: auditResults.length });
 
             try {
                 // SHA-1 Hash im Browser berechnen
@@ -2201,7 +2301,7 @@ async function openSecurityAudit() {
         setupAuditFilters();
 
     } catch (err) {
-        showToast('Audit error: ' + err.message, 'error');
+        showToast(err.message || 'msg_error', 'error');
     }
 }
 
@@ -2249,7 +2349,7 @@ function renderAuditResults(filter) {
     }
 
     if (filtered.length === 0) {
-        container.innerHTML = `<div class="empty-state"><p>${filter === 'strong' ? 'No strong passwords found.' : 'No issues found in this category. 🎉'}</p></div>`;
+        container.innerHTML = `<div class="empty-state"><p>${filter === 'strong' ? t('audit_empty_strong') : t('audit_empty_issues')}</p></div>`;
         return;
     }
 
@@ -2268,10 +2368,10 @@ function renderAuditResults(filter) {
         else if (result.strength >= 45) strengthColor = '#f59e0b'; // amber
 
         let badges = '';
-        if (hasLeaked) badges += '<span class="audit-badge audit-badge-leaked">🔓 Leaked' + (result.leakCount ? ` (${result.leakCount.toLocaleString()}x)` : '') + '</span>';
-        if (hasWeak) badges += '<span class="audit-badge audit-badge-weak">⚠️ Weak</span>';
-        if (hasReused) badges += '<span class="audit-badge audit-badge-reused">🔄 Reused (' + result.reusedCount + ')</span>';
-        if (isStrong) badges += '<span class="audit-badge audit-badge-strong">✅ Strong</span>';
+        if (hasLeaked) badges += '<span class="audit-badge audit-badge-leaked">🔓 ' + t('audit_leaked') + (result.leakCount ? ` (${result.leakCount.toLocaleString()}x)` : '') + '</span>';
+        if (hasWeak) badges += '<span class="audit-badge audit-badge-weak">' + t('audit_filter_weak') + '</span>';
+        if (hasReused) badges += '<span class="audit-badge audit-badge-reused">🔄 ' + t('audit_reused') + ' (' + result.reusedCount + ')</span>';
+        if (isStrong) badges += '<span class="audit-badge audit-badge-strong">' + t('audit_filter_strong') + '</span>';
 
         card.innerHTML = `
             <div class="audit-result-header">
@@ -2354,7 +2454,7 @@ if (window.api && window.api.onNativeRequest) {
             const mainScreen = document.getElementById('main-screen');
             if (mainScreen && !mainScreen.classList.contains('hidden')) {
                 renderPasswordList();
-                showToast('Passwords synchronized from extension!', 'success');
+                showToast('msg_sync_from_ext', 'success');
             }
         }
         else if (request.action === "request-vault") {
@@ -2392,6 +2492,22 @@ let currentEditIdIndex = null;
 let currentEditDocIndex = null;
 let currentEditCardIndex = null;
 
+document.addEventListener('click', (e) => {
+    // Product Hunt Banner global handlers
+    if (e.target.closest('#ph-rate-btn')) {
+        window.api.openExternal('https://www.producthunt.com');
+        localStorage.setItem('ph_dismissed', 'true');
+        checkProductHuntBanner();
+    } else if (e.target.closest('#ph-later-btn')) {
+        const snoozeUntil = Date.now() + 2 * 24 * 60 * 60 * 1000;
+        localStorage.setItem('ph_snoozed_until', snoozeUntil.toString());
+        checkProductHuntBanner();
+    } else if (e.target.closest('#ph-dismiss-btn')) {
+        localStorage.setItem('ph_dismissed', 'true');
+        checkProductHuntBanner();
+    }
+});
+
 function setupNewEventListeners() {
     // Sidebar Navigation
     setupSidebarNavigation();
@@ -2408,21 +2524,38 @@ function setupNewEventListeners() {
         updateSidebarActive('export');
     });
 
-    // Product Hunt Banner
-    document.getElementById('ph-rate-btn').addEventListener('click', () => {
-        window.api.openExternal('https://www.producthunt.com');
-        localStorage.setItem('ph_dismissed', 'true');
-        checkProductHuntBanner();
-    });
-    document.getElementById('ph-later-btn').addEventListener('click', () => {
-        const snoozeUntil = Date.now() + 2 * 24 * 60 * 60 * 1000;
-        localStorage.setItem('ph_snoozed_until', snoozeUntil.toString());
-        checkProductHuntBanner();
-    });
-    document.getElementById('ph-dismiss-btn').addEventListener('click', () => {
-        localStorage.setItem('ph_dismissed', 'true');
-        checkProductHuntBanner();
-    });
+    // Product Hunt / Review Banner handlers moved to global delegated listener below
+
+    // Onboarding Listeners
+    const onboardingNextBtn = document.getElementById('onboarding-next-btn');
+    if (onboardingNextBtn) {
+        onboardingNextBtn.addEventListener('click', () => {
+            if (onboardingCurrentStep < ONBOARDING_STEPS - 1) {
+                showOnboardingStep(onboardingCurrentStep + 1);
+            } else {
+                finishOnboarding();
+            }
+        });
+    }
+
+    const onboardingSkipBtn = document.getElementById('onboarding-skip-btn');
+    if (onboardingSkipBtn) {
+        onboardingSkipBtn.addEventListener('click', finishOnboarding);
+    }
+
+    // Initialize custom select dropdowns
+    initializeCustomSelects();
+
+    const restartOnboardingBtn = document.getElementById('restart-onboarding-btn');
+    if (restartOnboardingBtn) {
+        restartOnboardingBtn.addEventListener('click', () => {
+            localStorage.removeItem('onboarding_completed');
+            onboardingCurrentStep = 0;
+            showScreen('main-screen');
+            updateSidebarActive('dashboard');
+            showOnboardingStep(0);
+        });
+    }
 
     // Monthly Report Close & Delete
     document.getElementById('report-close-btn').addEventListener('click', () => {
@@ -2476,6 +2609,7 @@ function hasPaidAccess() {
 function setupSidebarNavigation() {
     document.querySelectorAll('#sidebar .nav-item').forEach(item => {
         item.addEventListener('click', () => {
+            const isTourHighlight = item.classList.contains('onboarding-highlight');
             const navId = item.getAttribute('data-nav');
             if (navId === 'dashboard') {
                 showDashboard();
@@ -2484,19 +2618,19 @@ function setupSidebarNavigation() {
                 showMainScreen();
             } else if (navId === 'trash') {
                 if (!hasPaidAccess()) {
-                    showToast('Trash requires a Premium or Lifetime license.', 'warning', true);
+                    showToast('msg_license_req_trash', 'warning');
                     return;
                 }
                 showTrashScreen();
             } else if (navId === 'watchtower') {
                 if (!hasPaidAccess()) {
-                    showToast('Watchtower requires a Premium or Lifetime license.', 'warning', true);
+                    showToast('msg_license_req_watchtower', 'warning');
                     return;
                 }
                 openSecurityAudit();
             } else if (navId === 'ids') {
                 if (!hasPaidAccess()) {
-                    showToast('IDs require a Premium or Lifetime license.', 'warning', true);
+                    showToast('msg_license_req_ids', 'warning');
                     return;
                 }
                 showIdsScreen();
@@ -2508,7 +2642,7 @@ function setupSidebarNavigation() {
                 showReportsScreen();
             } else if (navId === 'import') {
                 document.getElementById('import-password').value = '';
-                document.getElementById('import-file-path').textContent = currentLanguage === 'de' ? 'Keine Datei ausgewählt' : 'No file selected';
+                document.getElementById('import-file-path').textContent = t('label_no_file_selected');
                 document.getElementById('import-file-path').dataset.path = '';
                 showScreen('import-screen');
                 updateSidebarActive('import');
@@ -2517,7 +2651,7 @@ function setupSidebarNavigation() {
                 showScreen('export-screen');
                 updateSidebarActive('export');
             } else if (navId === 'csv-import') {
-                document.getElementById('csv-file-path').textContent = currentLanguage === 'de' ? 'Keine Datei ausgewählt' : 'No file selected';
+                document.getElementById('csv-file-path').textContent = t('label_no_file_selected');
                 document.getElementById('csv-file-path').dataset.path = '';
                 showScreen('csv-import-screen');
                 updateSidebarActive('csv-import');
@@ -2601,15 +2735,51 @@ async function showDashboard() {
     if (recent.length === 0) {
         recentContainer.innerHTML = `<p class="hint">${t('msg_no_passwords')}</p>`;
     } else {
-        recent.forEach(pwd => {
+        recent.forEach((pwd, idx) => {
+            const domain = pwd.domain || pwd.url || pwd.link || '';
+            const faviconUrl = getFaviconUrl(domain);
+            const firstLetter = (pwd.app || '?').charAt(0).toUpperCase();
+            const isLocal = isLocalNetwork(domain);
+            const recentIconId = 'recent-icon-' + (pwd.id || idx);
+
+            let iconHtml = '';
+            if (faviconUrl) {
+                iconHtml = `
+                    <div class="password-card-icon" data-icon-id="${recentIconId}">
+                        <img src="${faviconUrl}" alt="${firstLetter}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=&quot;password-card-icon-letter&quot;>${firstLetter}</span>';">
+                    </div>
+                `;
+            } else {
+                iconHtml = `
+                    <div class="password-card-icon" data-icon-id="${recentIconId}">
+                        <span class="password-card-icon-letter">${firstLetter}</span>
+                    </div>
+                `;
+            }
+
             const card = document.createElement('div');
             card.className = 'password-card';
             card.innerHTML = `
-                <span class="password-card-name">${escapeHtml(pwd.app)}</span>
+                <div style="display: flex; align-items: center;">
+                    ${iconHtml}
+                    <span class="password-card-name">${escapeHtml(pwd.app)}</span>
+                </div>
                 <span class="password-card-arrow">
                     <img src="../logos/right.png" alt=">">
                 </span>
             `;
+
+            if (!faviconUrl && isLocal && window.api && window.api.fetchLocalFavicon) {
+                window.api.fetchLocalFavicon(domain).then(localDataUrl => {
+                    if (localDataUrl) {
+                        const container = card.querySelector(`[data-icon-id="${recentIconId}"]`);
+                        if (container) {
+                            container.innerHTML = `<img src="${localDataUrl}" alt="${firstLetter}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=&quot;password-card-icon-letter&quot;>${firstLetter}</span>';">`;
+                        }
+                    }
+                }).catch(() => {});
+            }
+
             const actualIndex = passwords.indexOf(pwd);
             card.addEventListener('click', () => showPasswordDetail(actualIndex));
             recentContainer.appendChild(card);
@@ -2626,6 +2796,7 @@ function checkProductHuntBanner() {
 
     if (licenseState.valid) {
         banner.classList.add('hidden');
+        banner.style.display = 'none';
         return;
     }
 
@@ -2635,9 +2806,699 @@ function checkProductHuntBanner() {
 
     if (dismissed || (snoozedUntil && now < parseInt(snoozedUntil))) {
         banner.classList.add('hidden');
+        banner.style.display = 'none';
     } else {
         banner.classList.remove('hidden');
+        banner.style.display = 'flex';
     }
+}
+
+function setupCustomSelect() {
+    const trigger = document.getElementById('custom-folder-trigger');
+    if (trigger) {
+        trigger.addEventListener('click', function (e) {
+            e.stopPropagation();
+            const options = document.getElementById('custom-folder-options');
+            if (options) {
+                const isHidden = options.classList.contains('select-hide');
+                closeAllCustomSelects();
+                if (isHidden) {
+                    options.classList.remove('select-hide');
+                    this.classList.add('select-arrow-active');
+                }
+            }
+        });
+    }
+
+    document.addEventListener('click', () => closeAllCustomSelects());
+}
+
+function initializeCustomSelects() {
+    const selects = document.querySelectorAll('select.folder-select');
+    selects.forEach(selectEl => {
+        setupSingleCustomSelect(selectEl);
+    });
+}
+
+function setupSingleCustomSelect(selectEl) {
+    if (!selectEl) return;
+
+    let container = selectEl.parentElement;
+    if (!container.classList.contains('custom-select-container')) {
+        container = document.createElement('div');
+        container.className = 'custom-select-container';
+        if (selectEl.style.width) container.style.width = selectEl.style.width;
+        if (selectEl.style.minWidth) container.style.minWidth = selectEl.style.minWidth;
+        selectEl.parentNode.insertBefore(container, selectEl);
+        container.appendChild(selectEl);
+    }
+
+    selectEl.style.display = 'none';
+
+    let trigger = container.querySelector(':scope > .select-selected');
+    if (!trigger) {
+        trigger = document.createElement('div');
+        trigger.className = 'select-selected';
+        container.appendChild(trigger);
+
+        trigger.addEventListener('click', function (e) {
+            e.stopPropagation();
+            const items = container.querySelector('.select-items');
+            if (!items) return;
+            const isHidden = items.classList.contains('select-hide');
+            closeAllCustomSelects();
+            if (isHidden) {
+                items.classList.remove('select-hide');
+                trigger.classList.add('select-arrow-active');
+            }
+        });
+    }
+
+    let itemsContainer = container.querySelector(':scope > .select-items');
+    if (!itemsContainer) {
+        itemsContainer = document.createElement('div');
+        itemsContainer.className = 'select-items select-hide';
+        container.appendChild(itemsContainer);
+    }
+
+    refreshCustomSelectOptions(selectEl);
+}
+
+function refreshCustomSelectOptions(selectEl) {
+    if (!selectEl) return;
+    const container = selectEl.closest('.custom-select-container');
+    if (!container) return;
+    const trigger = container.querySelector(':scope > .select-selected');
+    const itemsContainer = container.querySelector(':scope > .select-items');
+    if (!trigger || !itemsContainer) return;
+
+    itemsContainer.innerHTML = '';
+
+    const selectedOption = selectEl.options[selectEl.selectedIndex] || selectEl.options[0];
+    trigger.textContent = selectedOption ? selectedOption.textContent : '';
+
+    Array.from(selectEl.options).forEach((opt, idx) => {
+        const item = document.createElement('div');
+        item.textContent = opt.textContent;
+        item.dataset.value = opt.value;
+        if (idx === selectEl.selectedIndex) {
+            item.classList.add('same-as-selected');
+        }
+
+        item.addEventListener('click', function (e) {
+            e.stopPropagation();
+            selectEl.selectedIndex = idx;
+            selectEl.value = opt.value;
+            trigger.textContent = opt.textContent;
+
+            itemsContainer.querySelectorAll('div').forEach(d => d.classList.remove('same-as-selected'));
+            item.classList.add('same-as-selected');
+
+            itemsContainer.classList.add('select-hide');
+            trigger.classList.remove('select-arrow-active');
+
+            selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+
+        itemsContainer.appendChild(item);
+    });
+}
+
+function syncCustomSelect(selectEl) {
+    if (typeof selectEl === 'string') selectEl = document.getElementById(selectEl);
+    if (!selectEl) return;
+    const container = selectEl.closest('.custom-select-container');
+    if (!container) return;
+    const trigger = container.querySelector(':scope > .select-selected');
+    const itemsContainer = container.querySelector(':scope > .select-items');
+    if (!trigger || !itemsContainer) return;
+
+    const selectedOption = selectEl.options[selectEl.selectedIndex];
+    if (selectedOption) {
+        trigger.textContent = selectedOption.textContent;
+        itemsContainer.querySelectorAll('div').forEach(d => {
+            d.classList.toggle('same-as-selected', d.dataset.value === selectEl.value);
+        });
+    }
+}
+
+function closeAllCustomSelects(elmnt) {
+    document.querySelectorAll('.select-items').forEach(el => {
+        if (!elmnt || el !== elmnt.nextElementSibling) {
+            el.classList.add('select-hide');
+        }
+    });
+    document.querySelectorAll('.select-selected').forEach(el => {
+        if (!elmnt || el !== elmnt) {
+            el.classList.remove('select-arrow-active');
+        }
+    });
+}
+
+// Onboarding Trail / Feature Tour
+const ONBOARDING_STEPS = 5;
+let onboardingCurrentStep = 0;
+
+const ONBOARDING_ICONS = [
+    '../logos/locked.png',
+    '../logos/password.png',
+    '../logos/shield.png',
+    '../logos/trash.png',
+    '../logos/settings.png'
+];
+
+const ONBOARDING_TOUR_TARGETS = [
+    null,                     // Step 0: Welcome
+    '[data-nav="passwords"]',  // Step 1: Passwords
+    '[data-nav="watchtower"]', // Step 2: Watchtower
+    '[data-nav="trash"]',      // Step 3: Trash
+    '[data-nav="settings"]'    // Step 4: Settings
+];
+
+function checkOnboarding() {
+    if (localStorage.getItem('onboarding_completed') === 'true') return;
+    onboardingCurrentStep = 0;
+    showOnboardingStep(0);
+}
+
+function showOnboardingStep(step) {
+    const overlay = document.getElementById('onboarding-overlay');
+    if (!overlay) return;
+
+    overlay.classList.remove('hidden');
+    onboardingCurrentStep = step;
+
+    const stepLabel = document.getElementById('onboarding-step-label');
+    const title = document.getElementById('onboarding-title');
+    const text = document.getElementById('onboarding-text');
+    const nextBtn = document.getElementById('onboarding-next-btn');
+    const iconImg = overlay.querySelector('.onboarding-icon-img');
+    const spotlightBox = document.getElementById('onboarding-spotlight-box');
+    const modal = overlay.querySelector('.onboarding-modal');
+
+    const stepKey = step + 1;
+    if (stepLabel) stepLabel.textContent = t('onboarding_step', { current: stepKey, total: ONBOARDING_STEPS });
+    if (title) title.textContent = t(`onboarding_step${stepKey}_title`);
+    if (text) text.textContent = t(`onboarding_step${stepKey}_text`);
+    if (nextBtn) {
+        nextBtn.textContent = step === ONBOARDING_STEPS - 1 ? t('onboarding_finish') : t('onboarding_next');
+    }
+
+    if (iconImg && ONBOARDING_ICONS[step]) iconImg.src = ONBOARDING_ICONS[step];
+
+    // Remove previous highlights
+    document.querySelectorAll('.onboarding-highlight').forEach(el => {
+        el.classList.remove('onboarding-highlight');
+    });
+
+    const currentTargetSelector = ONBOARDING_TOUR_TARGETS[step];
+    if (currentTargetSelector) {
+        const target = document.querySelector(currentTargetSelector);
+        if (target && spotlightBox) {
+            overlay.classList.add('spotlight-active');
+            const rect = target.getBoundingClientRect();
+            spotlightBox.style.top = Math.max(0, rect.top - 4) + 'px';
+            spotlightBox.style.left = Math.max(0, rect.left - 4) + 'px';
+            spotlightBox.style.width = (rect.width + 8) + 'px';
+            spotlightBox.style.height = (rect.height + 8) + 'px';
+            spotlightBox.classList.remove('hidden');
+
+            // Position modal nicely to the right of sidebar
+            if (modal) {
+                modal.style.position = 'fixed';
+                modal.style.left = Math.min(window.innerWidth - 460, rect.right + 28) + 'px';
+                modal.style.top = Math.max(20, Math.min(window.innerHeight - 380, rect.top - 30)) + 'px';
+            }
+
+            // Interactive click: clicking the spotlight box triggers the action AND advances the tour
+            spotlightBox.onclick = (e) => {
+                e.stopPropagation();
+                target.click();
+                if (onboardingCurrentStep < ONBOARDING_STEPS - 1) {
+                    showOnboardingStep(onboardingCurrentStep + 1);
+                } else {
+                    finishOnboarding();
+                }
+            };
+        }
+    } else {
+        // Step 0 / Centered modal
+        overlay.classList.remove('spotlight-active');
+        if (spotlightBox) spotlightBox.classList.add('hidden');
+        if (modal) {
+            modal.style.position = 'relative';
+            modal.style.left = '';
+            modal.style.top = '';
+        }
+    }
+
+    // Update dots
+    overlay.querySelectorAll('.onboarding-dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === step);
+    });
+}
+
+function finishOnboarding() {
+    const overlay = document.getElementById('onboarding-overlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('spotlight-active');
+    }
+    const spotlightBox = document.getElementById('onboarding-spotlight-box');
+    if (spotlightBox) spotlightBox.classList.add('hidden');
+    localStorage.setItem('onboarding_completed', 'true');
+
+    document.querySelectorAll('.onboarding-highlight').forEach(el => {
+        el.classList.remove('onboarding-highlight');
+    });
+}
+
+// Dashboard Global Search & Command Palette
+let searchSelectedIndex = -1;
+
+function setupDashboardSearch() {
+    const input = document.getElementById('dashboard-search-input');
+    const clearBtn = document.getElementById('dashboard-search-clear');
+    const dropdown = document.getElementById('dashboard-search-dropdown');
+    const resultsContainer = document.getElementById('dashboard-search-results');
+
+    if (!input || !dropdown || !resultsContainer) return;
+
+    input.addEventListener('input', () => {
+        const query = input.value.trim();
+        if (!query) {
+            dropdown.classList.add('hidden');
+            if (clearBtn) clearBtn.classList.add('hidden');
+            searchSelectedIndex = -1;
+            return;
+        }
+
+        if (clearBtn) clearBtn.classList.remove('hidden');
+        renderDashboardSearchResults(query);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        const items = resultsContainer.querySelectorAll('.search-result-item');
+        if (!items || items.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            searchSelectedIndex = (searchSelectedIndex + 1) % items.length;
+            updateSearchSelected(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            searchSelectedIndex = (searchSelectedIndex - 1 + items.length) % items.length;
+            updateSearchSelected(items);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (searchSelectedIndex >= 0 && searchSelectedIndex < items.length) {
+                items[searchSelectedIndex].click();
+            } else if (items.length > 0) {
+                items[0].click();
+            }
+        } else if (e.key === 'Escape') {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            input.value = '';
+            clearBtn.classList.add('hidden');
+            dropdown.classList.add('hidden');
+            searchSelectedIndex = -1;
+            input.focus();
+        });
+    }
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.dashboard-search-wrapper')) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    input.addEventListener('focus', () => {
+        if (input.value.trim()) {
+            renderDashboardSearchResults(input.value.trim());
+        }
+    });
+}
+
+function updateSearchSelected(items) {
+    items.forEach((item, idx) => {
+        if (idx === searchSelectedIndex) {
+            item.classList.add('selected');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+}
+
+function renderDashboardSearchResults(rawQuery) {
+    const dropdown = document.getElementById('dashboard-search-dropdown');
+    const resultsContainer = document.getElementById('dashboard-search-results');
+    const input = document.getElementById('dashboard-search-input');
+    const clearBtn = document.getElementById('dashboard-search-clear');
+    if (!dropdown || !resultsContainer) return;
+
+    const query = rawQuery.toLowerCase();
+    searchSelectedIndex = -1;
+    resultsContainer.innerHTML = '';
+
+    const resultsByCategory = {
+        features: [],
+        passwords: [],
+        ids: [],
+        cards: [],
+        documents: [],
+        folders: []
+    };
+
+    // 1. System Features & Navigation
+    const allFeatures = [
+        {
+            keywords: ['einstellung', 'einstellungen', 'setting', 'settings', 'config', 'option', 'sprache', 'language', 'account', 'ajustes', 'configuración', 'paramètres', 'langue'],
+            title: t('title_settings'),
+            subtitle: t('settings_app'),
+            icon: '../logos/settings.png',
+            action: () => showSettings()
+        },
+        {
+            keywords: ['passwort hinzufügen', 'neues passwort', 'add password', 'new password', 'create password', 'hinzufügen', 'add', 'neu', 'añadir contraseña', 'nueva contraseña', 'ajouter mot de passe'],
+            title: t('btn_add_password'),
+            subtitle: t('header_passwords'),
+            icon: '../logos/password.png',
+            action: () => showAddPassword()
+        },
+        {
+            keywords: ['passwörter', 'passwords', 'alle passwörter', 'all passwords', 'vault', 'tresor', 'contraseñas', 'mots de passe'],
+            title: t('header_passwords'),
+            subtitle: `${passwords.length} ${t('header_passwords')}`,
+            icon: '../logos/password.png',
+            action: () => { currentFolder = null; showMainScreen(); }
+        },
+        {
+            keywords: ['ordner erstellen', 'neuer ordner', 'create folder', 'new folder', 'add folder', 'crear carpeta', 'créer dossier'],
+            title: t('btn_create_folder'),
+            subtitle: t('header_passwords'),
+            icon: '../logos/addfolder.png',
+            action: () => showCreateFolder()
+        },
+        {
+            keywords: ['kreditkarte', 'kreditkarten', 'karten', 'credit card', 'cards', 'visa', 'mastercard', 'karte hinzufügen', 'tarjetas', 'cartes'],
+            title: t('nav_cards') || 'Credit Cards',
+            subtitle: `${cards.length} ${t('nav_cards') || 'Cards'}`,
+            icon: '../logos/credit_card.png',
+            action: () => showCardsScreen()
+        },
+        {
+            keywords: ['ausweis', 'ausweise', 'pass', 'passport', 'id', 'ids', 'führerschein', 'driver', 'license', 'identificaciones', 'pièces d\'identité'],
+            title: t('nav_ids') || 'IDs & Documents',
+            subtitle: `${ids.length} ${t('nav_ids') || 'IDs'}`,
+            icon: '../logos/id.png',
+            action: () => {
+                if (!hasPaidAccess()) {
+                    showToast('msg_license_req_ids', 'warning');
+                    return;
+                }
+                showIdsScreen();
+            }
+        },
+        {
+            keywords: ['dokument', 'dokumente', 'dateien', 'document', 'documents', 'files', 'upload', 'archivos', 'fichiers'],
+            title: t('nav_documents') || 'Documents',
+            subtitle: `${documents.length} ${t('nav_documents') || 'Documents'}`,
+            icon: '../logos/documents.png',
+            action: () => showDocumentsScreen()
+        },
+        {
+            keywords: ['watchtower', 'sicherheit', 'audit', 'security', 'score', 'prüfen', 'check', 'leaked', 'weak', 'seguridad', 'sécurité'],
+            title: t('nav_watchtower'),
+            subtitle: t('nav_watchtower'),
+            icon: '../logos/shield.png',
+            action: () => {
+                if (!hasPaidAccess()) {
+                    showToast('msg_license_req_watchtower', 'warning');
+                    return;
+                }
+                openSecurityAudit();
+            }
+        },
+        {
+            keywords: ['bericht', 'berichte', 'report', 'reports', 'monatsbericht', 'monthly', 'informe', 'rapport'],
+            title: t('nav_reports'),
+            subtitle: t('report_title'),
+            icon: '../logos/report.png',
+            action: () => showReportsScreen()
+        },
+        {
+            keywords: ['papierkorb', 'trash', 'gelöscht', 'deleted', 'garbage', 'papelera', 'corbeille'],
+            title: t('nav_trash'),
+            subtitle: `${trash.length} ${t('nav_trash')}`,
+            icon: '../logos/garbage.png',
+            action: () => {
+                if (!hasPaidAccess()) {
+                    showToast('msg_license_req_trash', 'warning');
+                    return;
+                }
+                showTrashScreen();
+            }
+        },
+        {
+            keywords: ['importieren', 'import', 'passwörter importieren', 'backup wiederherstellen', 'importar', 'importer'],
+            title: t('header_import'),
+            subtitle: t('settings_data'),
+            icon: '../logos/import.png',
+            action: () => {
+                document.getElementById('import-password').value = '';
+                document.getElementById('import-file-path').textContent = t('label_no_file_selected');
+                document.getElementById('import-file-path').dataset.path = '';
+                showScreen('import-screen');
+                updateSidebarActive('import');
+            }
+        },
+        {
+            keywords: ['exportieren', 'export', 'passwörter exportieren', 'backup erstellen', 'exportar', 'exporter'],
+            title: t('header_export'),
+            subtitle: t('settings_data'),
+            icon: '../logos/export.png',
+            action: () => {
+                document.getElementById('export-password').value = '';
+                showScreen('export-screen');
+                updateSidebarActive('export');
+            }
+        },
+        {
+            keywords: ['csv import', 'browser import', 'chrome import', 'csv', 'importar csv', 'importer csv'],
+            title: t('settings_import_csv'),
+            subtitle: t('settings_data'),
+            icon: '../logos/import.png',
+            action: () => {
+                document.getElementById('csv-file-path').textContent = t('label_no_file_selected');
+                document.getElementById('csv-file-path').dataset.path = '';
+                showScreen('csv-import-screen');
+                updateSidebarActive('csv-import');
+            }
+        },
+        {
+            keywords: ['onboarding', 'tour', 'anleitung', 'guide', 'tutorial', 'hilfe', 'help', 'guía', 'ayuda', 'tutoriel', 'aide'],
+            title: t('settings_onboarding'),
+            subtitle: t('app_title'),
+            icon: '../logos/shield.png',
+            action: () => {
+                localStorage.removeItem('onboarding_completed');
+                onboardingCurrentStep = 0;
+                showScreen('main-screen');
+                updateSidebarActive('dashboard');
+                showOnboardingStep(0);
+            }
+        }
+    ];
+
+    allFeatures.forEach(feat => {
+        if (feat.title.toLowerCase().includes(query) || feat.subtitle.toLowerCase().includes(query) || feat.keywords.some(k => k.includes(query) || query.includes(k))) {
+            resultsByCategory.features.push({
+                icon: feat.icon,
+                title: feat.title,
+                subtitle: feat.subtitle,
+                badge: 'App',
+                action: feat.action
+            });
+        }
+    });
+
+    // 2. Passwords
+    passwords.forEach((pwd, idx) => {
+        const matchApp = pwd.app && pwd.app.toLowerCase().includes(query);
+        const matchUser = pwd.username && pwd.username.toLowerCase().includes(query);
+        const matchUrl = pwd.url && pwd.url.toLowerCase().includes(query);
+        const matchNotes = pwd.notes && pwd.notes.toLowerCase().includes(query);
+        if (matchApp || matchUser || matchUrl || matchNotes) {
+            const domain = pwd.domain || pwd.url || pwd.link || '';
+            const faviconUrl = getFaviconUrl(domain);
+            const firstLetter = (pwd.app || '?').charAt(0).toUpperCase();
+            const isLocal = isLocalNetwork(domain);
+            const iconId = 'search-pwd-icon-' + (pwd.id || idx);
+
+            resultsByCategory.passwords.push({
+                isPassword: true,
+                domain: domain,
+                isLocal: isLocal,
+                iconId: iconId,
+                faviconUrl: faviconUrl,
+                firstLetter: firstLetter,
+                icon: faviconUrl || '../logos/password.png',
+                title: pwd.app,
+                subtitle: pwd.username || pwd.url || (pwd.notes ? pwd.notes.slice(0, 30) : ''),
+                badge: 'Password',
+                action: () => showPasswordDetail(idx)
+            });
+        }
+    });
+
+    // 3. IDs
+    ids.forEach((idItem, idx) => {
+        const matchName = idItem.name && idItem.name.toLowerCase().includes(query);
+        const matchNumber = idItem.number && idItem.number.toLowerCase().includes(query);
+        const matchNotes = idItem.notes && idItem.notes.toLowerCase().includes(query);
+        if (matchName || matchNumber || matchNotes) {
+            const typeLabel = t(`id_type_${idItem.type.replace('drivers_license', 'drivers')}`) || idItem.type;
+            resultsByCategory.ids.push({
+                icon: '../logos/id.png',
+                title: idItem.name,
+                subtitle: `${typeLabel}${idItem.number ? ' • ' + idItem.number : ''}`,
+                badge: 'ID',
+                action: () => showEditId(idx)
+            });
+        }
+    });
+
+    // 4. Cards
+    cards.forEach((card, idx) => {
+        const matchName = card.name && card.name.toLowerCase().includes(query);
+        const matchHolder = card.cardholderName && card.cardholderName.toLowerCase().includes(query);
+        const matchBrand = card.brand && card.brand.toLowerCase().includes(query);
+        const matchNotes = card.notes && card.notes.toLowerCase().includes(query);
+        if (matchName || matchHolder || matchBrand || matchNotes) {
+            resultsByCategory.cards.push({
+                icon: '../logos/credit_card.png',
+                title: card.name,
+                subtitle: `${card.brand ? card.brand.toUpperCase() + ' ' : ''}${card.cardNumber ? '•••• ' + card.cardNumber.slice(-4) : ''}`,
+                badge: 'Card',
+                action: () => showEditCard(idx)
+            });
+        }
+    });
+
+    // 5. Documents
+    documents.forEach((doc, idx) => {
+        const matchTitle = doc.title && doc.title.toLowerCase().includes(query);
+        const matchNotes = doc.notes && doc.notes.toLowerCase().includes(query);
+        const matchFiles = doc.files && doc.files.some(f => f.name && f.name.toLowerCase().includes(query));
+        if (matchTitle || matchNotes || matchFiles) {
+            resultsByCategory.documents.push({
+                icon: '../logos/documents.png',
+                title: doc.title,
+                subtitle: doc.files && doc.files.length ? `${doc.files.length} file(s)` : (doc.notes ? doc.notes.slice(0, 30) : ''),
+                badge: 'Document',
+                action: () => showEditDocument(idx)
+            });
+        }
+    });
+
+    // 6. Folders
+    folders.forEach(folder => {
+        if (folder.name && folder.name.toLowerCase().includes(query)) {
+            const count = passwords.filter(p => p.folderId === folder.id).length;
+            resultsByCategory.folders.push({
+                icon: '../logos/folder.png',
+                title: folder.name,
+                subtitle: `${count} Passwords`,
+                badge: 'Folder',
+                action: () => openFolder(folder.id)
+            });
+        }
+    });
+
+    const categoryOrder = [
+        { key: 'features', label: t('search_group_features') },
+        { key: 'passwords', label: t('search_group_passwords') },
+        { key: 'ids', label: t('search_group_ids') },
+        { key: 'cards', label: t('search_group_cards') },
+        { key: 'documents', label: t('search_group_documents') },
+        { key: 'folders', label: t('search_group_folders') }
+    ];
+
+    let totalResults = 0;
+    categoryOrder.forEach(({ key, label }) => {
+        const items = resultsByCategory[key];
+        if (items && items.length > 0) {
+            totalResults += items.length;
+            const groupEl = document.createElement('div');
+            groupEl.className = 'search-results-group';
+
+            const titleEl = document.createElement('div');
+            titleEl.className = 'search-group-title';
+            titleEl.textContent = label;
+            groupEl.appendChild(titleEl);
+
+            items.forEach(item => {
+                const itemEl = document.createElement('div');
+                itemEl.className = 'search-result-item';
+
+                let iconHtml = '';
+                if (item.isPassword) {
+                    if (item.faviconUrl) {
+                        iconHtml = `<img src="${item.faviconUrl}" alt="${item.firstLetter}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=&quot;password-card-icon-letter&quot; style=&quot;font-size:12px; font-weight:700;&quot;>${item.firstLetter}</span>';">`;
+                    } else {
+                        iconHtml = `<span class="password-card-icon-letter" style="font-size:12px; font-weight:700;">${item.firstLetter}</span>`;
+                    }
+                } else {
+                    iconHtml = `<img src="${item.icon}" alt="">`;
+                }
+
+                itemEl.innerHTML = `
+                    <div class="search-item-icon" ${item.iconId ? `data-icon-id="${item.iconId}"` : ''}>
+                        ${iconHtml}
+                    </div>
+                    <div class="search-item-info">
+                        <div class="search-item-title">${escapeHtml(item.title)}</div>
+                        ${item.subtitle ? `<div class="search-item-subtitle">${escapeHtml(item.subtitle)}</div>` : ''}
+                    </div>
+                    <span class="search-item-badge">${escapeHtml(item.badge)}</span>
+                `;
+
+                if (item.isPassword && !item.faviconUrl && item.isLocal && window.api && window.api.fetchLocalFavicon) {
+                    window.api.fetchLocalFavicon(item.domain).then(localDataUrl => {
+                        if (localDataUrl) {
+                            const iconContainer = itemEl.querySelector(`[data-icon-id="${item.iconId}"]`);
+                            if (iconContainer) {
+                                iconContainer.innerHTML = `<img src="${localDataUrl}" alt="${item.firstLetter}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=&quot;password-card-icon-letter&quot; style=&quot;font-size:12px; font-weight:700;&quot;>${item.firstLetter}</span>';">`;
+                            }
+                        }
+                    }).catch(() => {});
+                }
+
+                itemEl.addEventListener('click', () => {
+                    dropdown.classList.add('hidden');
+                    input.value = '';
+                    if (clearBtn) clearBtn.classList.add('hidden');
+                    item.action();
+                });
+
+                groupEl.appendChild(itemEl);
+            });
+
+            resultsContainer.appendChild(groupEl);
+        }
+    });
+
+    if (totalResults === 0) {
+        resultsContainer.innerHTML = `<div class="search-empty-state">${t('search_no_results')}</div>`;
+    }
+
+    dropdown.classList.remove('hidden');
 }
 
 function isLastDayOfMonth(date = new Date()) {
@@ -3127,6 +3988,7 @@ function showAddId() {
     document.getElementById('delete-id-btn').classList.add('hidden');
 
     renderEditIdFileList();
+    syncCustomSelect('edit-id-type');
     showScreen('edit-id-screen');
 }
 
@@ -3147,6 +4009,7 @@ function showEditId(index) {
     document.getElementById('delete-id-btn').classList.remove('hidden');
 
     renderEditIdFileList();
+    syncCustomSelect('edit-id-type');
     showScreen('edit-id-screen');
 }
 
@@ -3159,7 +4022,7 @@ async function handleSaveId() {
     const notes = document.getElementById('edit-id-notes').value.trim();
 
     if (!name) {
-        showToast('Document Name is required!', 'error');
+        showToast('msg_doc_name_required', 'error');
         return;
     }
 
@@ -3217,7 +4080,7 @@ async function handleDeleteId() {
 
 async function handleIdFileUpload() {
     if (currentFiles.length >= 5) {
-        showToast('Maximum 5 files allowed!', 'error');
+        showToast('msg_max_files', 'error');
         return;
     }
 
@@ -3233,9 +4096,9 @@ async function handleIdFileUpload() {
         if (result.success) {
             currentFiles.push({ data: result.data, name: result.fileName });
             renderEditIdFileList();
-            showToast('File attached!', 'success');
+            showToast('msg_file_attached', 'success');
         } else {
-            showToast(result.error || 'Error reading file!', 'error');
+            showToast(result.error || 'msg_file_read_error', 'error');
         }
     }
 }
@@ -3303,9 +4166,9 @@ async function handleIdFileDownloadByIndex(fileIndex) {
     if (filePath) {
         const result = await window.api.writeFile({ filePath, data: file.data });
         if (result.success) {
-            showToast('File saved!', 'success');
+            showToast('msg_file_saved', 'success');
         } else {
-            showToast('Error saving file!', 'error');
+            showToast('msg_file_save_error', 'error');
         }
     }
 }
@@ -3418,7 +4281,7 @@ async function handleSaveDocument() {
     const description = document.getElementById('edit-doc-description').value.trim();
 
     if (!name) {
-        showToast('Document Name is required!', 'error');
+        showToast('msg_doc_name_required', 'error');
         return;
     }
 
@@ -3484,9 +4347,9 @@ async function handleDocFileUpload() {
         if (result.success) {
             currentFiles.push({ data: result.data, name: result.fileName });
             renderEditDocFileList();
-            showToast('File attached!', 'success');
+            showToast('msg_file_attached', 'success');
         } else {
-            showToast(result.error || 'Error reading file!', 'error');
+            showToast(result.error || 'msg_file_read_error', 'error');
         }
     }
 }
@@ -3554,9 +4417,9 @@ async function handleDocFileDownloadByIndex(fileIndex) {
     if (filePath) {
         const result = await window.api.writeFile({ filePath, data: file.data });
         if (result.success) {
-            showToast('File saved!', 'success');
+            showToast('msg_file_saved', 'success');
         } else {
-            showToast('Error saving file!', 'error');
+            showToast('msg_file_save_error', 'error');
         }
     }
 }
@@ -3648,6 +4511,7 @@ function showAddCard() {
 
     document.getElementById('delete-card-btn').classList.add('hidden');
 
+    syncCustomSelect('edit-card-brand');
     showScreen('edit-card-screen');
 }
 
@@ -3667,6 +4531,7 @@ function showEditCard(index) {
 
     document.getElementById('delete-card-btn').classList.remove('hidden');
 
+    syncCustomSelect('edit-card-brand');
     showScreen('edit-card-screen');
 }
 

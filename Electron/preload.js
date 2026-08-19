@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('api', {
     saveCards: (data) => ipcRenderer.invoke('save-cards', data),
     loadReports: (data) => ipcRenderer.invoke('load-reports', data),
     saveReports: (data) => ipcRenderer.invoke('save-reports', data),
+    fetchLocalFavicon: (domainStr) => ipcRenderer.invoke('fetch-local-favicon', domainStr),
 
     // Utilities
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
@@ -51,5 +52,15 @@ contextBridge.exposeInMainWorld('api', {
 
     // Password Security Audit
     passwordAudit: (data) => ipcRenderer.invoke('password-audit', data),
-    checkPwned: (data) => ipcRenderer.invoke('check-pwned', data)
+    checkPwned: (data) => ipcRenderer.invoke('check-pwned', data),
+
+    // LAN Sync
+    syncStartServer: () => ipcRenderer.invoke('sync-start-server'),
+    syncStopServer: () => ipcRenderer.invoke('sync-stop-server'),
+    syncGetStatus: () => ipcRenderer.invoke('sync-get-status'),
+    onSyncStatusUpdate: (callback) => ipcRenderer.on('sync-status-update', (e, data) => callback(data)),
+
+    // Extension Sync
+    getPendingExtensionCredentials: () => ipcRenderer.invoke('get-pending-extension-credentials'),
+    clearMasterPassword: () => ipcRenderer.invoke('clear-master-password')
 });
