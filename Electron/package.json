@@ -42,6 +42,7 @@
     "files": [
       "**/*",
       "../logos/**/*",
+      "../icons_new/**/*",
       "!video_mock.js",
       "!video_index.html"
     ],
@@ -49,6 +50,13 @@
       {
         "from": "../logos",
         "to": "logos",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../icons_new",
+        "to": "icons_new",
         "filter": [
           "**/*"
         ]

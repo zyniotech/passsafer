@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// native-host.js - Chrome Native Messaging Host
+
 const net = require('net');
 const fs = require('fs');
 
@@ -13,7 +13,6 @@ function sendMessage(msg) {
     process.stdout.write(buffer);
 }
 
-// Read from stdin (Chrome Native Messaging protocol)
 let stdinBuffer = Buffer.alloc(0);
 
 process.stdin.on('readable', () => {
@@ -21,7 +20,7 @@ process.stdin.on('readable', () => {
     while ((chunk = process.stdin.read()) !== null) {
         stdinBuffer = Buffer.concat([stdinBuffer, chunk]);
     }
-    
+
     while (stdinBuffer.length >= 4) {
         const msgLen = stdinBuffer.readUInt32LE(0);
         if (stdinBuffer.length >= 4 + msgLen) {
@@ -31,7 +30,7 @@ process.stdin.on('readable', () => {
                 const msgObj = JSON.parse(msgStr);
                 sendToElectron(msgObj);
             } catch (e) {
-                // Ignore parse errors
+
             }
         } else {
             break;
@@ -45,7 +44,7 @@ const os = require('os');
 
 function autoLaunchApp() {
     try {
-        // 1. Check development path
+
         const devElectronDir = path.join(__dirname, '..', 'Electron');
         if (fs.existsSync(devElectronDir)) {
             const cmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -57,7 +56,6 @@ function autoLaunchApp() {
             return;
         }
 
-        // 2. Check relative path if installed (resources/native-host -> root)
         const relativeInstalledPath = path.join(__dirname, '..', '..', 'PassSafer.exe');
         if (fs.existsSync(relativeInstalledPath)) {
             spawn(relativeInstalledPath, ['--tray'], {
@@ -67,7 +65,6 @@ function autoLaunchApp() {
             return;
         }
 
-        // 3. Check standard installation path on Windows
         if (process.platform === 'win32') {
             const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
             const pathsToTry = [
@@ -94,7 +91,7 @@ function autoLaunchApp() {
                 return;
             }
         }
-        // 3. MacOS standard path
+
         else if (process.platform === 'darwin') {
             const macPath = '/Applications/PassSafer.app/Contents/MacOS/PassSafer';
             if (fs.existsSync(macPath)) {
@@ -106,7 +103,7 @@ function autoLaunchApp() {
             }
         }
     } catch (e) {
-        // Ignore launch errors
+
     }
 }
 
@@ -129,13 +126,13 @@ function getIpcToken() {
             return fs.readFileSync(tokenPath, 'utf8').trim();
         }
     } catch (e) {
-        // Ignore token read errors
+
     }
     return null;
 }
 
 function sendToElectron(msgObj) {
-    // Read the IPC token and attach it to the message
+
     const token = getIpcToken();
     if (token) {
         msgObj._token = token;
@@ -145,7 +142,7 @@ function sendToElectron(msgObj) {
         client.write(JSON.stringify(msgObj) + '\n');
     });
 
-    client.setTimeout(5000); // 5 seconds connection timeout
+    client.setTimeout(5000);
 
     client.on('timeout', () => {
         client.destroy();
@@ -159,9 +156,9 @@ function sendToElectron(msgObj) {
     let responseBuffer = '';
     client.on('data', (data) => {
         responseBuffer += data.toString();
-        // Try to parse complete JSON lines
+
         const lines = responseBuffer.split('\n');
-        // Keep last incomplete line in buffer
+
         responseBuffer = lines.pop();
         for (const line of lines) {
             if (line.trim()) {
@@ -169,19 +166,19 @@ function sendToElectron(msgObj) {
                     const respObj = JSON.parse(line.trim());
                     sendMessage(respObj);
                 } catch (e) {
-                    // Ignore malformed lines
+
                 }
             }
         }
     });
     client.on('end', () => {
-        // Process any remaining data in buffer
+
         if (responseBuffer.trim()) {
             try {
                 const respObj = JSON.parse(responseBuffer.trim());
                 sendMessage(respObj);
             } catch (e) {
-                // Ignore
+
             }
         }
         responseBuffer = '';

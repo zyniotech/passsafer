@@ -1,4 +1,4 @@
-// Global State
+
 let currentUser = null;
 let currentPassword = null;
 let passwords = [];
@@ -12,37 +12,35 @@ let currentActiveReport = null;
 let currentFolder = null;
 let currentEditIndex = null;
 let currentEditFolder = null;
-let currentFileData = null;
-let currentFileName = null;
-let currentFiles = []; // Array of {data, name}
+let currentFiles = [];
 let translations = {};
 let currentLanguage = 'en';
 const API_BASE_URL = 'https://passsafer-api.zyniotech.workers.dev';
+
+let syncDirection = 'merge';
+let syncCurrentState = 'idle';
 let licenseState = { valid: false, plan: 'none', features: { passwordGenerator: false, securityAudit: false } };
 
-// Initialize App
 document.addEventListener('DOMContentLoaded', async () => {
-    // Dark Mode is the default and only theme
+
     document.body.classList.remove('light-mode');
     localStorage.removeItem('app_theme');
 
-    // Initialize Language
     const supportedLangs = ['en', 'de', 'es', 'fr'];
     const systemLang = navigator.language.split('-')[0];
     currentLanguage = supportedLangs.includes(systemLang) ? systemLang : 'en';
     await loadTranslations(currentLanguage);
 
-    // Check license FIRST before showing any screen
     const hasLicense = await checkLicenseStatus().catch(err => {
         console.error('Startup license check failed:', err);
         return false;
     });
 
     if (!hasLicense) {
-        // No valid license → show license screen first
+
         showScreen('license-screen');
     } else {
-        // Valid license → proceed to login or register
+
         const isFirstRun = await window.api.checkFirstRun();
         if (isFirstRun) {
             showScreen('register-screen');
@@ -51,13 +49,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    try {
+        const settingsResult = await window.api.loadSettings();
+        if (settingsResult.success && settingsResult.settings) {
+            if (settingsResult.settings.language) {
+                currentLanguage = settingsResult.settings.language;
+                await loadTranslations(currentLanguage);
+            }
+        }
+    } catch (e) {}
+
     setupEventListeners();
     setupAutoLogout();
     setupCustomSelect();
     initializeCustomSelects();
     setupDashboardSearch();
-    
-    // Set language select value
+
     const langSelect = document.getElementById('language-select');
     if (langSelect) {
         langSelect.value = currentLanguage;
@@ -65,10 +72,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Screens where sidebar should be hidden (unauthenticated)
 const SIDEBAR_HIDDEN_SCREENS = ['login-screen', 'register-screen', 'license-screen'];
 
-// Map of nav items to screen IDs
 const NAV_SCREEN_MAP = {
     'dashboard': 'dashboard-screen',
     'passwords': 'main-screen',
@@ -84,7 +89,6 @@ const NAV_SCREEN_MAP = {
     'settings': 'settings-screen'
 };
 
-// Screen Management
 function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.add('hidden');
@@ -101,28 +105,50 @@ function showScreen(screenId) {
     }
 }
 
-// Toast Notifications
+let successLottie = null;
+
 function showToast(message, type = 'info', isLiteral = false) {
     const toast = document.getElementById('toast');
     const toastMessage = document.getElementById('toast-message');
-    
+
     const text = isLiteral ? message : (translations[message] || message);
     if (toastMessage) {
         toastMessage.textContent = text;
     } else {
         toast.textContent = text;
     }
-    
+
     toast.className = `toast show ${type}`;
 
+    const lottieContainer = document.getElementById('toast-lottie');
+    if (lottieContainer) {
+        if (type === 'success') {
+            lottieContainer.style.display = 'flex';
+            if (!successLottie) {
+                successLottie = lottie.loadAnimation({
+                    container: lottieContainer,
+                    renderer: 'svg',
+                    loop: false,
+                    autoplay: false,
+                    path: 'success_animation.json'
+                });
+            }
+            successLottie.goToAndPlay(0, true);
+        } else {
+            lottieContainer.style.display = 'none';
+        }
+    }
+
     setTimeout(() => {
-        toast.className = 'toast';
+        toast.className = 'toast hidden';
     }, 3000);
 }
 
-// i18n Logic
 async function loadTranslations(lang) {
     try {
+        currentLanguage = lang;
+        document.documentElement.lang = lang;
+        document.documentElement.setAttribute('lang', lang);
         const response = await fetch(`./locales/${lang}.json`);
         translations = await response.json();
         applyTranslations();
@@ -135,14 +161,14 @@ function applyTranslations() {
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         let translation = translations[key];
-        
+
         if (translation) {
             if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'password' || el.type === 'url')) {
                 el.placeholder = translation;
             } else if (el.hasAttribute('title')) {
                 el.setAttribute('title', translation);
             } else {
-                // Find span or text node to avoid overwriting icons
+
                 const span = el.querySelector('span[data-i18n]') || (el.tagName === 'SPAN' ? el : null);
                 if (span) {
                     span.textContent = translation;
@@ -163,6 +189,10 @@ function applyTranslations() {
     if (typeof initializeCustomSelects === 'function') {
         initializeCustomSelects();
     }
+
+    if (typeof updateSyncStatusDisplay === 'function') {
+        updateSyncStatusDisplay(syncCurrentState);
+    }
 }
 
 function t(key, variables = {}) {
@@ -173,7 +203,6 @@ function t(key, variables = {}) {
     return text;
 }
 
-// Password Validation
 function validatePassword(pwd) {
     if (pwd.length < 10) return false;
     if (!/[A-Z]/.test(pwd)) return false;
@@ -202,7 +231,6 @@ function generateStrongPassword() {
     const chars = upper + lower + digits + special;
     const length = 16;
 
-    // [MITTEL-01] Cryptographically secure random index (rejection sampling, no modulo bias)
     function secureRandom(max) {
         const limit = Math.floor(0xFFFFFFFF / max) * max;
         let value;
@@ -215,7 +243,7 @@ function generateStrongPassword() {
     }
 
     let password = '';
-    // Ensure at least one of each type
+
     password += upper[secureRandom(upper.length)];
     password += lower[secureRandom(lower.length)];
     password += digits[secureRandom(digits.length)];
@@ -225,7 +253,6 @@ function generateStrongPassword() {
         password += chars[secureRandom(chars.length)];
     }
 
-    // Fisher-Yates shuffle with CSPRNG
     const arr = password.split('');
     for (let i = arr.length - 1; i > 0; i--) {
         const j = secureRandom(i + 1);
@@ -236,7 +263,6 @@ function generateStrongPassword() {
     document.getElementById('edit-password').value = password;
 }
 
-// Helper for Enter key handling
 function addEnterKeyListener(elementId, callback) {
     const el = document.getElementById(elementId);
     if (el) {
@@ -249,15 +275,13 @@ function addEnterKeyListener(elementId, callback) {
     }
 }
 
-// Event Listeners Setup
 function setupEventListeners() {
-    // Login/Register
+
     document.getElementById('login-btn').addEventListener('click', handleLogin);
     document.getElementById('register-btn').addEventListener('click', handleRegister);
     document.getElementById('show-register-btn').addEventListener('click', () => showScreen('register-screen'));
     document.getElementById('show-login-btn').addEventListener('click', () => showScreen('login-screen'));
 
-    // Enter key listeners on login & register
     addEnterKeyListener('login-username', handleLogin);
     addEnterKeyListener('login-password', handleLogin);
     addEnterKeyListener('login-pin', handleLogin);
@@ -267,13 +291,21 @@ function setupEventListeners() {
     addEnterKeyListener('register-pin', handleRegister);
     addEnterKeyListener('license-key-input', handleActivateLicense);
 
-    // Main Screen
     document.getElementById('add-password-btn').addEventListener('click', showAddPassword);
     document.getElementById('create-folder-btn').addEventListener('click', showCreateFolder);
+    document.getElementById('create-folder-card-btn')?.addEventListener('click', showCreateFolder);
+    document.getElementById('create-folder-id-btn')?.addEventListener('click', showCreateFolder);
+    document.getElementById('create-folder-doc-btn')?.addEventListener('click', showCreateFolder);
+    document.getElementById('reports-search-input')?.addEventListener('input', renderReportsList);
     document.getElementById('back-btn').addEventListener('click', handleBackToRoot);
+    document.getElementById('edit-folder-btn')?.addEventListener('click', () => {
+        if (currentFolder) {
+            const folder = folders.find(f => f.id === currentFolder);
+            if (folder) showEditFolder(folder);
+        }
+    });
     document.getElementById('search-input').addEventListener('input', handleSearch);
 
-    // Detail Screen
     document.getElementById('close-detail-btn').addEventListener('click', () => showMainScreen());
     document.getElementById('copy-username-btn').addEventListener('click', copyUsername);
     document.getElementById('copy-password-btn').addEventListener('click', copyPassword);
@@ -282,8 +314,7 @@ function setupEventListeners() {
     document.getElementById('toggle-password-btn').addEventListener('click', togglePasswordVisibility);
     document.getElementById('save-folder-btn').addEventListener('click', savePasswordFolder);
     document.getElementById('edit-password-btn').addEventListener('click', editCurrentPassword);
-    
-    // Link Opening in Default Browser
+
     const detailLink = document.getElementById('detail-link');
     if (detailLink) {
         detailLink.addEventListener('click', (e) => {
@@ -296,27 +327,23 @@ function setupEventListeners() {
     }
     document.getElementById('delete-password-btn').addEventListener('click', deleteCurrentPassword);
 
-    // Edit Password Screen
     document.getElementById('close-edit-btn').addEventListener('click', () => showMainScreen());
     document.getElementById('save-password-btn').addEventListener('click', handleSavePassword);
     document.getElementById('cancel-edit-btn').addEventListener('click', () => showMainScreen());
     document.getElementById('upload-file-btn').addEventListener('click', handleFileUpload);
 
-    // Folder Screen
     document.getElementById('close-folder-btn').addEventListener('click', () => showMainScreen());
     document.getElementById('save-folder-btn-main').addEventListener('click', handleSaveFolder);
     document.getElementById('delete-folder-btn').addEventListener('click', handleDeleteFolder);
     document.getElementById('cancel-folder-btn').addEventListener('click', () => showMainScreen());
 
-    // Settings Screen
     document.getElementById('close-settings-btn').addEventListener('click', () => showMainScreen());
     document.getElementById('change-pin-btn').addEventListener('click', () => showScreen('change-pin-screen'));
     document.getElementById('change-password-btn').addEventListener('click', () => showScreen('change-password-screen'));
     document.getElementById('generate-report-btn').addEventListener('click', generateManualReport);
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
     document.getElementById('check-updates-btn').addEventListener('click', handleManualUpdateCheck);
-    
-    // License Listeners
+
     document.getElementById('activate-license-btn').addEventListener('click', handleActivateLicense);
     document.getElementById('get-trial-btn').addEventListener('click', () => {
         window.api.openExternal('https://zynio-tech.web.app/register');
@@ -324,7 +351,7 @@ function setupEventListeners() {
     document.getElementById('buy-premium-btn').addEventListener('click', () => {
         window.api.openExternal('https://zynio-tech.web.app/pricing');
     });
-    // license-back-btn removed from HTML since license is now the first screen
+
     document.getElementById('settings-activate-license-btn').addEventListener('click', () => {
         const input = document.getElementById('license-key-input');
         if (input) {
@@ -345,11 +372,17 @@ function setupEventListeners() {
         langSelect.addEventListener('change', async (e) => {
             currentLanguage = e.target.value;
             await loadTranslations(currentLanguage);
+
+            try {
+                const settingsResult = await window.api.loadSettings();
+                const settings = (settingsResult.success && settingsResult.settings) ? settingsResult.settings : {};
+                settings.language = currentLanguage;
+                await window.api.saveSettings(settings);
+            } catch (e) {}
             showToast('msg_lang_changed', 'success');
         });
     }
 
-    // Change PIN Screen
     document.getElementById('close-change-pin-btn').addEventListener('click', () => showScreen('settings-screen'));
     document.getElementById('save-new-pin-btn').addEventListener('click', handleChangePin);
     document.getElementById('cancel-change-pin-btn').addEventListener('click', () => showScreen('settings-screen'));
@@ -357,23 +390,19 @@ function setupEventListeners() {
     addEnterKeyListener('new-pin', handleChangePin);
     addEnterKeyListener('repeat-pin', handleChangePin);
 
-    // Change Password Screen
     document.getElementById('save-new-password-btn').addEventListener('click', handleChangePassword);
     document.getElementById('cancel-change-password-btn').addEventListener('click', () => showScreen('settings-screen'));
     addEnterKeyListener('current-password', handleChangePassword);
     addEnterKeyListener('new-password', handleChangePassword);
     addEnterKeyListener('repeat-password', handleChangePassword);
 
-    // Generator
     const genBtn = document.getElementById('generate-password-btn');
     if (genBtn) {
         genBtn.addEventListener('click', generateStrongPassword);
     }
 
-    // Export Screen
     document.getElementById('do-export-btn').addEventListener('click', handleExport);
 
-    // Delete Account Screen
     document.getElementById('delete-account-btn').addEventListener('click', () => {
         document.getElementById('delete-account-password').value = '';
         showScreen('delete-account-screen');
@@ -383,12 +412,9 @@ function setupEventListeners() {
     document.getElementById('confirm-delete-account-btn').addEventListener('click', handleDeleteAccount);
     addEnterKeyListener('delete-account-password', handleDeleteAccount);
 
-    // Import Screen
     document.getElementById('select-import-file-btn').addEventListener('click', selectImportFile);
     document.getElementById('do-import-btn').addEventListener('click', handleImport);
 
-    // Modal Buttons
-    // Modal Buttons
     const confirmBtn = document.getElementById('modal-confirm-btn');
     const cancelBtn = document.getElementById('modal-cancel-btn');
 
@@ -407,14 +433,11 @@ function setupEventListeners() {
         newCancel.addEventListener('click', hideConfirmationModal);
     }
 
-    // Auto-Update Events
     setupAutoUpdate();
 
-    // Setup new screens & features listeners
     setupNewEventListeners();
 }
 
-// Auto-Update Handler
 function setupAutoUpdate() {
     if (window.api && window.api.onUpdateAvailable) {
         let downloadTimeout = null;
@@ -424,7 +447,7 @@ function setupAutoUpdate() {
             downloadTimeout = setTimeout(() => {
                 console.warn('Update download stalled. Triggering fallback.');
                 showUpdateFallback('stalled');
-            }, 60000); // 60 seconds timeout
+            }, 60000);
         }
 
         function clearDownloadTimeout() {
@@ -458,7 +481,7 @@ function setupAutoUpdate() {
             const downloadBtn = document.getElementById('update-download-btn');
             const installBtn = document.getElementById('update-install-btn');
             const manualBtn = document.getElementById('update-manual-btn');
-            
+
             text.textContent = t('msg_new_version', { version: info.version }) || `Neue Version v${info.version} verfügbar!`;
             banner.classList.remove('hidden');
             if (downloadBtn) {
@@ -493,7 +516,7 @@ function setupAutoUpdate() {
             const downloadBtn = document.getElementById('update-download-btn');
             const installBtn = document.getElementById('update-install-btn');
             const manualBtn = document.getElementById('update-manual-btn');
-            
+
             text.textContent = t('msg_update_ready');
             banner.classList.remove('hidden');
             if (downloadBtn) downloadBtn.classList.add('hidden');
@@ -538,7 +561,6 @@ function setupAutoUpdate() {
     }
 }
 
-// Login Handler
 async function handleLogin() {
     const username = document.getElementById('login-username').value;
     const password = document.getElementById('login-password').value;
@@ -560,14 +582,12 @@ async function handleLogin() {
         currentUser = username;
         currentPassword = password;
 
-        // License is already validated before login, so just load passwords
         const loadResult = await window.api.loadPasswords({ password });
         if (loadResult.success) {
             passwords = loadResult.data;
             folders = loadResult.folders;
             trash = loadResult.trash || [];
-            
-            // Load IDs and Documents
+
             const idsResult = await window.api.loadIds({ password });
             if (idsResult.success) ids = idsResult.data || [];
             const docsResult = await window.api.loadDocuments({ password });
@@ -583,7 +603,7 @@ async function handleLogin() {
                     localStorage.setItem('reports_cleaned_v2', 'true');
                 }
             }
-            // Purge expired items from trash on startup
+
             purgeExpiredTrash();
 
             showDashboard();
@@ -598,7 +618,6 @@ async function handleLogin() {
     }
 }
 
-// Register Handler
 async function handleRegister() {
     const username = document.getElementById('register-username').value;
     const password = document.getElementById('register-password').value;
@@ -640,11 +659,10 @@ async function handleRegister() {
     }
 }
 
-// Main Screen
 function showMainScreen() {
     currentEditIndex = null;
     currentEditFolder = null;
-    // Clear sensitive data from DOM when leaving detail screen
+
     const pwdEl = document.getElementById('detail-password');
     if (pwdEl) {
         pwdEl.dataset.password = '';
@@ -659,6 +677,7 @@ function showMainScreen() {
 
 function updateHeaderTitle() {
     const title = document.getElementById('header-title');
+    if (!title) return;
     if (currentFolder) {
         const folder = folders.find(f => f.id === currentFolder);
         title.textContent = folder ? folder.name : 'Folder';
@@ -668,15 +687,17 @@ function updateHeaderTitle() {
 }
 
 function updateControls() {
-    const mainControls = document.getElementById('main-controls');
+    const mainControls = document.getElementById('main-controls') || document.querySelector('.workspace-header');
     const backContainer = document.getElementById('back-container');
 
     if (currentFolder) {
-        mainControls.style.display = 'none';
-        backContainer.classList.remove('hidden');
+        if (mainControls) mainControls.style.display = 'none';
+        if (backContainer) backContainer.classList.remove('hidden');
+        document.getElementById('password-list').classList.add('folder-active');
     } else {
-        mainControls.style.display = 'flex';
-        backContainer.classList.add('hidden');
+        if (mainControls) mainControls.style.display = 'flex';
+        if (backContainer) backContainer.classList.add('hidden');
+        document.getElementById('password-list').classList.remove('folder-active');
     }
 }
 
@@ -685,31 +706,27 @@ function handleBackToRoot() {
     showMainScreen();
 }
 
-// Render Password List
 function renderPasswordList() {
     const container = document.getElementById('password-list');
     container.innerHTML = '';
 
     const searchTerm = document.getElementById('search-input').value.toLowerCase();
 
-    // Filter folders and passwords based on search and current folder
     let displayFolders = [];
     let displayPasswords = [];
 
     if (!currentFolder) {
-        // Root view - show folders
+
         displayFolders = searchTerm
             ? folders.filter(f => f.name.toLowerCase().includes(searchTerm))
             : folders;
 
-        // Show passwords without folder
         displayPasswords = passwords.filter(p => !p.folderId);
     } else {
-        // Folder view - show passwords in folder
+
         displayPasswords = passwords.filter(p => p.folderId === currentFolder);
     }
 
-    // Apply search filter to passwords
     if (searchTerm && !currentFolder) {
         displayPasswords = displayPasswords.filter(p =>
             p.app.toLowerCase().includes(searchTerm) ||
@@ -718,7 +735,6 @@ function renderPasswordList() {
         );
     }
 
-    // Show empty state if nothing to display
     if (displayFolders.length === 0 && displayPasswords.length === 0) {
         const message = searchTerm ? t('msg_no_results') : t('msg_no_passwords');
         container.innerHTML = `
@@ -730,13 +746,11 @@ function renderPasswordList() {
         return;
     }
 
-    // Render folders
     displayFolders.forEach(folder => {
         const card = createFolderCard(folder);
         container.appendChild(card);
     });
 
-    // Render passwords
     displayPasswords.forEach((pwd, index) => {
         const actualIndex = passwords.indexOf(pwd);
         const card = createPasswordCard(pwd, actualIndex);
@@ -790,13 +804,11 @@ function createPasswordCard(pwd, index) {
     }
 
     card.innerHTML = `
-        <div style="display: flex; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
             ${iconHtml}
             <span class="password-card-name">${escapeHtml(pwd.app)}</span>
         </div>
-        <span class="password-card-arrow">
-            <img src="../logos/right.png" alt=">">
-        </span>
+        
     `;
 
     if (!faviconUrl && isLocal && window.api && window.api.fetchLocalFavicon) {
@@ -827,21 +839,12 @@ function createFolderCard(folder) {
     card.className = 'folder-card';
     card.setAttribute('data-drop-target', 'true');
     card.innerHTML = `
-        <img src="../logos/folder.png" alt="Folder" class="folder-card-icon">
+        <img src="../icons_new/folder_wihte1.svg" alt="Folder" class="folder-card-icon">
         <span class="folder-card-name">${escapeHtml(folder.name)}</span>
-        <span class="folder-card-count">${passwordCount}</span>
-        <button class="folder-card-edit" title="${t('btn_edit')}">
-            <img src="../logos/pencil.png" alt="Edit">
-        </button>
     `;
 
     card.addEventListener('click', (e) => {
-        if (e.target.closest('.folder-card-edit')) {
-            e.stopPropagation();
-            showEditFolder(folder);
-        } else {
-            openFolder(folder.id);
-        }
+        openFolder(folder.id);
     });
 
     card.addEventListener('dragover', (e) => {
@@ -882,7 +885,6 @@ function handleSearch() {
     renderPasswordList();
 }
 
-// Password Detail Screen
 function showPasswordDetail(index) {
     currentEditIndex = index;
     const pwd = passwords[index];
@@ -911,7 +913,6 @@ function showPasswordDetail(index) {
         notesSection.style.display = 'none';
     }
 
-    // File section
     const fileSection = document.getElementById('file-section');
     const files = pwd.files || (pwd.fileName && pwd.fileData ? [{ data: pwd.fileData, name: pwd.fileName }] : []);
     if (files.length > 0) {
@@ -921,14 +922,12 @@ function showPasswordDetail(index) {
         fileSection.style.display = 'none';
     }
 
-    // Populate custom dropdown
     const optionsContainer = document.getElementById('custom-folder-options');
     const trigger = document.getElementById('custom-folder-trigger');
     const hiddenInput = document.getElementById('folder-select');
 
     optionsContainer.innerHTML = '';
 
-    // Add "No Folder" option
     const noFolderOption = document.createElement('div');
     noFolderOption.textContent = t('label_no_folder');
     noFolderOption.addEventListener('click', () => {
@@ -942,7 +941,7 @@ function showPasswordDetail(index) {
     folders.forEach(folder => {
         const option = document.createElement('div');
         option.textContent = folder.name;
-        
+
         if (pwd.folderId === folder.id) {
             trigger.textContent = folder.name;
             hiddenInput.value = folder.id;
@@ -966,7 +965,6 @@ function showPasswordDetail(index) {
     showScreen('detail-screen');
 }
 
-// Custom Select Logic
 function setupCustomSelect() {
     const trigger = document.getElementById('custom-folder-trigger');
     if (trigger) {
@@ -1004,13 +1002,14 @@ function togglePasswordVisibility() {
     if (isMasked) {
         pwdElement.textContent = pwdElement.dataset.password;
         pwdElement.dataset.masked = 'false';
+        const btn = document.getElementById('toggle-password-btn'); if(btn) btn.querySelector('img').src = '../icons_new/eye_off_withe.svg';
     } else {
         pwdElement.textContent = '•'.repeat(pwdElement.dataset.password.length);
         pwdElement.dataset.masked = 'true';
+        const btn = document.getElementById('toggle-password-btn'); if(btn) btn.querySelector('img').src = '../icons_new/eye_open_withe.svg';
     }
 }
 
-// Auto-clear clipboard after timeout
 let clipboardClearTimer = null;
 async function scheduleClipboardClear() {
     if (clipboardClearTimer) clearTimeout(clipboardClearTimer);
@@ -1020,7 +1019,7 @@ async function scheduleClipboardClear() {
         } catch (e) {
             console.error('Failed to clear clipboard:', e);
         }
-    }, 30000); // 30 seconds
+    }, 30000);
 }
 
 async function copyUsername() {
@@ -1089,11 +1088,8 @@ async function deleteCurrentPassword() {
     );
 }
 
-// Add/Edit Password
 function showAddPassword() {
     currentEditIndex = null;
-    currentFileData = null;
-    currentFileName = null;
     currentFiles = [];
     document.getElementById('edit-title').textContent = 'Add Password';
     document.getElementById('edit-app').value = '';
@@ -1110,10 +1106,7 @@ function showEditPassword(index) {
     currentEditIndex = index;
     const pwd = passwords[index];
 
-    // Migrate old single-file format to new array format
     currentFiles = pwd.files || (pwd.fileName && pwd.fileData ? [{ data: pwd.fileData, name: pwd.fileName }] : []);
-    currentFileData = null;
-    currentFileName = null;
 
     document.getElementById('edit-title').textContent = 'Edit Password';
     document.getElementById('edit-app').value = pwd.app;
@@ -1150,10 +1143,10 @@ async function handleSavePassword() {
     };
 
     if (currentEditIndex !== null) {
-        // Edit existing
+
         passwords[currentEditIndex] = { ...passwords[currentEditIndex], ...passwordData };
     } else {
-        // Add new
+
         passwords.push(passwordData);
     }
 
@@ -1172,7 +1165,6 @@ async function handleSavePassword() {
     }
 }
 
-// Folder Management
 function showCreateFolder() {
     currentEditFolder = null;
     document.getElementById('folder-title').textContent = 'Create Folder';
@@ -1197,17 +1189,16 @@ async function handleSaveFolder() {
         return;
     }
 
-    // Check for duplicate name
     if (folders.some(f => f.name.toLowerCase() === name.toLowerCase() && f.id !== currentEditFolder?.id)) {
         showToast('msg_folder_exists', 'error');
         return;
     }
 
     if (currentEditFolder) {
-        // Edit
+
         currentEditFolder.name = name;
     } else {
-        // Create
+
         const newFolder = {
             id: generateId(),
             name
@@ -1235,14 +1226,13 @@ async function handleDeleteFolder() {
         'modal_delete_folder_title',
         'modal_delete_folder_desc',
         async () => {
-            // Move passwords to root
+
             passwords.forEach(pwd => {
                 if (pwd.folderId === currentEditFolder.id) {
                     pwd.folderId = null;
                 }
             });
 
-            // Delete folder
             folders = folders.filter(f => f.id !== currentEditFolder.id);
 
             const result = await window.api.savePasswords({
@@ -1262,7 +1252,6 @@ async function handleDeleteFolder() {
     );
 }
 
-// Change PIN
 async function handleChangePin() {
     const masterPwd = document.getElementById('confirm-master-pwd-pin').value;
     const currentPin = document.getElementById('confirm-current-pin').value;
@@ -1292,7 +1281,7 @@ async function handleChangePin() {
 
     if (result.success) {
         showToast('msg_pin_changed', 'success');
-        // Clear fields
+
         document.getElementById('confirm-master-pwd-pin').value = '';
         document.getElementById('confirm-current-pin').value = '';
         document.getElementById('new-pin').value = '';
@@ -1303,7 +1292,6 @@ async function handleChangePin() {
     }
 }
 
-// Change Master Password
 async function handleChangePassword() {
     const currentPwd = document.getElementById('confirm-current-pwd').value;
     const pin = document.getElementById('confirm-pin-pwd').value;
@@ -1334,7 +1322,7 @@ async function handleChangePassword() {
     if (result.success) {
         currentPassword = newPwd;
         showToast('msg_pwd_changed', 'success');
-        // Clear fields
+
         document.getElementById('confirm-current-pwd').value = '';
         document.getElementById('confirm-pin-pwd').value = '';
         document.getElementById('new-master-pwd').value = '';
@@ -1345,7 +1333,6 @@ async function handleChangePassword() {
     }
 }
 
-// [HOCH-03] Delete Account - jetzt mit PIN-Verifikation
 async function handleDeleteAccount() {
     const password = document.getElementById('delete-account-password').value;
     const pin = document.getElementById('delete-account-pin').value;
@@ -1365,7 +1352,7 @@ async function handleDeleteAccount() {
     if (result.success) {
         showToast('msg_account_deleted', 'success');
         setTimeout(() => {
-            // Force reload to reset state and show register screen
+
             location.reload();
         }, 2000);
     } else {
@@ -1373,7 +1360,6 @@ async function handleDeleteAccount() {
     }
 }
 
-// Logout
 function handleLogout(force = false) {
     if (force) {
         performLogout();
@@ -1405,7 +1391,8 @@ function performLogout() {
         clipboardClearTimer = null;
     }
 
-    // Clear input fields
+    window.api.clearMasterPassword();
+
     const loginPwd = document.getElementById('login-password');
     if (loginPwd) loginPwd.value = '';
     const loginPin = document.getElementById('login-pin');
@@ -1415,7 +1402,6 @@ function performLogout() {
     setTimeout(() => showScreen('login-screen'), 1000);
 }
 
-// Custom Confirmation Modal
 let pendingConfirmAction = null;
 
 function showConfirmationModal(titleKey, descKey, onConfirm) {
@@ -1423,7 +1409,6 @@ function showConfirmationModal(titleKey, descKey, onConfirm) {
     document.getElementById('modal-desc').textContent = t(descKey);
     pendingConfirmAction = onConfirm;
 
-    // Also translate buttons
     const confirmBtn = document.getElementById('modal-confirm-btn');
     const cancelBtn = document.getElementById('modal-cancel-btn');
     if (confirmBtn) confirmBtn.textContent = t('modal_confirm');
@@ -1438,9 +1423,8 @@ function hideConfirmationModal() {
     pendingConfirmAction = null;
 }
 
-// Auto Logout
 let logoutTimer;
-const LOGOUT_TIMEOUT = 10 * 60 * 1000; // 10 Minuten
+const LOGOUT_TIMEOUT = 10 * 60 * 1000;
 
 function setupAutoLogout() {
     ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'].forEach(event => {
@@ -1449,7 +1433,7 @@ function setupAutoLogout() {
 }
 
 function resetLogoutTimer() {
-    if (!currentUser) return; // Nur wenn eingeloggt
+    if (!currentUser) return;
 
     clearTimeout(logoutTimer);
     logoutTimer = setTimeout(() => {
@@ -1460,7 +1444,6 @@ function resetLogoutTimer() {
     }, LOGOUT_TIMEOUT);
 }
 
-// Export Handler
 async function handleExport() {
     const exportPassword = document.getElementById('export-password').value;
     if (!exportPassword) {
@@ -1468,7 +1451,6 @@ async function handleExport() {
         return;
     }
 
-    // [MITTEL-03] Export-Passwort muss gleiche Anforderungen erfüllen
     if (!validatePassword(exportPassword)) {
         showToast('msg_export_pwd_format', 'error');
         return;
@@ -1481,7 +1463,7 @@ async function handleExport() {
     });
 
     if (filePath) {
-        // Prepare data for export
+
         const exportData = {
             passwords,
             folders,
@@ -1505,7 +1487,6 @@ async function handleExport() {
     }
 }
 
-// Import Handler
 async function selectImportFile() {
     const { filePaths } = await window.api.showOpenDialog({
         title: 'Import Password File',
@@ -1543,19 +1524,18 @@ async function handleImport() {
         const importedData = result.data;
         let addedCount = 0;
 
-        // 1. Handle Folders
         const importedFolders = importedData.folders || [];
-        const folderIdMap = new Map(); // Old ID -> New/Existing ID
+        const folderIdMap = new Map();
 
         importedFolders.forEach(impFolder => {
-            // Check if folder with same name exists
+
             const existingFolder = folders.find(f => f.name === impFolder.name);
 
             if (existingFolder) {
-                // Map to existing folder
+
                 folderIdMap.set(impFolder.id, existingFolder.id);
             } else {
-                // Create new folder
+
                 const newId = generateId();
                 folders.push({
                     id: newId,
@@ -1566,19 +1546,18 @@ async function handleImport() {
             }
         });
 
-        // 2. Handle Passwords and Map to Folders
         const importedPasswords = importedData.passwords || importedData.data || [];
 
         importedPasswords.forEach(impPwd => {
-            // Simple duplicate check (app name only as requested)
+
             const exists = passwords.some(p => p.app === impPwd.app);
 
             if (!exists) {
-                // Map folder ID if it exists
+
                 if (impPwd.folderId && folderIdMap.has(impPwd.folderId)) {
                     impPwd.folderId = folderIdMap.get(impPwd.folderId);
                 } else {
-                    impPwd.folderId = null; // Reset if folder not found or not in map
+                    impPwd.folderId = null;
                 }
 
                 passwords.push(impPwd);
@@ -1586,7 +1565,6 @@ async function handleImport() {
             }
         });
 
-        // 3. Handle IDs
         const importedIds = importedData.ids || [];
         let addedIdsCount = 0;
         importedIds.forEach(impId => {
@@ -1597,7 +1575,6 @@ async function handleImport() {
             }
         });
 
-        // 4. Handle Documents
         const importedDocs = importedData.documents || [];
         let addedDocsCount = 0;
         importedDocs.forEach(impDoc => {
@@ -1608,7 +1585,6 @@ async function handleImport() {
             }
         });
 
-        // 5. Handle Cards
         const importedCards = importedData.cards || [];
         let addedCardsCount = 0;
         importedCards.forEach(impCard => {
@@ -1619,12 +1595,11 @@ async function handleImport() {
             }
         });
 
-        // Save merged data
         const saveResult = await window.api.savePasswords({
             password: currentPassword,
             passwords,
             folders,
-            trash // Fix Bug A: pass trash parameter
+            trash
         });
         const saveIdsResult = await window.api.saveIds({ password: currentPassword, ids });
         const saveDocsResult = await window.api.saveDocuments({ password: currentPassword, documents });
@@ -1642,7 +1617,6 @@ async function handleImport() {
     }
 }
 
-// File Upload Handler
 async function handleFileUpload() {
     if (currentFiles.length >= 5) {
         showToast('msg_max_files', 'error');
@@ -1668,7 +1642,6 @@ async function handleFileUpload() {
     }
 }
 
-// Render file list in Edit form
 function renderEditFileList() {
     const container = document.getElementById('edit-file-list');
     const hint = document.getElementById('edit-file-hint');
@@ -1706,7 +1679,6 @@ function renderEditFileList() {
     });
 }
 
-// Render file list in Detail view
 function renderDetailFileList(files) {
     const container = document.getElementById('detail-file-list');
     container.innerHTML = '';
@@ -1731,7 +1703,6 @@ function renderDetailFileList(files) {
     });
 }
 
-// File Download Handler (per file)
 async function handleFileDownloadByIndex(fileIndex) {
     const pwd = passwords[currentEditIndex];
     const files = pwd.files || (pwd.fileName && pwd.fileData ? [{ data: pwd.fileData, name: pwd.fileName }] : []);
@@ -1761,7 +1732,6 @@ async function handleFileDownloadByIndex(fileIndex) {
     }
 }
 
-// [MITTEL-02] Utility Functions - kryptographisch sichere ID-Generierung
 function generateId() {
     const array = new Uint8Array(16);
     crypto.getRandomValues(array);
@@ -1774,20 +1744,19 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Settings Screen Helper
 function showSettings() {
     updateSettingsLicenseUI();
     checkLicenseStatus(true).catch(err => console.error('Silent license sync failed:', err));
+    initSyncSettings();
     showScreen('settings-screen');
     updateSidebarActive('settings');
 }
 
-// Manual Update Check
 async function handleManualUpdateCheck() {
-    showToast('settings_updates', 'info'); // Using key for "Checking for updates..."
+    showToast('settings_updates', 'info');
     try {
         const result = await window.api.manualCheckUpdates();
-        
+
         if (result.success) {
             if (result.updateAvailable && result.updateInfo) {
                 const msg = t('msg_new_version', { version: result.updateInfo.version }) || `Neue Version v${result.updateInfo.version} gefunden!`;
@@ -1798,7 +1767,7 @@ async function handleManualUpdateCheck() {
                 const downloadBtn = document.getElementById('update-download-btn');
                 const installBtn = document.getElementById('update-install-btn');
                 const manualBtn = document.getElementById('update-manual-btn');
-                
+
                 text.textContent = msg;
                 banner.classList.remove('hidden');
                 downloadBtn.classList.remove('hidden');
@@ -1806,13 +1775,13 @@ async function handleManualUpdateCheck() {
                 downloadBtn.textContent = 'Download';
                 installBtn.classList.add('hidden');
                 if (manualBtn) manualBtn.classList.add('hidden');
-                
+
                 showScreen('main-screen');
             } else {
                 showToast('msg_no_update', 'info');
             }
         } else {
-            // Check for specific 404 or common update errors
+
             if (result.error && (result.error.includes('404') || result.error.includes('Not Found'))) {
                 showToast('msg_no_update', 'info');
             } else {
@@ -1824,7 +1793,6 @@ async function handleManualUpdateCheck() {
     }
 }
 
-// CSV Import Logic
 async function selectCsvFile() {
     const { filePaths } = await window.api.showOpenDialog({
         title: 'Select Browser CSV Export',
@@ -1852,7 +1820,7 @@ async function handleCsvImport() {
 
         const content = atob(result.data);
         const rows = parseCSV(content);
-        
+
         if (rows.length < 2) {
             showToast('msg_csv_empty', 'error');
             return;
@@ -1861,7 +1829,6 @@ async function handleCsvImport() {
         const headers = rows[0].map(h => h.toLowerCase().trim());
         const importedData = [];
 
-        // Detect format
         const isChrome = headers.includes('url') && headers.includes('username') && headers.includes('password');
         const isFirefox = headers.includes('url') && headers.includes('username') && headers.includes('password') && headers.includes('httprealm');
 
@@ -1887,7 +1854,7 @@ async function handleCsvImport() {
                     files: []
                 };
             } else {
-                // Fallback: try columns as Name, Url, User, Pwd, Note if 5 columns
+
                 if (row.length >= 5) {
                     entry = {
                         app: row[0] || 'Imported',
@@ -1910,7 +1877,7 @@ async function handleCsvImport() {
                     };
                 }
             }
-            
+
             if (entry.app && entry.password) {
                 importedData.push(entry);
             }
@@ -1921,10 +1888,9 @@ async function handleCsvImport() {
             return;
         }
 
-        // Merge with existing
         let added = 0;
         importedData.forEach(imp => {
-            // Simple duplicate check (app name only as requested)
+
             const exists = passwords.some(p => p.app === imp.app);
             if (!exists) {
                 passwords.push(imp);
@@ -1936,7 +1902,7 @@ async function handleCsvImport() {
             password: currentPassword,
             passwords,
             folders,
-            trash // Fix Bug A: pass trash parameter
+            trash
         });
 
         if (saveResult.success) {
@@ -1984,7 +1950,7 @@ function parseCSV(text) {
             currentField += char;
         }
     }
-    
+
     if (currentField || currentRow.length > 0) {
         currentRow.push(currentField);
         rows.push(currentRow);
@@ -1992,10 +1958,6 @@ function parseCSV(text) {
 
     return rows;
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-// LICENSING SYSTEM
-// ═══════════════════════════════════════════════════════════════════════
 
 async function checkLicenseStatus(forceSync = false) {
     try {
@@ -2013,11 +1975,10 @@ async function checkLicenseStatus(forceSync = false) {
 
         const isOnline = navigator.onLine;
 
-        // Only check online once per calendar month (and year)
         const lastSyncDate = new Date(lastSync);
         const currentDate = new Date(now);
-        const isSameMonth = lastSync && 
-                            lastSyncDate.getFullYear() === currentDate.getFullYear() && 
+        const isSameMonth = lastSync &&
+                            lastSyncDate.getFullYear() === currentDate.getFullYear() &&
                             lastSyncDate.getMonth() === currentDate.getMonth();
 
         if (isOnline && !isSameMonth) {
@@ -2089,7 +2050,7 @@ async function checkLicenseStatus(forceSync = false) {
         licenseState = {
             valid: true,
             plan: cached.plan,
-            features: cached.features || { 
+            features: cached.features || {
                 passwordGenerator: isPremiumPlan,
                 securityAudit: isPremiumPlan
             },
@@ -2117,13 +2078,13 @@ function updateSettingsLicenseUI() {
         }
         if (planEl) planEl.textContent = licenseState.plan.toUpperCase();
         if (expiryEl) {
-            expiryEl.textContent = licenseState.expiryDate 
-                ? new Date(licenseState.expiryDate).toLocaleDateString() 
+            expiryEl.textContent = licenseState.expiryDate
+                ? new Date(licenseState.expiryDate).toLocaleDateString()
                 : 'Lifetime';
         }
         if (syncEl) {
-            syncEl.textContent = licenseState.lastSync 
-                ? new Date(licenseState.lastSync).toLocaleString() 
+            syncEl.textContent = licenseState.lastSync
+                ? new Date(licenseState.lastSync).toLocaleString()
                 : 'N/A';
         }
     } else {
@@ -2140,7 +2101,7 @@ function updateSettingsLicenseUI() {
 async function handleActivateLicense() {
     const licenseKey = document.getElementById('license-key-input').value.trim();
     const errorEl = document.getElementById('license-error-msg');
-    
+
     if (!licenseKey) {
         errorEl.textContent = 'Please enter a license key.';
         errorEl.classList.remove('hidden');
@@ -2197,8 +2158,7 @@ async function handleActivateLicense() {
                 };
                 errorEl.classList.add('hidden');
                 showToast('msg_license_activated', 'success');
-                
-                // License activated → proceed to login or register
+
                 const isFirstRun = await window.api.checkFirstRun();
                 if (isFirstRun) {
                     showScreen('register-screen');
@@ -2225,10 +2185,6 @@ async function handleActivateLicense() {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// PASSWORT-SICHERHEITS-AUDIT
-// ═══════════════════════════════════════════════════════════════════════
-
 let auditResults = [];
 let auditLeakedSet = new Set();
 
@@ -2239,19 +2195,18 @@ async function openSecurityAudit() {
     }
     showScreen('audit-screen');
     updateSidebarActive('watchtower');
-    
-    // Reset UI
+
     document.getElementById('audit-scanning').style.display = 'block';
     document.getElementById('audit-summary').style.display = 'none';
     document.getElementById('audit-filters').style.display = 'none';
     document.getElementById('audit-results').innerHTML = '';
     document.getElementById('audit-progress').textContent = t('audit_analyzing');
-    
+
     auditResults = [];
     auditLeakedSet = new Set();
 
     try {
-        // Step 1: Local audit (weak, reused)
+
         const auditRes = await window.api.passwordAudit({ password: currentPassword });
         if (!auditRes.success) {
             showToast(auditRes.error || 'msg_error', 'error');
@@ -2259,15 +2214,14 @@ async function openSecurityAudit() {
         }
         auditResults = auditRes.results;
 
-        // Step 2: HaveIBeenPwned Leak Check (K-Anonymity)
         document.getElementById('audit-progress').textContent = t('audit_checking_leaks', { current: 0, total: auditResults.length });
-        
+
         for (let i = 0; i < auditResults.length; i++) {
             const entry = auditResults[i];
             document.getElementById('audit-progress').textContent = t('audit_checking_leaks', { current: i + 1, total: auditResults.length });
 
             try {
-                // SHA-1 Hash im Browser berechnen
+
                 const pwd = passwords.find(p => p.app === entry.app && p.username === entry.username);
                 if (pwd && pwd.password) {
                     const encoder = new TextEncoder();
@@ -2275,7 +2229,7 @@ async function openSecurityAudit() {
                     const hashBuffer = await crypto.subtle.digest('SHA-1', data);
                     const hashArray = Array.from(new Uint8Array(hashBuffer));
                     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-                    
+
                     const pwnResult = await window.api.checkPwned({ passwordHash: hashHex });
                     if (pwnResult.success && pwnResult.pwned) {
                         entry.issues.push('leaked');
@@ -2284,17 +2238,15 @@ async function openSecurityAudit() {
                     }
                 }
             } catch (e) {
-                // Leak-Check fehlgeschlagen – nicht kritisch
+
                 console.warn('[Audit] Leak check failed for', entry.app, e.message);
             }
 
-            // Rate-Limiting: 100ms Pause zwischen API-Anfragen
             if (i < auditResults.length - 1) {
                 await new Promise(r => setTimeout(r, 100));
             }
         }
 
-        // Step 3: Ergebnisse anzeigen
         document.getElementById('audit-scanning').style.display = 'none';
         renderAuditSummary();
         renderAuditResults('all');
@@ -2317,16 +2269,16 @@ function renderAuditSummary() {
     document.getElementById('audit-weak').textContent = weak;
     document.getElementById('audit-reused').textContent = reused;
     document.getElementById('audit-leaked').textContent = leaked;
-    
+
     document.getElementById('audit-summary').style.display = 'grid';
-    document.getElementById('audit-filters').style.display = 'flex';
+    document.getElementById('audit-filters').style.display = 'grid';
 }
 
 function setupAuditFilters() {
-    const filterBtns = document.querySelectorAll('.audit-filter-btn');
-    filterBtns.forEach(btn => {
+    const filterCards = document.querySelectorAll('.watchtower-card, .audit-filter-btn');
+    filterCards.forEach(btn => {
         btn.addEventListener('click', () => {
-            filterBtns.forEach(b => b.classList.remove('active'));
+            filterCards.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             renderAuditResults(btn.dataset.filter);
         });
@@ -2362,10 +2314,9 @@ function renderAuditResults(filter) {
         const hasLeaked = result.issues.includes('leaked');
         const isStrong = result.issues.length === 0;
 
-        // Stärke-Farbe
-        let strengthColor = '#ef4444'; // red
-        if (result.strength >= 70) strengthColor = '#22c55e'; // green
-        else if (result.strength >= 45) strengthColor = '#f59e0b'; // amber
+        let strengthColor = '#ef4444';
+        if (result.strength >= 70) strengthColor = '#22c55e';
+        else if (result.strength >= 45) strengthColor = '#f59e0b';
 
         let badges = '';
         if (hasLeaked) badges += '<span class="audit-badge audit-badge-leaked">🔓 ' + t('audit_leaked') + (result.leakCount ? ` (${result.leakCount.toLocaleString()}x)` : '') + '</span>';
@@ -2373,27 +2324,39 @@ function renderAuditResults(filter) {
         if (hasReused) badges += '<span class="audit-badge audit-badge-reused">🔄 ' + t('audit_reused') + ' (' + result.reusedCount + ')</span>';
         if (isStrong) badges += '<span class="audit-badge audit-badge-strong">' + t('audit_filter_strong') + '</span>';
 
+        let cardStateColor = '#2ecc71'; // default strong
+        if (hasLeaked) {
+            cardStateColor = '#e74c3c';
+        } else if (hasWeak || hasReused) {
+            cardStateColor = '#d5b500';
+        }
+        
+        card.style.boxShadow = `0px 0px 3px 0px ${cardStateColor}80`;
+        card.style.borderColor = `${cardStateColor}80`;
+
         card.innerHTML = `
-            <div class="audit-result-header">
-                <div class="audit-result-app">${escapeHtml(result.app)}</div>
-                <div class="audit-result-user">${escapeHtml(result.username)}</div>
+            <div class="audit-result-header" style="display: flex; align-items: center; gap: 12px; margin-bottom: 0;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.8; color: #a0a0a0;">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <div class="audit-result-app" style="font-weight: bold; color: #E0E0E0;">${escapeHtml(result.app)}</div>
             </div>
-            <div class="audit-result-body">
-                <div class="audit-strength-bar">
-                    <div class="audit-strength-fill" style="width: ${result.strength}%; background: ${strengthColor};"></div>
-                </div>
-                <span class="audit-strength-label" style="color: ${strengthColor};">${result.strength}%</span>
-            </div>
-            <div class="audit-badges">${badges}</div>
         `;
 
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', () => {
+            if (result.originalIndex !== undefined) {
+                showEditPassword(result.originalIndex);
+            }
+        });
         container.appendChild(card);
     });
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// NATIVE MESSAGING IPC HANDLER (FROM CHROME EXTENSION)
-// ═══════════════════════════════════════════════════════════════════════
 if (window.api && window.api.onNativeRequest) {
     window.api.onNativeRequest(async ({ id, request }) => {
         if (request.action === "ping") {
@@ -2401,7 +2364,6 @@ if (window.api && window.api.onNativeRequest) {
             return;
         }
 
-        // Only process requests if app is unlocked
         if (!currentPassword) {
             window.api.sendNativeResponse({ id, response: { action: (request.action || "").replace('request', 'response'), success: false, error: 'Locked' } });
             return;
@@ -2409,13 +2371,13 @@ if (window.api && window.api.onNativeRequest) {
 
         if (request.action === "get-credentials") {
             const matched = passwords.filter(p => p.link && p.link.toLowerCase().includes(request.domain.toLowerCase()));
-            window.api.sendNativeResponse({ 
-                id, 
-                response: { 
-                    action: "credentials-response", 
-                    success: true, 
-                    credentials: matched.map(p => ({ username: p.username, password: p.password })) 
-                } 
+            window.api.sendNativeResponse({
+                id,
+                response: {
+                    action: "credentials-response",
+                    success: true,
+                    credentials: matched.map(p => ({ username: p.username, password: p.password }))
+                }
             });
         }
         else if (request.action === "check-exists") {
@@ -2449,8 +2411,7 @@ if (window.api && window.api.onNativeRequest) {
 
             const result = await window.api.savePasswords({ password: currentPassword, passwords, folders });
             window.api.sendNativeResponse({ id, response: { action: "save-response", success: result.success } });
-            
-            // Refresh UI if on main screen
+
             const mainScreen = document.getElementById('main-screen');
             if (mainScreen && !mainScreen.classList.contains('hidden')) {
                 renderPasswordList();
@@ -2458,7 +2419,7 @@ if (window.api && window.api.onNativeRequest) {
             }
         }
         else if (request.action === "request-vault") {
-            // Browser-Erweiterung fordert die verschlüsselte Datenbank an (für entkoppelten Cache)
+
             try {
                 const loadResult = await window.api.loadPasswords({ password: currentPassword });
                 if (loadResult.success) {
@@ -2484,16 +2445,12 @@ if (window.api && window.api.onNativeRequest) {
     });
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// NEW SCREEN LOGIC & EVENT LISTENERS
-// ═══════════════════════════════════════════════════════════════════════
-
 let currentEditIdIndex = null;
 let currentEditDocIndex = null;
 let currentEditCardIndex = null;
 
 document.addEventListener('click', (e) => {
-    // Product Hunt Banner global handlers
+
     if (e.target.closest('#ph-rate-btn')) {
         window.api.openExternal('https://www.producthunt.com');
         localStorage.setItem('ph_dismissed', 'true');
@@ -2509,13 +2466,13 @@ document.addEventListener('click', (e) => {
 });
 
 function setupNewEventListeners() {
-    // Sidebar Navigation
+
     setupSidebarNavigation();
 
-    // Drag & Drop sidebar listeners
     setupDragAndDrop();
 
-    // Dashboard Quick Actions
+    setupSyncEventListeners();
+
     document.getElementById('qa-add-password').addEventListener('click', showAddPassword);
     document.getElementById('qa-watchtower').addEventListener('click', openSecurityAudit);
     document.getElementById('qa-export').addEventListener('click', () => {
@@ -2524,9 +2481,6 @@ function setupNewEventListeners() {
         updateSidebarActive('export');
     });
 
-    // Product Hunt / Review Banner handlers moved to global delegated listener below
-
-    // Onboarding Listeners
     const onboardingNextBtn = document.getElementById('onboarding-next-btn');
     if (onboardingNextBtn) {
         onboardingNextBtn.addEventListener('click', () => {
@@ -2543,7 +2497,6 @@ function setupNewEventListeners() {
         onboardingSkipBtn.addEventListener('click', finishOnboarding);
     }
 
-    // Initialize custom select dropdowns
     initializeCustomSelects();
 
     const restartOnboardingBtn = document.getElementById('restart-onboarding-btn');
@@ -2557,7 +2510,6 @@ function setupNewEventListeners() {
         });
     }
 
-    // Monthly Report Close & Delete
     document.getElementById('report-close-btn').addEventListener('click', () => {
         showReportsScreen();
         currentActiveReport = null;
@@ -2568,16 +2520,13 @@ function setupNewEventListeners() {
     });
     document.getElementById('report-delete-btn').addEventListener('click', handleDeleteReport);
 
-    // Empty Trash
     document.getElementById('empty-trash-btn').addEventListener('click', handleEmptyTrash);
 
-    // Search Box Inputs
     document.getElementById('trash-search-input').addEventListener('input', renderTrashList);
     document.getElementById('ids-search-input').addEventListener('input', renderIdsList);
     document.getElementById('docs-search-input').addEventListener('input', renderDocumentsList);
     document.getElementById('cards-search-input').addEventListener('input', renderCardsList);
 
-    // ID Screen Actions
     document.getElementById('add-id-btn').addEventListener('click', showAddId);
     document.getElementById('save-id-btn').addEventListener('click', handleSaveId);
     document.getElementById('delete-id-btn').addEventListener('click', handleDeleteId);
@@ -2585,7 +2534,6 @@ function setupNewEventListeners() {
     document.getElementById('close-edit-id-btn').addEventListener('click', showIdsScreen);
     document.getElementById('upload-id-file-btn').addEventListener('click', handleIdFileUpload);
 
-    // Document Screen Actions
     document.getElementById('add-document-btn').addEventListener('click', showAddDocument);
     document.getElementById('save-doc-btn').addEventListener('click', handleSaveDocument);
     document.getElementById('delete-doc-btn').addEventListener('click', handleDeleteDocument);
@@ -2593,7 +2541,6 @@ function setupNewEventListeners() {
     document.getElementById('close-edit-doc-btn').addEventListener('click', showDocumentsScreen);
     document.getElementById('upload-doc-file-btn').addEventListener('click', handleDocFileUpload);
 
-    // Credit Card Actions
     document.getElementById('add-card-btn').addEventListener('click', showAddCard);
     document.getElementById('save-card-btn').addEventListener('click', handleSaveCard);
     document.getElementById('delete-card-btn').addEventListener('click', handleDeleteCard);
@@ -2662,12 +2609,38 @@ function setupSidebarNavigation() {
     });
 }
 
+const SIDEBAR_ICON_MAP = {
+    'dashboard': 'dashboard',
+    'passwords': 'key',
+    'cards': 'credit-card',
+    'ids': 'id',
+    'documents': 'documents',
+    'watchtower': 'shield',
+    'reports': 'report',
+    'trash': 'trash',
+    'import': 'import',
+    'export': 'export',
+    'csv-import': 'browser',
+    'settings': 'settings'
+};
+
 function updateSidebarActive(navId) {
     document.querySelectorAll('#sidebar .nav-item').forEach(item => {
-        if (item.getAttribute('data-nav') === navId) {
+        const itemNav = item.getAttribute('data-nav');
+        const isActive = itemNav === navId;
+        const iconBase = SIDEBAR_ICON_MAP[itemNav];
+        const img = item.querySelector('.nav-icon img');
+
+        if (isActive) {
             item.classList.add('active');
+            if (img && iconBase) {
+                img.src = 'icons_new/sidebar/' + iconBase + '_orange.svg';
+            }
         } else {
             item.classList.remove('active');
+            if (img && iconBase) {
+                img.src = 'icons_new/sidebar/' + iconBase + '_withe.svg';
+            }
         }
     });
 }
@@ -2760,13 +2733,11 @@ async function showDashboard() {
             const card = document.createElement('div');
             card.className = 'password-card';
             card.innerHTML = `
-                <div style="display: flex; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
                     ${iconHtml}
                     <span class="password-card-name">${escapeHtml(pwd.app)}</span>
                 </div>
-                <span class="password-card-arrow">
-                    <img src="../logos/right.png" alt=">">
-                </span>
+                
             `;
 
             if (!faviconUrl && isLocal && window.api && window.api.fetchLocalFavicon) {
@@ -2955,24 +2926,23 @@ function closeAllCustomSelects(elmnt) {
     });
 }
 
-// Onboarding Trail / Feature Tour
 const ONBOARDING_STEPS = 5;
 let onboardingCurrentStep = 0;
 
 const ONBOARDING_ICONS = [
     '../logos/locked.png',
-    '../logos/password.png',
-    '../logos/shield.png',
-    '../logos/trash.png',
-    '../logos/settings.png'
+    '../icons_new/sidebar/key_withe.svg',
+    '../icons_new/sidebar/shield_withe.svg',
+    '../icons_new/trash/trash_withe.svg',
+    '../icons_new/sidebar/settings_withe.svg'
 ];
 
 const ONBOARDING_TOUR_TARGETS = [
-    null,                     // Step 0: Welcome
-    '[data-nav="passwords"]',  // Step 1: Passwords
-    '[data-nav="watchtower"]', // Step 2: Watchtower
-    '[data-nav="trash"]',      // Step 3: Trash
-    '[data-nav="settings"]'    // Step 4: Settings
+    null,
+    '[data-nav="passwords"]',
+    '[data-nav="watchtower"]',
+    '[data-nav="trash"]',
+    '[data-nav="settings"]'
 ];
 
 function checkOnboarding() {
@@ -2984,78 +2954,13 @@ function checkOnboarding() {
 function showOnboardingStep(step) {
     const overlay = document.getElementById('onboarding-overlay');
     if (!overlay) return;
-
+    
     overlay.classList.remove('hidden');
-    onboardingCurrentStep = step;
-
-    const stepLabel = document.getElementById('onboarding-step-label');
-    const title = document.getElementById('onboarding-title');
-    const text = document.getElementById('onboarding-text');
-    const nextBtn = document.getElementById('onboarding-next-btn');
-    const iconImg = overlay.querySelector('.onboarding-icon-img');
-    const spotlightBox = document.getElementById('onboarding-spotlight-box');
-    const modal = overlay.querySelector('.onboarding-modal');
-
-    const stepKey = step + 1;
-    if (stepLabel) stepLabel.textContent = t('onboarding_step', { current: stepKey, total: ONBOARDING_STEPS });
-    if (title) title.textContent = t(`onboarding_step${stepKey}_title`);
-    if (text) text.textContent = t(`onboarding_step${stepKey}_text`);
-    if (nextBtn) {
-        nextBtn.textContent = step === ONBOARDING_STEPS - 1 ? t('onboarding_finish') : t('onboarding_next');
+    
+    const startBtn = document.getElementById('onboarding-start-btn');
+    if (startBtn) {
+        startBtn.onclick = finishOnboarding;
     }
-
-    if (iconImg && ONBOARDING_ICONS[step]) iconImg.src = ONBOARDING_ICONS[step];
-
-    // Remove previous highlights
-    document.querySelectorAll('.onboarding-highlight').forEach(el => {
-        el.classList.remove('onboarding-highlight');
-    });
-
-    const currentTargetSelector = ONBOARDING_TOUR_TARGETS[step];
-    if (currentTargetSelector) {
-        const target = document.querySelector(currentTargetSelector);
-        if (target && spotlightBox) {
-            overlay.classList.add('spotlight-active');
-            const rect = target.getBoundingClientRect();
-            spotlightBox.style.top = Math.max(0, rect.top - 4) + 'px';
-            spotlightBox.style.left = Math.max(0, rect.left - 4) + 'px';
-            spotlightBox.style.width = (rect.width + 8) + 'px';
-            spotlightBox.style.height = (rect.height + 8) + 'px';
-            spotlightBox.classList.remove('hidden');
-
-            // Position modal nicely to the right of sidebar
-            if (modal) {
-                modal.style.position = 'fixed';
-                modal.style.left = Math.min(window.innerWidth - 460, rect.right + 28) + 'px';
-                modal.style.top = Math.max(20, Math.min(window.innerHeight - 380, rect.top - 30)) + 'px';
-            }
-
-            // Interactive click: clicking the spotlight box triggers the action AND advances the tour
-            spotlightBox.onclick = (e) => {
-                e.stopPropagation();
-                target.click();
-                if (onboardingCurrentStep < ONBOARDING_STEPS - 1) {
-                    showOnboardingStep(onboardingCurrentStep + 1);
-                } else {
-                    finishOnboarding();
-                }
-            };
-        }
-    } else {
-        // Step 0 / Centered modal
-        overlay.classList.remove('spotlight-active');
-        if (spotlightBox) spotlightBox.classList.add('hidden');
-        if (modal) {
-            modal.style.position = 'relative';
-            modal.style.left = '';
-            modal.style.top = '';
-        }
-    }
-
-    // Update dots
-    overlay.querySelectorAll('.onboarding-dot').forEach((dot, i) => {
-        dot.classList.toggle('active', i === step);
-    });
 }
 
 function finishOnboarding() {
@@ -3073,7 +2978,6 @@ function finishOnboarding() {
     });
 }
 
-// Dashboard Global Search & Command Palette
 let searchSelectedIndex = -1;
 
 function setupDashboardSearch() {
@@ -3175,48 +3079,47 @@ function renderDashboardSearchResults(rawQuery) {
         folders: []
     };
 
-    // 1. System Features & Navigation
     const allFeatures = [
         {
             keywords: ['einstellung', 'einstellungen', 'setting', 'settings', 'config', 'option', 'sprache', 'language', 'account', 'ajustes', 'configuración', 'paramètres', 'langue'],
             title: t('title_settings'),
             subtitle: t('settings_app'),
-            icon: '../logos/settings.png',
+            icon: '../icons_new/sidebar/settings_withe.svg',
             action: () => showSettings()
         },
         {
             keywords: ['passwort hinzufügen', 'neues passwort', 'add password', 'new password', 'create password', 'hinzufügen', 'add', 'neu', 'añadir contraseña', 'nueva contraseña', 'ajouter mot de passe'],
             title: t('btn_add_password'),
             subtitle: t('header_passwords'),
-            icon: '../logos/password.png',
+            icon: '../icons_new/sidebar/key_withe.svg',
             action: () => showAddPassword()
         },
         {
             keywords: ['passwörter', 'passwords', 'alle passwörter', 'all passwords', 'vault', 'tresor', 'contraseñas', 'mots de passe'],
             title: t('header_passwords'),
             subtitle: `${passwords.length} ${t('header_passwords')}`,
-            icon: '../logos/password.png',
+            icon: '../icons_new/sidebar/key_withe.svg',
             action: () => { currentFolder = null; showMainScreen(); }
         },
         {
             keywords: ['ordner erstellen', 'neuer ordner', 'create folder', 'new folder', 'add folder', 'crear carpeta', 'créer dossier'],
             title: t('btn_create_folder'),
             subtitle: t('header_passwords'),
-            icon: '../logos/addfolder.png',
+            icon: '../icons_new/add-folder/add_folder_withe.svg',
             action: () => showCreateFolder()
         },
         {
             keywords: ['kreditkarte', 'kreditkarten', 'karten', 'credit card', 'cards', 'visa', 'mastercard', 'karte hinzufügen', 'tarjetas', 'cartes'],
             title: t('nav_cards') || 'Credit Cards',
             subtitle: `${cards.length} ${t('nav_cards') || 'Cards'}`,
-            icon: '../logos/credit_card.png',
+            icon: '../icons_new/sidebar/credit-card_withe.svg',
             action: () => showCardsScreen()
         },
         {
             keywords: ['ausweis', 'ausweise', 'pass', 'passport', 'id', 'ids', 'führerschein', 'driver', 'license', 'identificaciones', 'pièces d\'identité'],
             title: t('nav_ids') || 'IDs & Documents',
             subtitle: `${ids.length} ${t('nav_ids') || 'IDs'}`,
-            icon: '../logos/id.png',
+            icon: '../icons_new/sidebar/id_withe.svg',
             action: () => {
                 if (!hasPaidAccess()) {
                     showToast('msg_license_req_ids', 'warning');
@@ -3229,14 +3132,14 @@ function renderDashboardSearchResults(rawQuery) {
             keywords: ['dokument', 'dokumente', 'dateien', 'document', 'documents', 'files', 'upload', 'archivos', 'fichiers'],
             title: t('nav_documents') || 'Documents',
             subtitle: `${documents.length} ${t('nav_documents') || 'Documents'}`,
-            icon: '../logos/documents.png',
+            icon: '../icons_new/sidebar/documents_withe.svg',
             action: () => showDocumentsScreen()
         },
         {
             keywords: ['watchtower', 'sicherheit', 'audit', 'security', 'score', 'prüfen', 'check', 'leaked', 'weak', 'seguridad', 'sécurité'],
             title: t('nav_watchtower'),
             subtitle: t('nav_watchtower'),
-            icon: '../logos/shield.png',
+            icon: '../icons_new/sidebar/shield_withe.svg',
             action: () => {
                 if (!hasPaidAccess()) {
                     showToast('msg_license_req_watchtower', 'warning');
@@ -3249,14 +3152,14 @@ function renderDashboardSearchResults(rawQuery) {
             keywords: ['bericht', 'berichte', 'report', 'reports', 'monatsbericht', 'monthly', 'informe', 'rapport'],
             title: t('nav_reports'),
             subtitle: t('report_title'),
-            icon: '../logos/report.png',
+            icon: '../icons_new/sidebar/report_withe.svg',
             action: () => showReportsScreen()
         },
         {
             keywords: ['papierkorb', 'trash', 'gelöscht', 'deleted', 'garbage', 'papelera', 'corbeille'],
             title: t('nav_trash'),
             subtitle: `${trash.length} ${t('nav_trash')}`,
-            icon: '../logos/garbage.png',
+            icon: '../icons_new/sidebar/trash_withe.svg',
             action: () => {
                 if (!hasPaidAccess()) {
                     showToast('msg_license_req_trash', 'warning');
@@ -3269,7 +3172,7 @@ function renderDashboardSearchResults(rawQuery) {
             keywords: ['importieren', 'import', 'passwörter importieren', 'backup wiederherstellen', 'importar', 'importer'],
             title: t('header_import'),
             subtitle: t('settings_data'),
-            icon: '../logos/import.png',
+            icon: '../icons_new/sidebar/import_withe.svg',
             action: () => {
                 document.getElementById('import-password').value = '';
                 document.getElementById('import-file-path').textContent = t('label_no_file_selected');
@@ -3282,7 +3185,7 @@ function renderDashboardSearchResults(rawQuery) {
             keywords: ['exportieren', 'export', 'passwörter exportieren', 'backup erstellen', 'exportar', 'exporter'],
             title: t('header_export'),
             subtitle: t('settings_data'),
-            icon: '../logos/export.png',
+            icon: '../icons_new/sidebar/export_withe.svg',
             action: () => {
                 document.getElementById('export-password').value = '';
                 showScreen('export-screen');
@@ -3293,7 +3196,7 @@ function renderDashboardSearchResults(rawQuery) {
             keywords: ['csv import', 'browser import', 'chrome import', 'csv', 'importar csv', 'importer csv'],
             title: t('settings_import_csv'),
             subtitle: t('settings_data'),
-            icon: '../logos/import.png',
+            icon: '../icons_new/sidebar/import_withe.svg',
             action: () => {
                 document.getElementById('csv-file-path').textContent = t('label_no_file_selected');
                 document.getElementById('csv-file-path').dataset.path = '';
@@ -3305,7 +3208,7 @@ function renderDashboardSearchResults(rawQuery) {
             keywords: ['onboarding', 'tour', 'anleitung', 'guide', 'tutorial', 'hilfe', 'help', 'guía', 'ayuda', 'tutoriel', 'aide'],
             title: t('settings_onboarding'),
             subtitle: t('app_title'),
-            icon: '../logos/shield.png',
+            icon: '../icons_new/sidebar/shield_withe.svg',
             action: () => {
                 localStorage.removeItem('onboarding_completed');
                 onboardingCurrentStep = 0;
@@ -3328,7 +3231,6 @@ function renderDashboardSearchResults(rawQuery) {
         }
     });
 
-    // 2. Passwords
     passwords.forEach((pwd, idx) => {
         const matchApp = pwd.app && pwd.app.toLowerCase().includes(query);
         const matchUser = pwd.username && pwd.username.toLowerCase().includes(query);
@@ -3348,7 +3250,7 @@ function renderDashboardSearchResults(rawQuery) {
                 iconId: iconId,
                 faviconUrl: faviconUrl,
                 firstLetter: firstLetter,
-                icon: faviconUrl || '../logos/password.png',
+                icon: faviconUrl || '../icons_new/sidebar/key_withe.svg',
                 title: pwd.app,
                 subtitle: pwd.username || pwd.url || (pwd.notes ? pwd.notes.slice(0, 30) : ''),
                 badge: 'Password',
@@ -3357,7 +3259,6 @@ function renderDashboardSearchResults(rawQuery) {
         }
     });
 
-    // 3. IDs
     ids.forEach((idItem, idx) => {
         const matchName = idItem.name && idItem.name.toLowerCase().includes(query);
         const matchNumber = idItem.number && idItem.number.toLowerCase().includes(query);
@@ -3365,7 +3266,7 @@ function renderDashboardSearchResults(rawQuery) {
         if (matchName || matchNumber || matchNotes) {
             const typeLabel = t(`id_type_${idItem.type.replace('drivers_license', 'drivers')}`) || idItem.type;
             resultsByCategory.ids.push({
-                icon: '../logos/id.png',
+                icon: '../icons_new/sidebar/id_withe.svg',
                 title: idItem.name,
                 subtitle: `${typeLabel}${idItem.number ? ' • ' + idItem.number : ''}`,
                 badge: 'ID',
@@ -3374,15 +3275,18 @@ function renderDashboardSearchResults(rawQuery) {
         }
     });
 
-    // 4. Cards
     cards.forEach((card, idx) => {
         const matchName = card.name && card.name.toLowerCase().includes(query);
         const matchHolder = card.cardholderName && card.cardholderName.toLowerCase().includes(query);
         const matchBrand = card.brand && card.brand.toLowerCase().includes(query);
         const matchNotes = card.notes && card.notes.toLowerCase().includes(query);
         if (matchName || matchHolder || matchBrand || matchNotes) {
+            const brand = getCardBrand(card);
+            let iconSrc = '../icons_new/cards/' + brand + '.svg';
+            if (brand === 'generic') iconSrc = '../icons_new/sidebar/credit-card_withe.svg';
+
             resultsByCategory.cards.push({
-                icon: '../logos/credit_card.png',
+                icon: iconSrc,
                 title: card.name,
                 subtitle: `${card.brand ? card.brand.toUpperCase() + ' ' : ''}${card.cardNumber ? '•••• ' + card.cardNumber.slice(-4) : ''}`,
                 badge: 'Card',
@@ -3391,14 +3295,13 @@ function renderDashboardSearchResults(rawQuery) {
         }
     });
 
-    // 5. Documents
     documents.forEach((doc, idx) => {
         const matchTitle = doc.title && doc.title.toLowerCase().includes(query);
         const matchNotes = doc.notes && doc.notes.toLowerCase().includes(query);
         const matchFiles = doc.files && doc.files.some(f => f.name && f.name.toLowerCase().includes(query));
         if (matchTitle || matchNotes || matchFiles) {
             resultsByCategory.documents.push({
-                icon: '../logos/documents.png',
+                icon: '../icons_new/sidebar/documents_withe.svg',
                 title: doc.title,
                 subtitle: doc.files && doc.files.length ? `${doc.files.length} file(s)` : (doc.notes ? doc.notes.slice(0, 30) : ''),
                 badge: 'Document',
@@ -3407,12 +3310,11 @@ function renderDashboardSearchResults(rawQuery) {
         }
     });
 
-    // 6. Folders
     folders.forEach(folder => {
         if (folder.name && folder.name.toLowerCase().includes(query)) {
             const count = passwords.filter(p => p.folderId === folder.id).length;
             resultsByCategory.folders.push({
-                icon: '../logos/folder.png',
+                icon: '../icons_new/add-folder/add_folder_withe.svg',
                 title: folder.name,
                 subtitle: `${count} Passwords`,
                 badge: 'Folder',
@@ -3466,7 +3368,7 @@ function renderDashboardSearchResults(rawQuery) {
                         <div class="search-item-title">${escapeHtml(item.title)}</div>
                         ${item.subtitle ? `<div class="search-item-subtitle">${escapeHtml(item.subtitle)}</div>` : ''}
                     </div>
-                    <span class="search-item-badge">${escapeHtml(item.badge)}</span>
+                    
                 `;
 
                 if (item.isPassword && !item.faviconUrl && item.isLocal && window.api && window.api.fetchLocalFavicon) {
@@ -3510,7 +3412,7 @@ async function checkAndGenerateMonthlyReport(score, total, strong, weak, reused)
     const today = new Date();
     if (isLastDayOfMonth(today)) {
         const currentMonthKey = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-        
+
         const reportExists = reports.some(r => {
             const d = new Date(r.date);
             const key = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
@@ -3591,43 +3493,49 @@ function generateMonthlyReport(report) {
     const detailScreen = document.getElementById('report-detail-screen');
     if (!detailScreen) return;
 
-    document.getElementById('report-score').textContent = report.score;
+    document.getElementById('report-score-val').innerHTML = `${report.score}<span style="font-size: 24px; color: var(--color-text-secondary); margin-left: 8px;">/ 100</span>`;
+    document.getElementById('report-stat-total').textContent = report.total;
+    document.getElementById('report-stat-strong').textContent = report.strong;
+    document.getElementById('report-stat-weak').textContent = report.weak;
+    document.getElementById('report-stat-reused').textContent = report.reused;
 
-    const statsContainer = document.getElementById('report-stats');
-    statsContainer.innerHTML = `
-        <div class="report-stat-item" style="display:flex; justify-content:space-between; margin-bottom:8px;">
-            <span class="report-stat-label">${t('report_passwords_total') || 'Total Passwords'}:</span>
-            <span class="report-stat-val" style="font-weight:bold;">${report.total}</span>
-        </div>
-        <div class="report-stat-item" style="display:flex; justify-content:space-between; margin-bottom:8px;">
-            <span class="report-stat-label">${t('report_passwords_strong') || 'Strong Passwords'}:</span>
-            <span class="report-stat-val text-success" style="font-weight:bold; color:#22c55e;">${report.strong}</span>
-        </div>
-        <div class="report-stat-item" style="display:flex; justify-content:space-between; margin-bottom:8px;">
-            <span class="report-stat-label">${t('report_passwords_weak') || 'Weak Passwords'}:</span>
-            <span class="report-stat-val text-warning" style="font-weight:bold; color:#ff8c00;">${report.weak}</span>
-        </div>
-        <div class="report-stat-item" style="display:flex; justify-content:space-between; margin-bottom:8px;">
-            <span class="report-stat-label">${t('report_passwords_reused') || 'Reused Passwords'}:</span>
-            <span class="report-stat-val text-danger" style="font-weight:bold; color:#e74c3c;">${report.reused}</span>
-        </div>
-    `;
+    const scoreContext = document.getElementById('report-score-context');
+    const scoreVal = document.getElementById('report-score-val');
+    
+    // Set score colors based on value
+    if (report.score >= 80) {
+        scoreVal.style.color = '#22c55e'; // success green
+        scoreContext.textContent = 'Excellent vault health.';
+    } else if (report.score >= 50) {
+        scoreVal.style.color = '#ff8c00'; // warning orange
+        scoreContext.textContent = 'Action required to improve security.';
+    } else {
+        scoreVal.style.color = '#e74c3c'; // danger red
+        scoreContext.textContent = 'Critical security risks detected.';
+    }
 
     const recContainer = document.getElementById('report-recommendations');
-    recContainer.innerHTML = '';
-    
-    let recommendations = [];
+    recContainer.innerHTML = '<h3 style="font-size: 14px; font-weight: 600; color: var(--color-text); margin-bottom: 12px; margin-top: 0;">Recommendations</h3>';
+
     if (report.weak > 0) {
-        recommendations.push(`<div class="report-rec-item text-warning" style="color:#ff8c00; margin-top:8px;">⚠️ ${t('report_recommendation_weak', { count: report.weak }) || (report.weak + ' passwords should be changed.')}</div>`);
+        recContainer.innerHTML += `<div class="report-rec-item" style="display:flex; align-items:center; gap:8px; padding: 12px; background: rgba(255,140,0,0.1); border: 1px solid rgba(255,140,0,0.2); border-radius: 8px; margin-bottom: 8px; color: #ff8c00; font-size: 13px;">
+            <div style="width: 8px; height: 8px; border-radius: 50%; background: #ff8c00; box-shadow: 0 0 8px #ff8c00;"></div>
+            ${t('report_recommendation_weak', { count: report.weak }) || (report.weak + ' weak passwords found.')}
+        </div>`;
     }
     if (report.reused > 0) {
-        recommendations.push(`<div class="report-rec-item text-danger" style="color:#e74c3c; margin-top:8px;">🔄 ${t('report_recommendation_reused', { count: report.reused }) || (report.reused + ' passwords are reused across accounts.')}</div>`);
+        recContainer.innerHTML += `<div class="report-rec-item" style="display:flex; align-items:center; gap:8px; padding: 12px; background: rgba(231,76,60,0.1); border: 1px solid rgba(231,76,60,0.2); border-radius: 8px; margin-bottom: 8px; color: #e74c3c; font-size: 13px;">
+            <div style="width: 8px; height: 8px; border-radius: 50%; background: #e74c3c; box-shadow: 0 0 8px #e74c3c;"></div>
+            ${t('report_recommendation_reused', { count: report.reused }) || (report.reused + ' reused passwords found.')}
+        </div>`;
     }
     if (report.weak === 0 && report.reused === 0) {
-        recommendations.push(`<div class="report-rec-item text-success" style="color:#22c55e; margin-top:8px;">✅ ${t('report_recommendation_good') || 'Your passwords are in good shape!'}</div>`);
+        recContainer.innerHTML += `<div class="report-rec-item" style="display:flex; align-items:center; gap:8px; padding: 12px; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.2); border-radius: 8px; margin-bottom: 8px; color: #22c55e; font-size: 13px;">
+            <div style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px #22c55e;"></div>
+            ${t('report_recommendation_good') || 'Your vault is in perfect shape!'}
+        </div>`;
     }
 
-    recContainer.innerHTML = recommendations.join('');
     showScreen('report-detail-screen');
 }
 
@@ -3665,7 +3573,19 @@ function renderReportsList() {
     if (!container) return;
     container.innerHTML = '';
 
-    if (reports.length === 0) {
+    const searchInput = document.getElementById('reports-search-input');
+    const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+
+    const localeStr = currentLanguage === 'de' ? 'de-DE' : currentLanguage === 'es' ? 'es-ES' : currentLanguage === 'fr' ? 'fr-FR' : 'en-US';
+    const dateOptions = { year: 'numeric', month: 'long' };
+
+    const filtered = reports.filter(report => {
+        const reportDate = new Date(report.date);
+        const formattedDate = reportDate.toLocaleDateString(localeStr, dateOptions).toLowerCase();
+        return formattedDate.includes(searchTerm);
+    });
+
+    if (filtered.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
                 <p>${t('reports_empty') || 'No reports saved yet.'}</p>
@@ -3675,25 +3595,22 @@ function renderReportsList() {
         return;
     }
 
-    reports.forEach((report) => {
+    filtered.forEach((report) => {
         const card = document.createElement('div');
         card.className = 'password-card';
 
         const reportDate = new Date(report.date);
-        const localeStr = currentLanguage === 'de' ? 'de-DE' : currentLanguage === 'es' ? 'es-ES' : currentLanguage === 'fr' ? 'fr-FR' : 'en-US';
-        const dateOptions = { year: 'numeric', month: 'long' };
         const formattedDate = reportDate.toLocaleDateString(localeStr, dateOptions);
 
         card.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
-                <span class="password-card-name" style="font-weight:bold;">${escapeHtml(formattedDate)}</span>
-                <span style="font-size:12px; color:var(--color-text-muted);">${t('report_passwords_total') || 'Total Passwords'}: ${report.total}</span>
+            <div class="password-card-icon" style="background:#282828; display: flex; align-items: center; justify-content: center; margin-right: 12px; width: 32px; height: 32px; border-radius: 8px;">
+                <img src="../icons_new/sidebar/report_withe.svg" alt="Report" style="width:20px;height:20px;">
+            </div>
+            <div style="display:flex; flex:1; align-items: center;">
+                <span class="password-card-name" style="font-weight:600; color:var(--color-text);">${escapeHtml(formattedDate)}</span>
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
-                <span class="badge" style="background:#ff8c00; color:white; padding:2px 6px; border-radius:4px; font-size:11px;">${t('dashboard_score_label') || 'Score'}: ${report.score}</span>
-                <span class="password-card-arrow">
-                    <img src="../logos/right.png" alt=">">
-                </span>
+                <span style="color:var(--color-text-secondary); font-size:13px; font-weight:600; margin-right:4px;">${report.score} / 100</span>
             </div>
         `;
 
@@ -3742,7 +3659,7 @@ function renderTrashList() {
 
         const card = document.createElement('div');
         card.className = 'trash-card';
-        
+
         const badgeClass = daysLeft <= 7 ? 'danger' : 'warn';
 
         let displayName = item.app || item.name || '';
@@ -3911,8 +3828,8 @@ function renderIdsList() {
     container.innerHTML = '';
 
     const searchTerm = document.getElementById('ids-search-input').value.toLowerCase();
-    const filtered = ids.filter(item => 
-        item.name.toLowerCase().includes(searchTerm) || 
+    const filtered = ids.filter(item =>
+        item.name.toLowerCase().includes(searchTerm) ||
         (item.number && item.number.toLowerCase().includes(searchTerm))
     );
 
@@ -3930,7 +3847,7 @@ function renderIdsList() {
         const index = ids.indexOf(idItem);
         const card = document.createElement('div');
         card.className = 'password-card';
-        
+
         let warningBadge = '';
         if (idItem.expiryDate) {
             const expiry = new Date(idItem.expiryDate);
@@ -3939,7 +3856,7 @@ function renderIdsList() {
             today.setHours(0,0,0,0);
             const timeDiff = expiry.getTime() - today.getTime();
             const daysLeft = Math.ceil(timeDiff / (24 * 60 * 60 * 1000));
-            
+
             if (daysLeft < 0) {
                 warningBadge = `<span class="badge badge-danger" style="background:#e74c3c; color:white; padding:2px 6px; border-radius:4px; font-size:11px;">${t('id_expired')}</span>`;
             } else if (daysLeft <= 30) {
@@ -3950,18 +3867,15 @@ function renderIdsList() {
             }
         }
 
-        const typeLabel = t(`id_type_${idItem.type.replace('drivers_license', 'drivers')}`) || idItem.type;
-
         card.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
-                <span class="password-card-name" style="font-weight:bold;">${escapeHtml(idItem.name)}</span>
-                <span style="font-size:12px; color:var(--color-text-muted);">${escapeHtml(typeLabel)} ${idItem.number ? '• ' + escapeHtml(idItem.number) : ''}</span>
+            <div class="password-card-icon" style="background:#282828;">
+                <img src="icons_new/id_withe1.svg" alt="ID" style="width:20px;height:20px;">
+            </div>
+            <div style="display:flex; flex:1; align-items: center;">
+                <span class="password-card-name" style="font-weight:600; color:var(--color-text);">${escapeHtml(idItem.name)}</span>
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
                 ${warningBadge}
-                <span class="password-card-arrow">
-                    <img src="../logos/right.png" alt=">">
-                </span>
             </div>
         `;
 
@@ -4054,7 +3968,7 @@ async function handleSaveId() {
 
 async function handleDeleteId() {
     if (currentEditIdIndex === null) return;
-    
+
     showConfirmationModal(
         'modal_delete_id_title',
         'modal_delete_id_desc',
@@ -4067,7 +3981,7 @@ async function handleDeleteId() {
 
             const resultIds = await window.api.saveIds({ password: currentPassword, ids });
             const resultPwd = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
-            
+
             if (resultIds.success && resultPwd.success) {
                 showToast('id_deleted', 'success');
                 showIdsScreen();
@@ -4187,8 +4101,8 @@ function renderDocumentsList() {
     container.innerHTML = '';
 
     const searchTerm = document.getElementById('docs-search-input').value.toLowerCase();
-    const filtered = documents.filter(item => 
-        item.name.toLowerCase().includes(searchTerm) || 
+    const filtered = documents.filter(item =>
+        item.name.toLowerCase().includes(searchTerm) ||
         (item.description && item.description.toLowerCase().includes(searchTerm))
     );
 
@@ -4218,15 +4132,14 @@ function renderDocumentsList() {
         const fileCount = doc.files ? doc.files.length : 0;
 
         card.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
-                <span class="password-card-name" style="font-weight:bold;">${escapeHtml(doc.name)}</span>
-                <span style="font-size:12px; color:var(--color-text-muted);">${escapeHtml(doc.description || '')}</span>
+            <div class="password-card-icon" style="background:#282828; display: flex; align-items: center; justify-content: center; margin-right: 12px; width: 32px; height: 32px; border-radius: 8px;">
+                <img src="icons_new/documents.svg" alt="Doc" style="width:20px;height:20px;">
+            </div>
+            <div style="display:flex; flex:1; align-items: center;">
+                <span class="password-card-name" style="font-weight:600; color:var(--color-text);">${escapeHtml(doc.name)}</span>
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
-                <span class="badge badge-secondary" style="background:#555; color:white; padding:2px 6px; border-radius:4px; font-size:11px;">${fileCount} ${fileCount === 1 ? 'file' : 'files'} (${sizeStr})</span>
-                <span class="password-card-arrow">
-                    <img src="../logos/right.png" alt=">">
-                </span>
+                <span style="color:var(--color-text-secondary); font-size:13px; font-weight:600;">${fileCount} File${fileCount !== 1 ? 's' : ''}</span>
             </div>
         `;
 
@@ -4323,7 +4236,7 @@ async function handleDeleteDocument() {
 
             const resultDocs = await window.api.saveDocuments({ password: currentPassword, documents });
             const resultPwd = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
-            
+
             if (resultDocs.success && resultPwd.success) {
                 showToast('doc_deleted', 'success');
                 showDocumentsScreen();
@@ -4432,14 +4345,32 @@ function showCardsScreen() {
     renderCardsList();
 }
 
+function getCardBrand(cardItem) {
+    if (cardItem.brand) {
+        const b = cardItem.brand.toLowerCase();
+        if (b.includes('visa')) return 'visa';
+        if (b.includes('master')) return 'mastercard';
+        if (b.includes('amex') || b.includes('american')) return 'amex';
+    }
+    const num = (cardItem.cardNumber || '').replace(/[\s-]/g, '');
+    if (/^4/.test(num)) return 'visa';
+    if (/^(5[1-5]|2[2-7])/.test(num)) return 'mastercard';
+    if (/^3[47]/.test(num)) return 'amex';
+    const name = (cardItem.name || '').toLowerCase();
+    if (name.includes('visa')) return 'visa';
+    if (name.includes('mastercard') || name.includes('master')) return 'mastercard';
+    if (name.includes('amex') || name.includes('american express')) return 'amex';
+    return 'generic';
+}
+
 function renderCardsList() {
     const container = document.getElementById('cards-list');
     if (!container) return;
     container.innerHTML = '';
 
     const searchTerm = document.getElementById('cards-search-input').value.toLowerCase();
-    const filtered = cards.filter(c => 
-        c.name.toLowerCase().includes(searchTerm) || 
+    const filtered = cards.filter(c =>
+        c.name.toLowerCase().includes(searchTerm) ||
         (c.cardholderName && c.cardholderName.toLowerCase().includes(searchTerm)) ||
         (c.cardNumber && c.cardNumber.includes(searchTerm))
     );
@@ -4469,22 +4400,23 @@ function renderCardsList() {
             }
         }
 
-        const expiryStr = (cardItem.expiryMonth && cardItem.expiryYear) 
-            ? `${cardItem.expiryMonth.padStart(2, '0')}/${cardItem.expiryYear}` 
+        const expiryStr = (cardItem.expiryMonth && cardItem.expiryYear)
+            ? `${cardItem.expiryMonth.padStart(2, '0')}/${cardItem.expiryYear}`
             : '';
 
-        const brandLabel = cardItem.brand ? cardItem.brand.toUpperCase() : '';
+        const brand = getCardBrand(cardItem);
+        const brandIconSrc = 'icons_new/cards/' + brand + '.svg';
+        const brandLabel = brand.toUpperCase();
 
         card.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
-                <span class="password-card-name" style="font-weight:bold;">${escapeHtml(cardItem.name)}</span>
-                <span style="font-size:12px; color:var(--color-text-muted);">${escapeHtml(brandLabel)} ${escapeHtml(maskedNumber)}</span>
+            <div class="card-brand-logo" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; margin-right: 12px;">
+                <img src="${brandIconSrc}" alt="${escapeHtml(brand)}" style="width: 28px; height: 28px; object-fit: contain;">
+            </div>
+            <div style="display:flex; flex:1; align-items: center;">
+                <span class="password-card-name" style="font-weight:600; color:var(--color-text);">${escapeHtml(cardItem.name)}</span>
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
-                ${expiryStr ? `<span class="badge badge-secondary" style="background:#555; color:white; padding:2px 6px; border-radius:4px; font-size:11px;">${expiryStr}</span>` : ''}
-                <span class="password-card-arrow">
-                    <img src="../logos/right.png" alt=">">
-                </span>
+                ${expiryStr ? `<span style="color:var(--color-text-secondary); font-size:13px; margin-right:4px;">${expiryStr}</span>` : ''}
             </div>
         `;
 
@@ -4592,7 +4524,7 @@ async function handleDeleteCard() {
 
             const resultCards = await window.api.saveCards({ password: currentPassword, cards });
             const resultPwd = await window.api.savePasswords({ password: currentPassword, passwords, folders, trash });
-            
+
             if (resultCards.success && resultPwd.success) {
                 showToast('card_deleted', 'success');
                 showCardsScreen();
@@ -4632,4 +4564,260 @@ function setupDragAndDrop() {
             }
         });
     }
+}
+
+function setupSyncEventListeners() {
+
+    document.querySelectorAll('.sync-direction-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.sync-direction-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            syncDirection = btn.dataset.direction;
+        });
+    });
+
+    const syncStartBtn = document.getElementById('sync-start-btn');
+    if (syncStartBtn) {
+        syncStartBtn.addEventListener('click', handleSyncStart);
+    }
+
+    const syncConnectBtn = document.getElementById('sync-connect-btn');
+    if (syncConnectBtn) {
+        syncConnectBtn.addEventListener('click', () => {
+            document.getElementById('sync-pin-input').classList.remove('hidden');
+            document.getElementById('sync-pin-display').classList.add('hidden');
+            document.getElementById('sync-pin-field').value = '';
+            document.getElementById('sync-pin-field').focus();
+        });
+    }
+
+    const syncConnectConfirm = document.getElementById('sync-connect-confirm-btn');
+    if (syncConnectConfirm) {
+        syncConnectConfirm.addEventListener('click', handleSyncConnect);
+    }
+
+    const syncConnectCancel = document.getElementById('sync-connect-cancel-btn');
+    if (syncConnectCancel) {
+        syncConnectCancel.addEventListener('click', () => {
+            document.getElementById('sync-pin-input').classList.add('hidden');
+        });
+    }
+
+    const syncCancelBtn = document.getElementById('sync-cancel-btn');
+    if (syncCancelBtn) {
+        syncCancelBtn.addEventListener('click', async () => {
+            await window.api.syncStopServer();
+            document.getElementById('sync-pin-display').classList.add('hidden');
+            updateSyncStatusDisplay('idle');
+        });
+    }
+
+    const autoToggle = document.getElementById('sync-auto-toggle');
+    if (autoToggle) {
+        autoToggle.addEventListener('change', async () => {
+            if (autoToggle.checked) {
+                const result = await window.api.syncEnableAuto();
+                if (!result.success) {
+                    autoToggle.checked = false;
+                    showToast(result.error || t('msg_sync_conn_failed'), 'error', true);
+                } else {
+
+                    try {
+                        const sr = await window.api.loadSettings();
+                        const settings = (sr.success && sr.settings) ? sr.settings : {};
+                        settings.autoSync = true;
+                        await window.api.saveSettings(settings);
+                    } catch(e){}
+                    showToast('msg_sync_auto_enabled', 'success');
+                }
+            } else {
+                await window.api.syncDisableAuto();
+                try {
+                    const sr = await window.api.loadSettings();
+                    const settings = (sr.success && sr.settings) ? sr.settings : {};
+                    settings.autoSync = false;
+                    await window.api.saveSettings(settings);
+                } catch(e){}
+                showToast('msg_sync_auto_disabled', 'info');
+            }
+        });
+    }
+
+    const pinField = document.getElementById('sync-pin-field');
+    if (pinField) {
+        pinField.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handleSyncConnect();
+        });
+
+        pinField.addEventListener('input', () => {
+            pinField.value = pinField.value.replace(/\D/g, '').substring(0, 6);
+        });
+    }
+
+    if (window.api.onSyncStatusUpdate) {
+        window.api.onSyncStatusUpdate((state) => {
+            syncCurrentState = state;
+            updateSyncStatusDisplay(state);
+        });
+    }
+}
+
+async function handleSyncStart() {
+    const result = await window.api.syncStartServer();
+    if (!result.success) {
+        showToast(result.error || t('msg_sync_conn_failed'), 'error', true);
+        return;
+    }
+
+    const pinDisplay = document.getElementById('sync-pin-display');
+    const pinCode = document.getElementById('sync-pin-code');
+    const pinInput = document.getElementById('sync-pin-input');
+
+    if (pinDisplay) pinDisplay.classList.remove('hidden');
+    if (pinInput) pinInput.classList.add('hidden');
+    if (pinCode) pinCode.textContent = result.pin;
+
+    updateSyncStatusDisplay('waiting');
+}
+
+async function handleSyncConnect() {
+    const pinField = document.getElementById('sync-pin-field');
+    const pin = pinField ? pinField.value.trim() : '';
+
+    if (pin.length !== 6 || !/^\d+$/.test(pin)) {
+        showToast('msg_sync_pin_digits', 'error');
+        return;
+    }
+
+    updateSyncStatusDisplay('connecting');
+
+    try {
+        const result = await window.api.syncConnect({
+            pin,
+            direction: syncDirection
+        });
+
+        if (result.success) {
+            document.getElementById('sync-pin-input').classList.add('hidden');
+            updateSyncStatusDisplay('complete');
+            showToast('msg_sync_success', 'success');
+
+            const autoToggle = document.getElementById('sync-auto-toggle');
+            if (autoToggle && autoToggle.checked && result.deviceName) {
+                await window.api.syncSavePair({
+                    deviceId: result.deviceId || result.deviceName,
+                    deviceName: result.deviceName,
+                    lastSync: Date.now(),
+                    createdAt: Date.now()
+                });
+                loadSyncDevices();
+            }
+
+            if (syncDirection !== 'push') {
+                const loadResult = await window.api.loadPasswords({ password: currentPassword });
+                if (loadResult.success) {
+                    passwords = loadResult.data;
+                    folders = loadResult.folders;
+                    trash = loadResult.trash || [];
+                }
+                const idsResult = await window.api.loadIds({ password: currentPassword });
+                if (idsResult.success) ids = idsResult.data || [];
+                const docsResult = await window.api.loadDocuments({ password: currentPassword });
+                if (docsResult.success) documents = docsResult.data || [];
+                const cardsResult = await window.api.loadCards({ password: currentPassword });
+                if (cardsResult.success) cards = cardsResult.data || [];
+                const reportsResult = await window.api.loadReports({ password: currentPassword });
+                if (reportsResult.success) reports = reportsResult.data || [];
+            }
+
+            const lastSyncEl = document.getElementById('sync-last-display');
+            if (lastSyncEl) lastSyncEl.textContent = new Date().toLocaleString();
+
+            setTimeout(() => updateSyncStatusDisplay('idle'), 3000);
+        } else {
+            updateSyncStatusDisplay('error');
+            showToast(result.error || t('msg_sync_failed'), 'error', true);
+            setTimeout(() => updateSyncStatusDisplay('idle'), 3000);
+        }
+    } catch (e) {
+        updateSyncStatusDisplay('error');
+        showToast('msg_sync_conn_failed', 'error');
+        setTimeout(() => updateSyncStatusDisplay('idle'), 3000);
+    }
+}
+
+function updateSyncStatusDisplay(state) {
+    const statusEl = document.getElementById('sync-status-display');
+    if (!statusEl) return;
+
+    const stateMap = {
+        'idle': { key: 'sync_status_idle', fallback: 'Idle', color: 'var(--color-text-muted)' },
+        'waiting': { key: 'sync_status_waiting', fallback: 'Waiting for connection...', color: 'var(--color-accent)' },
+        'connecting': { key: 'sync_status_connecting', fallback: 'Connecting...', color: 'var(--color-accent)' },
+        'pairing': { key: 'sync_status_pairing', fallback: 'Pairing...', color: 'var(--color-accent)' },
+        'syncing': { key: 'sync_status_syncing', fallback: 'Syncing...', color: 'var(--color-accent)' },
+        'auto-syncing': { key: 'sync_status_auto_syncing', fallback: 'Auto-syncing...', color: 'var(--color-accent)' },
+        'complete': { key: 'sync_status_complete', fallback: 'Success ✓', color: '#4caf50' },
+        'error': { key: 'sync_status_error', fallback: 'Error ✗', color: 'var(--color-danger)' }
+    };
+
+    const info = stateMap[state] || stateMap['idle'];
+    statusEl.textContent = t(info.key) || info.fallback;
+    statusEl.style.color = info.color;
+}
+
+async function loadSyncDevices() {
+    const listEl = document.getElementById('sync-devices-list');
+    if (!listEl) return;
+
+    try {
+        const result = await window.api.syncGetPairs();
+        if (!result.success || !result.pairs || result.pairs.length === 0) {
+            listEl.innerHTML = `<p style="color: var(--color-text-muted); font-size: 0.85rem; padding: 12px;">${t('settings_sync_no_devices')}</p>`;
+            return;
+        }
+
+        listEl.innerHTML = '';
+        result.pairs.forEach(pair => {
+            const item = document.createElement('div');
+            item.className = 'sync-device-item';
+
+            const lastSync = pair.lastSync ? new Date(pair.lastSync).toLocaleString() : '-';
+            const daysLeft = pair.lastSync ? Math.max(0, 30 - Math.floor((Date.now() - pair.lastSync) / (24 * 60 * 60 * 1000))) : 0;
+            const lastSyncPrefix = t('settings_sync_last_sync_prefix') || 'Last Sync:';
+            const daysLeftText = t('settings_sync_days_left', { days: daysLeft });
+            const disconnectText = t('settings_sync_disconnect') || 'Disconnect';
+
+            item.innerHTML = `
+                <div class="sync-device-info">
+                    <div class="sync-device-name">💻 ${pair.deviceName || pair.deviceId}</div>
+                    <div class="sync-device-last-sync">${lastSyncPrefix} ${lastSync} (${daysLeftText})</div>
+                </div>
+                <button class="sync-device-remove" data-device-id="${pair.deviceId}">${disconnectText}</button>
+            `;
+
+            item.querySelector('.sync-device-remove').addEventListener('click', async () => {
+                await window.api.syncRemovePair(pair.deviceId);
+                showToast('msg_sync_device_unlinked', 'info');
+                loadSyncDevices();
+            });
+
+            listEl.appendChild(item);
+        });
+    } catch (e) {
+        listEl.innerHTML = `<p style="color: var(--color-text-muted); font-size: 0.85rem; padding: 12px;">${t('settings_sync_no_devices')}</p>`;
+    }
+}
+
+async function initSyncSettings() {
+    updateSyncStatusDisplay(syncCurrentState);
+    loadSyncDevices();
+
+    try {
+        const sr = await window.api.loadSettings();
+        if (sr.success && sr.settings && sr.settings.autoSync) {
+            const toggle = document.getElementById('sync-auto-toggle');
+            if (toggle) toggle.checked = true;
+        }
+    } catch(e){}
 }

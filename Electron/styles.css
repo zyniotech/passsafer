@@ -1,17 +1,21 @@
 /* Farben */
 :root {
-    --color-bg: #2d2d2d;
-    --color-dark: #1a1a1a;
+    --color-trash-border: #C9210F;
+    --color-bg: #1E1E1E;
+    --color-dark: #282828;
+    --color-card-bg: #282828;
     --color-accent: #ff8c00;
     --color-accent-hover: #ff9f26;
-    --color-text: #e0e0e0;
-    --color-text-secondary: #888;
-    --color-text-muted: #666;
-    --color-border: #404040;
-    --color-icon-bg: #4a4a4a;
+    --color-text: #E0E0E0;
+    --color-text-secondary: #A0A0A0;
+    --color-text-muted: #A0A0A0;
+    --color-border: #3E3E3E;
+    --color-icon-bg: #1E1E1E;
     --color-danger: #e74c3c;
     --color-danger-hover: #c0392b;
-    --color-success: #27ae60;
+    --color-success: #2ECC71;
+    --color-warning: #D5B500;
+    --color-button-bg: #3E3E3E;
 
     --transition-speed: 0.2s;
     --border-radius: 8px;
@@ -30,7 +34,7 @@
 }
 
 body {
-    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Google Sans Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: var(--color-bg);
     color: var(--color-text);
     overflow: hidden;
@@ -38,7 +42,7 @@ body {
 }
 
 body, input, button, select, textarea {
-    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Google Sans Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* Screens */
@@ -211,6 +215,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .button.secondary {
     background-color: var(--color-border);
     color: var(--color-text);
+    border: 1px solid transparent;
 }
 
 .button.secondary:hover {
@@ -241,36 +246,37 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .select-selected:hover {
-    border-color: var(--color-accent);
+    border-color: #b3b3b3D9;
 }
 
 .select-selected:focus,
 .select-selected.select-arrow-active {
     outline: none;
-    border-color: var(--color-accent) !important;
-    box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.25) !important;
+    border-color: #b3b3b3D9 !important;
+    box-shadow: none !important;
 }
 
 .select-selected:after {
     content: "";
-    width: 0;
-    height: 0;
-    border: 5px solid transparent;
-    border-color: var(--color-accent) transparent transparent transparent;
-    margin-left: 10px;
-    margin-top: 4px;
+    width: 16px;
+    height: 16px;
+    background-image: url("../icons_new/drop_down_withe.svg");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    border: none;
+    margin-left: auto;
     transition: transform 0.2s;
 }
 
 .select-selected.select-arrow-active:after {
-    border-color: transparent transparent var(--color-accent) transparent;
-    margin-top: -4px;
+    transform: rotate(180deg);
 }
 
 .select-items {
     position: absolute;
     background-color: var(--color-dark);
-    border: 1px solid var(--color-accent);
+    border: 1px solid var(--color-border);
     border-radius: var(--border-radius);
     top: 105%;
     left: 0;
@@ -279,7 +285,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     max-height: 220px;
     overflow: hidden;
     overflow-y: auto;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 140, 0, 0.2);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
 
 .select-hide {
@@ -300,9 +306,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .select-items div:hover,
 .same-as-selected {
-    background-color: rgba(255, 140, 0, 0.15) !important;
-    outline: 2px solid var(--color-accent);
-    outline-offset: -2px;
+    background-color: transparent !important;
+    outline: 1px solid var(--color-focus);
+    outline-offset: -1px;
     color: #ffffff !important;
 }
 
@@ -397,11 +403,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .icon-button {
-    background-color: var(--color-icon-bg);
-    border: none;
+    background-color: #282828;
+    border: 1px solid #3E3E3E;
     width: 40px;
     height: 40px;
-    border-radius: var(--border-radius);
+    border-radius: 50%;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -533,11 +539,11 @@ input:focus, select:focus, textarea:focus {
 
 /* Back Container */
 .back-container {
-    padding: 16px 20px;
-    background-color: var(--color-dark);
+    padding: 16px 32px;
+    background-color: transparent;
     display: flex;
-    justify-content: flex-start;
-    /* Align left */
+    justify-content: space-between;
+    align-items: center;
 }
 
 #back-btn {
@@ -891,13 +897,18 @@ input:focus, select:focus, textarea:focus {
 /* Remove default last-child styling for settings-option */
 /* Instead use specific class for danger actions */
 .settings-option.danger-option {
-    background-color: var(--color-danger);
-    border-color: var(--color-danger);
-    color: white;
+    background-color: rgba(231, 76, 60, 0.1) !important;
+    border: 1px solid var(--color-danger) !important;
+    color: var(--color-danger) !important;
+}
+.settings-section-title[data-i18n="settings_danger"] {
+    color: var(--color-danger) !important;
 }
 
 .settings-option.danger-option:hover {
-    background-color: var(--color-danger-hover);
+    background-color: rgba(231, 76, 60, 0.1) !important;
+    border: 1px solid var(--color-danger) !important;
+    color: var(--color-danger) !important;
 }
 
 .settings-option.danger-option img {
@@ -1404,11 +1415,22 @@ textarea {
     border-top: 1px solid var(--color-border);
 }
 
+.sidebar-divider {
+    height: 1px;
+    background-color: var(--color-border);
+    margin: 8px 14px;
+}
+
 .nav-item {
     display: flex;
     align-items: center;
+    justify-content: flex-start;
     gap: 12px;
-    padding: 11px 14px;
+    padding-left: 24px;
+    padding-right: 0;
+    height: 42px;
+    width: 208px;
+    border: 1px solid transparent;
     border-radius: 8px;
     cursor: pointer;
     color: var(--color-text-secondary);
@@ -1417,28 +1439,23 @@ textarea {
     font-weight: 500;
     position: relative;
     user-select: none;
+    box-sizing: border-box;
 }
 
 .nav-item:hover {
-    background: rgba(255, 140, 0, 0.08);
+    background-color: #282420;
+    border-color: rgba(255, 159, 28, 0.2);
     color: var(--color-text);
 }
 
 .nav-item.active {
-    background: rgba(255, 140, 0, 0.12);
+    background-color: #282420;
+    border-color: rgba(255, 159, 28, 0.2);
     color: var(--color-accent);
 }
 
 .nav-item.active::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3px;
-    height: 60%;
-    background: var(--color-accent);
-    border-radius: 0 3px 3px 0;
+    display: none !important;
 }
 
 .nav-icon {
@@ -1655,11 +1672,7 @@ textarea {
     transition: all 0.2s;
 }
 
-.quick-action-btn:hover {
-    border-color: var(--color-accent);
-    background: rgba(255, 140, 0, 0.06);
-    transform: translateY(-1px);
-}
+
 
 .qa-icon {
     font-size: 18px;
@@ -1750,9 +1763,7 @@ textarea {
     transition: all 0.2s;
 }
 
-.trash-card:hover {
-    border-color: var(--color-accent);
-}
+
 
 .trash-card-info {
     flex: 1;
@@ -2241,16 +2252,18 @@ textarea {
     align-items: center;
     background: var(--color-dark);
     border: 1px solid var(--color-border);
-    border-radius: 12px;
+    border-radius: 20px;
     padding: 0 16px;
-    height: 48px;
+    width: 590px;
+    height: 40px;
+    margin: 0 auto;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
     transition: all var(--transition-speed);
 }
 
 .dashboard-search-box:focus-within {
-    border-color: var(--color-accent);
-    box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.25), 0 8px 24px rgba(0, 0, 0, 0.35);
+    border-color: #b3b3b3D9;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .dashboard-search-icon {
@@ -2293,12 +2306,13 @@ textarea {
 .dashboard-search-dropdown {
     position: absolute;
     top: calc(100% + 8px);
-    left: 0;
-    right: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 590px;
     background: #1c1c1c;
-    border: 1px solid var(--color-accent);
+    border: 1px solid #b3b3b3D9;
     border-radius: 12px;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 140, 0, 0.25);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7);
     max-height: 400px;
     overflow-y: auto;
     z-index: 1000;
@@ -2407,4 +2421,1260 @@ textarea {
     color: var(--color-text-muted);
     font-size: 13px;
 }
-
+
+/* ============================================
+   UI REDESIGN OVERRIDES
+   ============================================ */
+
+/* Add --color-focus to root (subtle hover border) */
+:root {
+    --color-trash-border: #C9210F;
+    --color-focus: #E0E0E0;
+}
+
+/* ---- workspace-header ---- */
+.workspace-header {
+    height: 80px;
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: transparent;
+    border: none;
+    flex-shrink: 0;
+}
+
+/* ---- search-container: pill style, centered, wider ---- */
+.workspace-header .search-container {
+    flex: 1;
+    max-width: 590px;
+    height: 40px;
+    background: var(--color-dark);
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 10px;
+    position: static;
+}
+
+.workspace-header .search-container .search-input {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    flex: 1;
+    width: 100%;
+    color: var(--color-text);
+    font-size: 14px;
+    order: 0;
+}
+
+.workspace-header .search-container .search-input:focus {
+    outline: none;
+    border: none;
+    box-shadow: none;
+}
+
+.workspace-header .search-container .search-icon {
+    position: static;
+    width: 16px;
+    height: 16px;
+    opacity: 0.4;
+    order: 1;
+    flex-shrink: 0;
+}
+
+.workspace-header .search-container:focus-within {
+    border-color: #b3b3b3D9;
+    box-shadow: none;
+}
+
+/* ---- icon-button in workspace-header: circular ---- */
+.workspace-header .icon-button {
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+}
+
+/* ---- Hide old app-header for converted screens ---- */
+#main-screen .app-header,
+#ids-screen .app-header,
+#documents-screen .app-header,
+#cards-screen .app-header,
+#reports-screen .app-header,
+#trash-screen .app-header,
+#audit-screen .app-header,
+#import-screen .app-header,
+#export-screen .app-header,
+#csv-import-screen .app-header {
+    display: none !important;
+}
+
+/* ---- header-title: normal text color, not accent ---- */
+.header-title {
+    color: var(--color-text) !important;
+}
+
+/* ---- Remove orange from card hover states ---- */
+.password-card:hover,
+.recent-card:hover,
+.folder-card:hover,
+.id-card:hover,
+.document-card:hover {
+    border: 1px solid #b3b3b3D9 !important;
+    background-color: var(--color-dark) !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* ---- Remove orange from icon-button hover ---- */
+.icon-button {
+    border: 1px solid transparent;
+}
+.icon-button:hover {
+    background-color: transparent !important;
+    border: 1px solid #b3b3b3D9 !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* ---- Remove orange from select hover ---- */
+.select-selected:hover {
+    border: 1px solid #b3b3b3D9 !important;
+    background-color: transparent !important;
+}
+
+/* ---- Remove orange from audit result card hover ---- */
+.audit-result-card:hover {
+    border: 1px solid #b3b3b3D9 !important;
+    background-color: var(--color-dark) !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* ---- Remove orange from settings option hover ---- */
+.settings-option:hover {
+    border: 1px solid #b3b3b3D9 !important;
+    background-color: transparent !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* ---- Remove orange focus from form inputs ---- */
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border: 1px solid #b3b3b3D9 !important;
+    outline: none;
+}
+
+/* ---- Remove orange from other interactive elements ---- */
+.select-items div:hover {
+    outline: none !important;
+    border: 1px solid #b3b3b3D9 !important;
+    border-radius: 4px;
+    background-color: transparent !important;
+}
+.button.secondary:hover {
+    border: 1px solid #b3b3b3D9 !important;
+    background-color: transparent !important;
+}
+
+
+/* ---- Remove orange from search-input focus in old main-controls ---- */
+.search-input:focus {
+    border-color: #b3b3b3D9 !important;
+}
+
+/* ---- Padding for content below workspace-header ---- */
+.password-list {
+    padding: 0 32px 32px;
+}
+.password-list.folder-active,
+#trash-list {
+    padding-top: 29px !important;
+}
+
+#empty-trash-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: var(--color-danger);
+    border: 1px solid #C9210F;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    transition: all var(--transition-speed);
+}
+#empty-trash-btn:hover {
+    background-color: var(--color-danger-hover);
+}
+
+/* ---- Audit screen content padding ---- */
+#audit-screen .settings-content {
+    padding: 24px 32px;
+}
+
+/* ---- Import / Export / CSV form padding ---- */
+#import-screen .form-container,
+#export-screen .form-container,
+#csv-import-screen .form-container {
+    padding: 24px 32px;
+}
+
+/* ---- Button Overrides ---- */
+.button, .button.primary, .button.secondary, .button.danger, .button.success {
+    background-color: var(--color-button-bg) !important;
+    border: 1px solid transparent !important;
+    box-sizing: border-box !important;
+    color: var(--color-text) !important;
+    font-size: 14px !important;
+    font-family: 'Google Sans Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    border-radius: var(--border-radius) !important;
+}
+
+/* Except trash button which has a red border */
+#empty-trash-btn {
+    border: 1px solid var(--color-trash-border) !important;
+}
+
+/* --- AUTOMATED OVERRIDES --- */
+
+/* Dashboard Anpassungen */
+#dashboard-greeting {
+    color: #E0E0E0 !important;
+    font-size: 26px !important;
+}
+
+#dashboard-date {
+    color: #A0A0A0 !important;
+    font-size: 14px !important;
+}
+
+.ring-score {
+    color: #FF8C00 !important;
+    font-size: 26px !important;
+}
+
+.ring-text {
+    color: #A0A0A0 !important;
+    font-size: 11px !important;
+}
+
+.stat-value {
+    color: #E0E0E0 !important;
+    font-size: 20px !important;
+}
+
+.quick-actions-title, .dashboard-section-title {
+    color: #E0E0E0 !important;
+    font-size: 14px !important;
+}
+
+.quick-action-btn, .quick-action-btn span {
+    color: #E0E0E0 !important;
+    font-size: 14px !important;
+}
+
+/* Listen */
+.password-card, .folder-card, .id-card, .document-card, .recent-card, .trash-card, .card-card {
+    margin-bottom: 8px !important;
+    background-color: #282828 !important;
+    border: 1px solid #3E3E3E !important;
+    border-radius: 8px !important;
+}
+
+.password-card-name, .folder-card-name, .id-card-name, .document-card-name, .card-card-name, .trash-card-name, .recent-card-name {
+    color: #E0E0E0 !important;
+    font-size: 14px !important;
+}
+
+.password-card-icon, .id-card-icon, .document-card-icon, .folder-card-icon, .card-card-icon, .trash-card-icon, .recent-card-icon {
+    width: 28px !important;
+    height: 28px !important;
+    background-color: transparent !important;
+}
+
+.password-card-icon img, .id-card-icon img, .document-card-icon img, .folder-card-icon img, .card-card-icon img, .trash-card-icon img, .recent-card-icon img {
+    width: 28px !important;
+    height: 28px !important;
+    object-fit: contain;
+}
+
+/* Watchtower */
+#audit-filters {
+    display: none !important;
+}
+
+.audit-card-number {
+    font-size: 26px !important;
+}
+
+.audit-card-total .audit-card-number {
+    color: #E0E0E0 !important;
+}
+
+.audit-card-strong .audit-card-number {
+    color: #2ECC71 !important;
+}
+
+.audit-card-weak .audit-card-number, .audit-card-reused .audit-card-number {
+    color: #D5B500 !important;
+}
+
+.audit-card-leaked .audit-card-number {
+    color: #E74C3C !important;
+}
+
+/* Search Bar & Buttons */
+.workspace-header .search-container {
+    height: 40px !important;
+    width: 590px !important;
+    max-width: 590px !important;
+    border: 1px solid #3E3E3E !important;
+}
+
+.workspace-header {
+    gap: 18px !important;
+}
+
+/* Trash Button Red Border */
+#empty-trash-btn {
+    border: 1px solid var(--color-trash-border) !important;
+}
+
+/* Note-Box / Import / Export */
+.settings-info-box {
+    background-color: #282828 !important;
+    border: 1px solid #3E3E3E !important;
+}
+
+.settings-info-box p {
+    font-size: 10px !important;
+    color: #E0E0E0 !important;
+}
+
+#import-password, #export-password, #license-key-input, .form-group input, .form-group textarea {
+    background-color: #282828 !important;
+    border: 1px solid #3E3E3E !important;
+}
+
+#export-password {
+    height: 44px !important;
+}
+
+/* Settings */
+.settings-section, .settings-row, .settings-option, .settings-info-box {
+    background-color: transparent !important;
+    border: 1px solid #3E3E3E !important;
+}
+
+.settings-content, .settings-content * {
+    color: #E0E0E0;
+}
+
+.settings-content {
+    font-size: 14px;
+}
+
+.settings-section-title, .settings-row span {
+    color: #A0A0A0 !important;
+    font-size: 14px !important;
+}
+
+/* .workspace-header { justify-content: flex-start !important; } */
+
+/* ---- Watchtower Cards: clickable + active state ---- */
+
+
+.watchtower-card.active {
+    border-color: #b3b3b3D9 !important;
+    box-shadow: 0 0 0 1px var(--color-text);
+}
+
+/* ---- Audit card total: white number (not orange) ---- */
+.audit-card-total .audit-card-number {
+    color: #E0E0E0 !important;
+}
+
+/* ---- Final Fixes (Dashboard & Sidebar) ---- */
+.stat-card:hover {
+    border: 1px solid #b3b3b3D9 !important;
+    background-color: var(--color-dark) !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.dashboard-welcome {
+    text-align: center !important;
+}
+
+.nav-item {
+    margin: 0 auto !important;
+    /* justify-content: center !important; */
+    padding-left: 28px !important;
+}
+
+/* --- Watchtower Bento Design --- */
+.audit-summary.watchtower-bento {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    grid-template-rows: auto auto !important;
+    gap: 16px !important;
+    margin-bottom: 32px !important;
+}
+
+.watchtower-bento .audit-card {
+    background-color: var(--color-dark) !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 16px !important;
+    padding: 24px !important;
+    text-align: left !important;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s !important;
+    cursor: pointer !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    border-top-color: var(--color-border) !important; /* Override the color line */
+}
+
+.watchtower-bento .audit-card:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+}
+
+.watchtower-bento .audit-card.active {
+    /* No border color change */
+}
+
+.watchtower-bento .audit-card-number {
+    font-size: 36px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    margin-bottom: 12px !important;
+    letter-spacing: -0.02em !important;
+}
+
+.watchtower-bento .audit-card-label {
+    font-size: 14px !important;
+    color: var(--color-text-secondary) !important;
+    font-weight: 500 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+}
+
+/* Specific Bento Layout Cells */
+.watchtower-bento .audit-card-leaked {
+    grid-column: span 2 !important;
+    grid-row: span 2 !important;
+    background: linear-gradient(145deg, rgba(231, 76, 60, 0.1) 0%, rgba(231, 76, 60, 0.02) 100%) !important;
+    border-color: rgba(231, 76, 60, 0.2) !important;
+}
+.watchtower-bento .audit-card-leaked:hover {
+    border-color: rgba(231, 76, 60, 0.5) !important;
+}
+.watchtower-bento .audit-card-leaked .audit-card-number {
+    font-size: 56px !important;
+    color: #E74C3C !important;
+}
+.watchtower-bento .audit-card-leaked .audit-card-label {
+    font-size: 16px !important;
+    color: #E74C3C !important;
+}
+.watchtower-bento .audit-card-desc {
+    font-size: 13px !important;
+    color: rgba(231, 76, 60, 0.8) !important;
+    margin-top: 8px !important;
+}
+
+.watchtower-bento .audit-card-weak, 
+.watchtower-bento .audit-card-reused {
+    grid-column: span 1 !important;
+}
+
+.watchtower-bento .audit-card-strong, 
+.watchtower-bento .audit-card-total {
+    grid-column: span 1 !important;
+    background: transparent !important;
+}
+
+/* Colors for numbers based on app vars */
+.watchtower-bento .audit-card-total .audit-card-number { color: #E0E0E0 !important; }
+.watchtower-bento .audit-card-strong .audit-card-number { color: #2ECC71 !important; }
+.watchtower-bento .audit-card-weak .audit-card-number { color: #D5B500 !important; }
+.watchtower-bento .audit-card-reused .audit-card-number { color: #D5B500 !important; }
+
+@media (max-width: 900px) {
+    .audit-summary.watchtower-bento {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+
+/* --- Penpot Style Audit Result Cards --- */
+.audit-result-card {
+    border-radius: 8px !important;
+    background-color: #282828 !important;
+    border-width: 1px !important;
+    border-style: solid !important;
+    padding: 12px !important;
+}
+
+
+/* --- Fix for Audit Result Cards Height and Alignment --- */
+.audit-result-card {
+    height: 56px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding: 0 16px !important; /* adjust padding for fixed height */
+}
+.audit-result-header {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
+}
+.audit-result-app {
+    text-align: left !important;
+    flex-grow: 1 !important;
+}
+
+
+/* --- Fix for Sidebar Background --- */
+.sidebar {
+    background-color: #181818 !important;
+}
+
+
+/* --- Dashboard Bento Redesign --- */
+.dashboard-bento-hero {
+    display: grid !important;
+    grid-template-columns: 2fr 1fr !important;
+    gap: 16px !important;
+    margin-bottom: 16px !important;
+}
+
+.dashboard-stats-bento {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 16px !important;
+    margin-bottom: 28px !important;
+}
+
+.bento-card, .stat-bento {
+    background-color: var(--color-dark) !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 16px !important;
+    padding: 24px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+}
+
+.score-card {
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.quick-actions-inline {
+    display: flex !important;
+    gap: 12px !important;
+    margin-top: 24px !important;
+}
+
+.quick-actions-inline .quick-action-btn {
+    flex: 1 !important;
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 12px !important;
+    padding: 12px 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    color: var(--color-text) !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+
+.quick-actions-inline .quick-action-btn:hover {
+    border-color: #b3b3b3D9 !important;
+}
+
+.quick-actions-inline .qa-icon {
+    display: flex !important;
+    align-items: center !important;
+}
+
+.quick-actions-inline .qa-icon img {
+    width: 20px !important;
+    height: 20px !important;
+}
+
+/* Fix stat bento sizing */
+.stat-bento {
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    padding: 24px !important;
+    gap: 12px !important;
+}
+
+.stat-bento .stat-icon {
+    margin-bottom: 8px !important;
+}
+
+.stat-bento .stat-value {
+    font-size: 32px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    margin-bottom: 4px !important;
+}
+
+.stat-bento .stat-label {
+    font-size: 14px !important;
+    color: var(--color-text-secondary) !important;
+}
+
+@media (max-width: 900px) {
+    .dashboard-bento-hero {
+        grid-template-columns: 1fr !important;
+    }
+    .dashboard-stats-bento {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+
+/* --- Refinements: Search Spacing, Dropdown Redesign, Stat Hover Removal --- */
+
+/* 1. More spacing below search bar */
+.dashboard-search-wrapper {
+    margin-bottom: 48px !important;
+}
+
+/* 2. Remove hover from dashboard stats (bento) */
+.stat-bento {
+    pointer-events: none !important; /* Disables hover effects */
+}
+.stat-bento:hover {
+    transform: none !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+    border-color: var(--color-border) !important;
+}
+
+/* 3. Search Dropdown Redesign (Impeccable & Taste) */
+.dashboard-search-dropdown {
+    background: #181818 !important; /* Match sidebar */
+    border: 1px solid #333 !important;
+    border-radius: 12px !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.05) inset !important;
+    padding: 8px !important;
+    top: calc(100% + 12px) !important;
+}
+
+.search-results-group {
+    padding: 4px 0 !important;
+    border-top: none !important;
+}
+
+.search-results-group + .search-results-group {
+    border-top: 1px solid #2a2a2a !important;
+    margin-top: 4px !important;
+    padding-top: 8px !important;
+}
+
+.search-group-title {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: var(--color-text-muted) !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    padding: 4px 12px 8px !important;
+}
+
+.search-result-item {
+    border-radius: 8px !important;
+    margin: 0 4px !important;
+    padding: 8px 12px !important;
+    transition: background-color 0.1s ease, transform 0.1s ease !important;
+    border-left: none !important; /* Remove orange line */
+    background-color: transparent !important;
+}
+
+.search-result-item:hover,
+.search-result-item.selected {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border-left: none !important;
+    padding-left: 12px !important; /* Stop shifting layout */
+    transform: scale(0.99) !important;
+}
+
+.search-item-icon {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-radius: 6px !important;
+    padding: 6px !important;
+}
+
+.search-item-title {
+    font-weight: 500 !important;
+    color: #fff !important;
+}
+
+.search-item-subtitle {
+    color: var(--color-text-secondary) !important;
+}
+
+
+/* Fix for Dashboard Search Dropdown Glitch */
+.dashboard-search-dropdown {
+    animation: searchDropdownFadeIn 0.15s ease-out !important;
+}
+
+@keyframes searchDropdownFadeIn {
+    from { 
+        opacity: 0; 
+        transform: translateX(-50%) translateY(10px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateX(-50%) translateY(0); 
+    }
+}
+
+
+/* --- New Onboarding Modal --- */
+.onboarding-overlay {
+    background: rgba(0, 0, 0, 0.75) !important;
+    backdrop-filter: blur(8px) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 9999 !important;
+}
+
+.onboarding-overlay.hidden {
+    display: none !important;
+}
+
+.onboarding-modal-new {
+    background: var(--color-dark) !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 24px !important;
+    width: 480px !important;
+    max-width: 90vw !important;
+    padding: 40px !important;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.05) inset !important;
+    animation: onboardingPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes onboardingPop {
+    from { opacity: 0; transform: scale(0.95) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.onboarding-hero-image {
+    display: flex !important;
+    justify-content: center !important;
+    margin-bottom: 24px !important;
+}
+
+.onboarding-features-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    margin-bottom: 32px !important;
+}
+
+.onboarding-feature {
+    display: flex !important;
+    align-items: center !important;
+    gap: 16px !important;
+    background: rgba(255,255,255,0.03) !important;
+    padding: 16px !important;
+    border-radius: 16px !important;
+    border: 1px solid rgba(255,255,255,0.05) !important;
+    transition: background 0.2s !important;
+}
+
+.onboarding-feature:hover {
+    background: rgba(255,255,255,0.06) !important;
+}
+
+.onboarding-feature-icon {
+    width: 40px !important;
+    height: 40px !important;
+    background: rgba(255,255,255,0.08) !important;
+    border-radius: 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+}
+
+.onboarding-feature-icon img {
+    width: 20px !important;
+    height: 20px !important;
+}
+
+.onboarding-feature-text h3 {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    color: #fff !important;
+    margin: 0 0 4px 0 !important;
+}
+
+.onboarding-feature-text p {
+    font-size: 13px !important;
+    color: var(--color-text-secondary) !important;
+    margin: 0 !important;
+    line-height: 1.4 !important;
+}
+
+#onboarding-start-btn:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(255,140,0,0.3) !important;
+}
+
+
+/* --- Fix Sidebar Logo Divider --- */
+.sidebar-logo {
+    border-bottom: none !important;
+}
+
+
+/* --- Fix Drag and Drop Styling (No Orange) --- */
+.folder-card.drag-over {
+    border-color: #b3b3b3D9 !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    transform: scale(1.02) !important;
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.1) !important;
+}
+
+.password-card.dragging {
+    opacity: 0.5 !important;
+    border: 2px dashed var(--color-text-muted) !important;
+    transform: scale(0.98) !important;
+}
+
+
+/* --- Fix Workspace Header Buttons Position --- */
+.workspace-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: relative !important;
+    width: 100% !important;
+}
+
+/* Hide the empty first div used in old grid layout */
+.workspace-header > div:first-child:not(.search-container):not(.back-container) {
+    display: none !important;
+}
+
+/* Ensure the search bar is always exactly in the center */
+.workspace-header > .search-container {
+    margin: 0 auto !important;
+}
+
+/* Position the buttons exactly 18px to the right of the search bar (590px / 2 = 295px) */
+.workspace-header > div:last-child {
+    position: absolute !important;
+    left: calc(50% + 295px + 18px) !important;
+    justify-content: flex-start !important;
+}
+
+
+/* --- Final Fixes: Sidebar & Folder Icon --- */
+.sidebar-bottom {
+    border-top: none !important;
+}
+
+.folder-card-icon {
+    filter: none !important;
+}
+
+
+/* --- Fix Dropdown Borders Clipping --- */
+.select-items {
+    padding: 4px !important;
+    overflow-y: auto !important;
+}
+
+.select-items div {
+    border-radius: 6px !important;
+    margin-bottom: 2px !important;
+    border-bottom: none !important;
+}
+
+.select-items div:last-child {
+    margin-bottom: 0 !important;
+}
+
+.select-items div:hover, .same-as-selected {
+    border-radius: 6px !important;
+    outline: none !important;
+    border: 1px solid #b3b3b3D9 !important;
+}
+
+
+/* --- Force ALL password-card items to exactly 56px height --- */
+.password-card {
+    height: 56px !important;
+    min-height: 56px !important;
+    padding: 0 20px !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+
+/* --- Force ALL folder-card items to exactly 56px height --- */
+.folder-card {
+    height: 56px !important;
+    min-height: 56px !important;
+    padding: 0 20px !important;
+}
+
+
+/* --- Bento Grid for Monthly Security Report --- */
+.report-bento-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 16px;
+}
+
+.report-bento-score {
+    grid-column: 1 / 3;
+    background: var(--color-dark);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.report-bento-score .score-label {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.report-bento-score .score-value {
+    font-size: 64px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.report-bento-score .score-context {
+    font-size: 14px;
+    color: var(--color-text);
+}
+
+.report-bento-stats {
+    grid-column: 1 / 3;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.stat-cell {
+    background: var(--color-dark);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.stat-cell .stat-val {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 4px;
+}
+
+.stat-cell .stat-label {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.stat-cell.stat-success .stat-val { color: #22c55e; }
+.stat-cell.stat-warning .stat-val { color: #ff8c00; }
+.stat-cell.stat-danger .stat-val { color: #e74c3c; }
+
+.report-bento-recommendations {
+    grid-column: 1 / 3;
+    background: var(--color-dark);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.audit-filter-btn:hover,
+#login-btn:hover,
+#register-btn:hover,
+#generate-password-btn:hover,
+button[type="submit"]:hover {
+    background-color: #b3b3b3 !important;
+    border-color: #b3b3b3 !important;
+    color: #121212 !important; /* Ensure text is readable on light grey */
+    box-shadow: none !important;
+    transform: translateY(0) !important;
+}
+
+/* Let danger buttons keep red hover, but strip any shadows */
+.button.danger:hover,
+#empty-trash-btn:hover {
+    background-color: #c0392b !important;
+    border-color: #c0392b !important;
+    color: white !important;
+    box-shadow: none !important;
+}
+
+/* Ensure secondary buttons get the outline hover style as per design */
+.button.secondary:hover {
+    background-color: transparent !important;
+    border-color: #b3b3b3 !important;
+    color: #b3b3b3 !important;
+}
+
+/* Toast Redesign for Success (Lottie) */
+.toast.success {
+    background-color: var(--color-bg) !important;
+    border: 1px solid #2ecc71 !important; /* Green border */
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important; /* Dark shadow, no orange */
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 12px 24px;
+    border-radius: var(--border-radius);
+}
+
+.toast.success #toast-message {
+    color: #2ecc71 !important; /* Green text */
+}
+
+
+/* --- Input & Hover Fixes --- */
+
+.button:hover,
+.button.primary:hover,
+.button.secondary:hover,
+.button.icon-only-modern:hover,
+.quick-action-btn:hover,
+.audit-filter-btn:hover,
+#login-btn:hover,
+#register-btn:hover,
+#generate-password-btn:hover,
+button[type="submit"]:hover {
+    border-color: #b3b3b3D9 !important;
+    box-shadow: none !important;
+    transform: translateY(0) !important;
+}
+
+.button.danger:hover,
+#empty-trash-btn:hover {
+    border-color: #e74c3c !important;
+    box-shadow: none !important;
+    transform: translateY(0) !important;
+}
+
+input:hover,
+input:focus,
+textarea:hover,
+textarea:focus,
+select:hover,
+select:focus,
+.select-selected:hover,
+.select-selected:focus,
+.search-bar:focus-within,
+.auth-form input:hover,
+.auth-form input:focus {
+    border-color: #b3b3b3D9 !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Toast Redesign for Success (Lottie) */
+.toast.success {
+    background-color: var(--color-bg) !important;
+    border: 1px solid #2ecc71 !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 12px 24px;
+    border-radius: var(--border-radius);
+}
+
+.toast.success #toast-message {
+    color: #2ecc71 !important;
+}
+
+/* --- Fix Back Buttons --- */
+#back-btn, #show-login-btn {
+    border-radius: 50px !important;
+}
+
+#back-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#back-btn img {
+    width: 20px;
+    height: 20px;
+}
+
+/* --- Watchtower Filter Buttons: Custom Colors on Hover and Active --- */
+.audit-filter-btn {
+    background-color: transparent !important;
+    border: 1px solid var(--color-border) !important;
+    color: var(--color-text-secondary) !important;
+}
+
+/* Default / All */
+.audit-filter-btn[data-filter="all"]:hover,
+.audit-filter-btn[data-filter="all"].active {
+    border-color: #b3b3b3D9 !important;
+    color: #b3b3b3D9 !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Weak & Reused (Yellow) */
+.audit-filter-btn[data-filter="weak"]:hover,
+.audit-filter-btn[data-filter="weak"].active,
+.audit-filter-btn[data-filter="reused"]:hover,
+.audit-filter-btn[data-filter="reused"].active {
+    border-color: #f39c12 !important;
+    color: #f39c12 !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Leaked (Red) */
+.audit-filter-btn[data-filter="leaked"]:hover,
+.audit-filter-btn[data-filter="leaked"].active {
+    border-color: #e74c3c !important;
+    color: #e74c3c !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Strong (Green) */
+.audit-filter-btn[data-filter="strong"]:hover,
+.audit-filter-btn[data-filter="strong"].active {
+    border-color: #2ecc71 !important;
+    color: #2ecc71 !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+
+.trash-card-actions .button:hover {
+    box-shadow: inset 0 0 0 1px #b3b3b3D9 !important;
+    border-color: transparent !important;
+    color: var(--color-text) !important;
+}
+
+
+/* --- Date Picker Styling --- */
+input[type="date"] {
+    color-scheme: dark; /* Force native calendar popup to dark mode */
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+    background-image: url("../icons_new/calendar_wihte.svg") !important;
+    background-position: center;
+    background-size: contain;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    opacity: 0.8;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+
+/* Custom iOS-style Switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+.switch input { 
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    -webkit-transition: .4s;
+    transition: .4s;
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    -webkit-transition: .4s;
+    transition: .4s;
+}
+input:checked + .slider {
+    background-color: #2ecc71;
+}
+input:focus + .slider {
+    box-shadow: 0 0 1px #2ecc71;
+}
+input:checked + .slider:before {
+    -webkit-transform: translateX(20px);
+    -ms-transform: translateX(20px);
+    transform: translateX(20px);
+}
+.slider.round {
+    border-radius: 24px;
+}
+.slider.round:before {
+    border-radius: 50%;
+}
+
+.watchtower-bento .audit-card:hover,
+.watchtower-bento .stat-cell:hover {
+    border: 1px solid transparent !important;
+    background: transparent !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+.watchtower-bento .stat-cell {
+    border: 1px solid var(--color-border);
+}

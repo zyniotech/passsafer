@@ -3,13 +3,11 @@ const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
 const https = require('https');
-const http = require('http');
 const os = require('os');
 const net = require('net');
 
 const allowedPaths = new Set();
 
-// Single-instance lock: prevent multiple background processes
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
     app.quit();
@@ -23,7 +21,6 @@ if (!gotTheLock) {
     });
 }
 
-// Restore original white locked.png from BrowserExtension icons during development
 if (!app.isPackaged) {
     try {
         const fsSync = require('fs');
@@ -38,17 +35,31 @@ if (!app.isPackaged) {
 }
 
 const DATA_DIR = path.join(app.getPath('appData'), 'PassSafer', 'PassSaferData');
-const MASTER_HASH_FILE = path.join(DATA_DIR, '.mh');
-const PIN_HASH_FILE = path.join(DATA_DIR, '.ph');
-const PASSWORDS_FILE = path.join(DATA_DIR, '.pw');
 const LICENSE_FILE = path.join(DATA_DIR, '.lic');
 const DEVICE_ID_FILE = path.join(DATA_DIR, '.did');
-const IDS_FILE = path.join(DATA_DIR, '.id');
-const DOCUMENTS_FILE = path.join(DATA_DIR, '.doc');
-const CARDS_FILE = path.join(DATA_DIR, '.card');
-const REPORTS_FILE = path.join(DATA_DIR, '.report');
+const USERS_DIR = path.join(DATA_DIR, 'users');
+const SYNC_PAIRS_FILE = path.join(DATA_DIR, '.sync_pairs');
+const SETTINGS_FILE = path.join(DATA_DIR, '.settings');
 
-// In-Memory Master Key für Sync-Push an Browser-Erweiterung
+let currentUserDir = null;
+let currentUsername = null;
+
+function getUserDir(username) {
+    return path.join(USERS_DIR, username);
+}
+function getUserFile(filename) {
+    if (!currentUserDir) throw new Error('No user logged in');
+    return path.join(currentUserDir, filename);
+}
+
+function MASTER_HASH_FILE() { return getUserFile('.mh'); }
+function PIN_HASH_FILE() { return getUserFile('.ph'); }
+function PASSWORDS_FILE() { return getUserFile('.pw'); }
+function IDS_FILE() { return getUserFile('.id'); }
+function DOCUMENTS_FILE() { return getUserFile('.doc'); }
+function CARDS_FILE() { return getUserFile('.card'); }
+function REPORTS_FILE() { return getUserFile('.report'); }
+
 let inMemoryMasterPassword = null;
 let pendingExtensionCredentials = [];
 let isSavingPasswords = false;
@@ -56,12 +67,10 @@ let pendingSaveQueue = [];
 
 let mainWindow;
 
-// --tray Support: Lautloser Start ohne sichtbares Fenster
 const isTrayStart = process.argv.includes('--tray');
 
-// Erstelle App-Fenster
 function createWindow() {
-    // Force dark theme native title bar/controls even on light OS themes
+
     nativeTheme.themeSource = 'dark';
 
     mainWindow = new BrowserWindow({
@@ -69,7 +78,7 @@ function createWindow() {
         height: 800,
         minWidth: 900,
         minHeight: 650,
-        show: !isTrayStart, // Bei --tray nicht anzeigen
+        show: !isTrayStart,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -81,9 +90,8 @@ function createWindow() {
     });
 
     mainWindow.loadFile('index.html');
-    mainWindow.removeMenu(); // Menüleiste entfernen
+    mainWindow.removeMenu();
 
-    // [HOCH-01] DevTools aktiv blockieren in Production
     mainWindow.webContents.on('devtools-opened', () => {
         mainWindow.webContents.closeDevTools();
     });
@@ -94,7 +102,6 @@ function createWindow() {
         }
     });
 
-    // Content Security Policy – erweitert um HaveIBeenPwned API
     mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
         callback({
             responseHeaders: {
@@ -112,13 +119,9 @@ function createWindow() {
     });
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// AUTO-REGISTER NATIVE MESSAGING HOST (no manual install_host.bat needed)
-// ─────────────────────────────────────────────────────────────────────
-
 const EXTENSION_IDS = [
-    'iimaibjnobgoecdbaeojkaikbkfbdhme', // Development ID
-    'pgccapkkkbbfeoafdmjibnjkiplnnffn'  // Chrome Web Store ID
+    'iimaibjnobgoecdbaeojkaikbkfbdhme',
+    'pgccapkkkbbfeoafdmjibnjkiplnnffn'
 ];
 
 function registerNativeMessagingHost() {
@@ -126,26 +129,23 @@ function registerNativeMessagingHost() {
         const fsSync = require('fs');
         const { execSync } = require('child_process');
 
-        // Determine native-host directory
         let nativeHostDir;
         if (app.isPackaged) {
-            // Installed app: resources/native-host/
+
             nativeHostDir = path.join(process.resourcesPath, 'native-host');
         } else {
-            // Development: BrowserExtension/
+
             nativeHostDir = path.join(__dirname, '..', 'BrowserExtension');
         }
 
         const nativeHostBat = path.join(nativeHostDir, 'native-host.bat');
         const manifestFile = path.join(nativeHostDir, 'de.passsafer.helper.json');
 
-        // Only proceed if native-host.bat exists
         if (!fsSync.existsSync(nativeHostBat)) {
             console.warn('[PassSafer] native-host.bat not found at:', nativeHostBat);
             return;
         }
 
-        // Write manifest with absolute path (backslashes doubled for JSON)
         const manifest = {
             name: 'de.passsafer.helper',
             description: 'PassSafer Native Messaging Host',
@@ -155,7 +155,6 @@ function registerNativeMessagingHost() {
         };
         fsSync.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2), 'utf8');
 
-        // Register in Windows Registry for Chrome, Brave, and Edge
         if (process.platform === 'win32') {
             const regPaths = [
                 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\de.passsafer.helper',
@@ -166,7 +165,7 @@ function registerNativeMessagingHost() {
                 try {
                     execSync(`reg add "${regPath}" /ve /t REG_SZ /d "${manifestFile}" /f`, { stdio: 'ignore' });
                 } catch (e) {
-                    // Non-critical: browser may not be installed
+
                 }
             }
             console.log('[PassSafer] Native messaging host registered for Chrome, Brave, and Edge.');
@@ -176,15 +175,40 @@ function registerNativeMessagingHost() {
     }
 }
 
+async function migrateToMultiUser() {
+
+    const oldMH = path.join(DATA_DIR, '.mh');
+    try {
+        await fs.access(oldMH);
+    } catch {
+        return;
+    }
+
+    const defaultUser = 'default';
+    const userDir = getUserDir(defaultUser);
+    await fs.mkdir(userDir, { recursive: true });
+
+    const filesToMove = ['.mh', '.ph', '.pw', '.id', '.doc', '.card', '.report'];
+    for (const file of filesToMove) {
+        const src = path.join(DATA_DIR, file);
+        const dest = path.join(userDir, file);
+        try {
+            await fs.access(src);
+            await fs.rename(src, dest);
+        } catch (e) {}
+    }
+
+    console.log(`[PassSafer] Migrated existing data to users/${defaultUser}/`);
+}
+
 app.whenReady().then(async () => {
     await ensureDataDir();
+    await migrateToMultiUser();
     createWindow();
     checkForUpdates();
 
-    // Auto-register native messaging host (so users don't need to run install_host.bat)
     registerNativeMessagingHost();
 
-    // Generate IPC auth token and write to file
     const ipcAuthToken = crypto.randomBytes(32).toString('hex');
     const IPC_TOKEN_FILE = path.join(DATA_DIR, '.ipc_token');
     await fs.writeFile(IPC_TOKEN_FILE, ipcAuthToken, 'utf8');
@@ -192,7 +216,6 @@ app.whenReady().then(async () => {
 
     startIpcServer(ipcAuthToken);
 
-    // System Tray Icon (only in --tray background mode)
     if (isTrayStart) {
         const iconPath = path.join(__dirname, '..', 'logos', 'logo_win_linx.ico');
         const tray = new Tray(iconPath);
@@ -205,12 +228,10 @@ app.whenReady().then(async () => {
         tray.on('double-click', () => { mainWindow.show(); mainWindow.focus(); });
     }
 
-    // Idle auto-shutdown (only in --tray background mode)
     if (isTrayStart) {
         let lastIpcActivity = Date.now();
-        const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+        const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
-        // Expose activity tracker for IPC server
         global.touchIpcActivity = () => { lastIpcActivity = Date.now(); };
 
         setInterval(() => {
@@ -234,33 +255,30 @@ app.on('window-all-closed', () => {
     }
 });
 
-// Stelle sicher dass Daten-Verzeichnis existiert
 async function ensureDataDir() {
     try {
         await fs.mkdir(DATA_DIR, { recursive: true });
+        await fs.mkdir(USERS_DIR, { recursive: true });
     } catch (err) {
         console.error('Error creating data directory:', err);
     }
 }
 
-// [HOCH-02] Login Attempt Tracker - Global (nicht Username-basiert, nicht umgehbar)
 class LoginAttemptTracker {
     constructor() {
         this.count = 0;
         this.lockoutUntil = 0;
         this.MAX_ATTEMPTS = 5;
-        this.LOCKOUT_DURATION = 5 * 60 * 1000; // 5 Minutes
+        this.LOCKOUT_DURATION = 5 * 60 * 1000;
     }
 
     recordAttempt() {
         const now = Date.now();
 
-        // Check if locked out
         if (now < this.lockoutUntil) {
-            return false; // Still locked
+            return false;
         }
 
-        // Reset after lockout expires
         if (this.lockoutUntil > 0 && now >= this.lockoutUntil) {
             this.lockoutUntil = 0;
             this.count = 0;
@@ -290,19 +308,12 @@ class LoginAttemptTracker {
 
 const loginTracker = new LoginAttemptTracker();
 
-// ═══════════════════════════════════════════════════════════════════════
-// KRYPTOGRAPHIE: Scrypt-basiertes Hashing & Schlüsselableitung
-// Scrypt-Parameter: N=16384, r=8, p=1 (speicherintensiv, brute-force-resistent)
-// ═══════════════════════════════════════════════════════════════════════
-
 const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
-// Hash-Funktionen mit Scrypt (Upgrade von PBKDF2)
 function hashPassword(password, salt) {
     return crypto.scryptSync(password, salt, 64, SCRYPT_PARAMS).toString('hex');
 }
 
-// Legacy PBKDF2 Hash (nur für Migration)
 function hashPasswordPBKDF2(password, salt) {
     return crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
 }
@@ -315,7 +326,6 @@ function verifyPassword(password, hash, salt) {
     return crypto.timingSafeEqual(hashBuffer, inputBuffer);
 }
 
-// Legacy PBKDF2 Verifikation (für Migration)
 function verifyPasswordPBKDF2(password, hash, salt) {
     const passwordHash = hashPasswordPBKDF2(password, salt);
     const hashBuffer = Buffer.from(hash, 'hex');
@@ -324,20 +334,17 @@ function verifyPasswordPBKDF2(password, hash, salt) {
     return crypto.timingSafeEqual(hashBuffer, inputBuffer);
 }
 
-// Verschlüsselungs-Funktionen mit Scrypt
 function deriveKey(password, salt) {
     return crypto.scryptSync(password, salt, 32, SCRYPT_PARAMS);
 }
 
-// Legacy PBKDF2 Key Derivation (für Migration)
 function deriveKeyPBKDF2(password, salt) {
     return crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
 }
 
-// [KRIT-02] AES-256-GCM Encryption (Authenticated Encryption)
 function encrypt(text, password, salt) {
     const key = deriveKey(password, salt);
-    const iv = crypto.randomBytes(12); // 12 bytes for GCM
+    const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
@@ -349,7 +356,7 @@ function decrypt(encryptedData, password, salt) {
     const key = deriveKey(password, salt);
 
     if (encryptedData.startsWith('v2:')) {
-        // GCM format: v2:iv:authTag:encrypted
+
         const parts = encryptedData.substring(3).split(':');
         const iv = Buffer.from(parts[0], 'hex');
         const authTag = Buffer.from(parts[1], 'hex');
@@ -360,7 +367,7 @@ function decrypt(encryptedData, password, salt) {
         decrypted += decipher.final('utf8');
         return decrypted;
     } else {
-        // Legacy CBC format: iv:encrypted (backward compatibility)
+
         const parts = encryptedData.split(':');
         const iv = Buffer.from(parts[0], 'hex');
         const encrypted = parts[1];
@@ -371,7 +378,6 @@ function decrypt(encryptedData, password, salt) {
     }
 }
 
-// Decrypt mit Legacy PBKDF2-Schlüssel (für Migration)
 function decryptWithPBKDF2(encryptedData, password, salt) {
     const key = deriveKeyPBKDF2(password, salt);
 
@@ -396,7 +402,6 @@ function decryptWithPBKDF2(encryptedData, password, salt) {
     }
 }
 
-// [KRIT-01] Export mit zufälligem Salt + GCM
 function encryptExport(text, password) {
     const exportSalt = crypto.randomBytes(32);
     const key = crypto.pbkdf2Sync(password, exportSalt, 100000, 32, 'sha256');
@@ -410,12 +415,12 @@ function encryptExport(text, password) {
 
 function decryptExport(encryptedData, password) {
     if (encryptedData.startsWith('v2:')) {
-        // New format: v2:salt:iv:authTag:encrypted
+
         const parts = encryptedData.substring(3).split(':');
         const exportSalt = Buffer.from(parts[0], 'hex');
         const iv = Buffer.from(parts[1], 'hex');
         const authTag = Buffer.from(parts[2], 'hex');
-        const encrypted = parts[3];   
+        const encrypted = parts[3];
         const key = crypto.pbkdf2Sync(password, exportSalt, 100000, 32, 'sha256');
         const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
         decipher.setAuthTag(authTag);
@@ -423,7 +428,7 @@ function decryptExport(encryptedData, password) {
         decrypted += decipher.final('utf8');
         return decrypted;
     } else {
-        //Legacy format: iv:encrypted (fixed salt, CBC) - backward compatibility
+
         const exportSalt = Buffer.from('export_salt_for_passsafer_app_12345');
         const key = crypto.pbkdf2Sync(password, exportSalt, 100000, 32, 'sha256');
         const parts = encryptedData.split(':');
@@ -438,27 +443,86 @@ function decryptExport(encryptedData, password) {
 
 async function setSecurePermissions(filePath) {
     try {
-        await fs.chmod(filePath, 0o600); // Read/Write for owner only
+        await fs.chmod(filePath, 0o600);
     } catch (err) {
-        // Ignore errors on Windows if not supported perfectly
+
     }
 }
 
-
-// Prüfe ob erste Nutzung
-ipcMain.handle('check-first-run', async () => {
+ipcMain.handle('list-users', async () => {
     try {
-        await fs.access(MASTER_HASH_FILE);
-        return false; // Nicht erste Nutzung
+        const entries = await fs.readdir(USERS_DIR, { withFileTypes: true });
+        const users = [];
+        for (const entry of entries) {
+            if (entry.isDirectory()) {
+
+                try {
+                    await fs.access(path.join(USERS_DIR, entry.name, '.mh'));
+                    users.push(entry.name);
+                } catch {}
+            }
+        }
+        return { success: true, users };
     } catch {
-        return true; // Erste Nutzung
+        return { success: true, users: [] };
     }
 });
 
-// Registrierung
+ipcMain.handle('check-user-exists', async (event, { username }) => {
+    try {
+        await fs.access(path.join(getUserDir(username), '.mh'));
+        return true;
+    } catch {
+        return false;
+    }
+});
+
+ipcMain.handle('load-settings', async () => {
+    try {
+        const data = await fs.readFile(SETTINGS_FILE, 'utf8');
+        return { success: true, settings: JSON.parse(data) };
+    } catch {
+        return { success: true, settings: { language: 'en', autoSync: false } };
+    }
+});
+
+ipcMain.handle('save-settings', async (event, { settings }) => {
+    try {
+        await fs.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('check-first-run', async () => {
+    try {
+        const entries = await fs.readdir(USERS_DIR, { withFileTypes: true });
+        for (const entry of entries) {
+            if (entry.isDirectory()) {
+                try {
+                    await fs.access(path.join(USERS_DIR, entry.name, '.mh'));
+                    return false;
+                } catch {}
+            }
+        }
+        return true;
+    } catch {
+        return true;
+    }
+});
+
 ipcMain.handle('register', async (event, { username, password, pin }) => {
     try {
-        await ensureDataDir(); // Ensure directory exists (important if account was just deleted)
+        const userExists = await fs.access(path.join(getUserDir(username), '.mh')).then(() => true).catch(() => false);
+        if (userExists) return { success: false, error: 'User already exists' };
+
+        await fs.mkdir(getUserDir(username), { recursive: true });
+        currentUserDir = getUserDir(username);
+        currentUsername = username;
+
+        await ensureDataDir();
+    await migrateToMultiUser();
 
         const masterSalt = crypto.randomBytes(16).toString('hex');
         const pinSalt = crypto.randomBytes(16).toString('hex');
@@ -466,19 +530,18 @@ ipcMain.handle('register', async (event, { username, password, pin }) => {
         const masterHash = hashPassword(password, masterSalt);
         const pinHash = hashPassword(pin, pinSalt);
 
-        await fs.writeFile(MASTER_HASH_FILE, JSON.stringify({ hash: masterHash, salt: masterSalt }));
-        await setSecurePermissions(MASTER_HASH_FILE);
+        await fs.writeFile(MASTER_HASH_FILE(), JSON.stringify({ hash: masterHash, salt: masterSalt }));
+        await setSecurePermissions(MASTER_HASH_FILE());
 
-        await fs.writeFile(PIN_HASH_FILE, JSON.stringify({ hash: pinHash, salt: pinSalt }));
-        await setSecurePermissions(PIN_HASH_FILE);
+        await fs.writeFile(PIN_HASH_FILE(), JSON.stringify({ hash: pinHash, salt: pinSalt }));
+        await setSecurePermissions(PIN_HASH_FILE());
 
-        // Initialisiere leere Passwort-Datei
         const storageSalt = crypto.randomBytes(16).toString('hex');
         const initialData = { folders: [], passwords: [] };
         const encrypted = encrypt(JSON.stringify(initialData), password, storageSalt);
 
-        await fs.writeFile(PASSWORDS_FILE, JSON.stringify({ salt: storageSalt, data: encrypted }));
-        await setSecurePermissions(PASSWORDS_FILE);
+        await fs.writeFile(PASSWORDS_FILE(), JSON.stringify({ salt: storageSalt, data: encrypted }));
+        await setSecurePermissions(PASSWORDS_FILE());
 
         return { success: true };
     } catch (error) {
@@ -486,10 +549,11 @@ ipcMain.handle('register', async (event, { username, password, pin }) => {
     }
 });
 
-// Login - [HOCH-02] Globaler Brute-Force-Schutz + Scrypt-Migration
 ipcMain.handle('login', async (event, { username, password, pin }) => {
     try {
-        // Brute Force Schutz - global, nicht umgehbar durch Username-Wechsel
+        currentUserDir = getUserDir(username);
+        currentUsername = username;
+
         if (!loginTracker.recordAttempt()) {
             const remaining = Math.ceil(loginTracker.getRemainingLockoutTime() / 1000);
             const minutes = Math.floor(remaining / 60);
@@ -497,14 +561,13 @@ ipcMain.handle('login', async (event, { username, password, pin }) => {
             return { success: false, error: `Zu viele Versuche. Bitte warte ${minutes}m ${seconds}s.` };
         }
 
-        const masterData = JSON.parse(await fs.readFile(MASTER_HASH_FILE, 'utf8'));
-        const pinData = JSON.parse(await fs.readFile(PIN_HASH_FILE, 'utf8'));
+        const masterData = JSON.parse(await fs.readFile(MASTER_HASH_FILE(), 'utf8'));
+        const pinData = JSON.parse(await fs.readFile(PIN_HASH_FILE(), 'utf8'));
 
         let masterValid = verifyPassword(password, masterData.hash, masterData.salt);
         let pinValid = verifyPassword(pin, pinData.hash, pinData.salt);
         let needsMigration = false;
 
-        // Fallback: PBKDF2-Verifikation für nahtlose Migration
         if (!masterValid) {
             masterValid = verifyPasswordPBKDF2(password, masterData.hash, masterData.salt);
             if (masterValid) needsMigration = true;
@@ -518,25 +581,21 @@ ipcMain.handle('login', async (event, { username, password, pin }) => {
             loginTracker.resetAttempts();
             inMemoryMasterPassword = password;
 
-            // Transparente Scrypt-Migration bei erstem Login nach Update
             if (needsMigration) {
                 try {
                     console.log('[PassSafer] Migrating credentials from PBKDF2 to Scrypt...');
 
-                    // Master-Hash mit Scrypt neu berechnen
                     const newMasterSalt = crypto.randomBytes(16).toString('hex');
                     const newMasterHash = hashPassword(password, newMasterSalt);
-                    await fs.writeFile(MASTER_HASH_FILE, JSON.stringify({ hash: newMasterHash, salt: newMasterSalt, kdf: 'scrypt' }));
-                    await setSecurePermissions(MASTER_HASH_FILE);
+                    await fs.writeFile(MASTER_HASH_FILE(), JSON.stringify({ hash: newMasterHash, salt: newMasterSalt, kdf: 'scrypt' }));
+                    await setSecurePermissions(MASTER_HASH_FILE());
 
-                    // PIN-Hash mit Scrypt neu berechnen
                     const newPinSalt = crypto.randomBytes(16).toString('hex');
                     const newPinHash = hashPassword(pin, newPinSalt);
-                    await fs.writeFile(PIN_HASH_FILE, JSON.stringify({ hash: newPinHash, salt: newPinSalt, kdf: 'scrypt' }));
-                    await setSecurePermissions(PIN_HASH_FILE);
+                    await fs.writeFile(PIN_HASH_FILE(), JSON.stringify({ hash: newPinHash, salt: newPinSalt, kdf: 'scrypt' }));
+                    await setSecurePermissions(PIN_HASH_FILE());
 
-                    // Passwort-Datenbank neu verschlüsseln mit Scrypt-Key
-                    const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
+                    const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE(), 'utf8'));
                     let decryptedData;
                     try {
                         decryptedData = decrypt(fileData.data, password, fileData.salt);
@@ -545,8 +604,8 @@ ipcMain.handle('login', async (event, { username, password, pin }) => {
                     }
                     const newStorageSalt = crypto.randomBytes(16).toString('hex');
                     const reEncrypted = encrypt(decryptedData, password, newStorageSalt);
-                    await fs.writeFile(PASSWORDS_FILE, JSON.stringify({ salt: newStorageSalt, data: reEncrypted, kdf: 'scrypt' }));
-                    await setSecurePermissions(PASSWORDS_FILE);
+                    await fs.writeFile(PASSWORDS_FILE(), JSON.stringify({ salt: newStorageSalt, data: reEncrypted, kdf: 'scrypt' }));
+                    await setSecurePermissions(PASSWORDS_FILE());
 
                     console.log('[PassSafer] Scrypt migration completed successfully.');
                 } catch (migrationErr) {
@@ -563,15 +622,14 @@ ipcMain.handle('login', async (event, { username, password, pin }) => {
     }
 });
 
-// Lade Passwörter (mit PBKDF2-Fallback für Migration)
 ipcMain.handle('load-passwords', async (event, { password }) => {
     try {
-        const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
+        const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE(), 'utf8'));
         let decryptedData;
         try {
             decryptedData = decrypt(fileData.data, password, fileData.salt);
         } catch {
-            // Fallback: PBKDF2-Entschlüsselung für Legacy-Datenbanken
+
             decryptedData = decryptWithPBKDF2(fileData.data, password, fileData.salt);
         }
         const parsedData = JSON.parse(decryptedData);
@@ -587,24 +645,20 @@ ipcMain.handle('load-passwords', async (event, { password }) => {
     }
 });
 
-// Speichere Passwörter + Sync-Push an Browser-Erweiterung
 ipcMain.handle('save-passwords', async (event, { password, passwords, folders, trash }) => {
     if (isSavingPasswords) {
         await new Promise(resolve => pendingSaveQueue.push(resolve));
     }
     isSavingPasswords = true;
     try {
-        const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
+        const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE(), 'utf8'));
         const salt = fileData.salt;
 
         const dataToSave = { passwords, folders, trash };
         const encrypted = encrypt(JSON.stringify(dataToSave), password, salt);
 
-        await fs.writeFile(PASSWORDS_FILE, JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
-        await setSecurePermissions(PASSWORDS_FILE);
-
-        // Sync-Push an verbundene Browser-Erweiterung (falls IPC-Server aktiv)
-        pushSyncToExtension(salt, encrypted);
+        await fs.writeFile(PASSWORDS_FILE(), JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
+        await setSecurePermissions(PASSWORDS_FILE());
 
         return { success: true };
     } catch (error) {
@@ -618,12 +672,11 @@ ipcMain.handle('save-passwords', async (event, { password, passwords, folders, t
     }
 });
 
-// PIN ändern
 ipcMain.handle('change-pin', async (event, { currentPassword, currentPin, newPin }) => {
     try {
-        // Verifiziere aktuelle Credentials
-        const masterData = JSON.parse(await fs.readFile(MASTER_HASH_FILE, 'utf8'));
-        const pinData = JSON.parse(await fs.readFile(PIN_HASH_FILE, 'utf8'));
+
+        const masterData = JSON.parse(await fs.readFile(MASTER_HASH_FILE(), 'utf8'));
+        const pinData = JSON.parse(await fs.readFile(PIN_HASH_FILE(), 'utf8'));
 
         const masterValid = verifyPassword(currentPassword, masterData.hash, masterData.salt);
         const pinValid = verifyPassword(currentPin, pinData.hash, pinData.salt);
@@ -632,12 +685,11 @@ ipcMain.handle('change-pin', async (event, { currentPassword, currentPin, newPin
             return { success: false, error: 'Ungültige Zugangsdaten' };
         }
 
-        // Speichere neuen PIN
         const newPinSalt = crypto.randomBytes(16).toString('hex');
         const newPinHash = hashPassword(newPin, newPinSalt);
 
-        await fs.writeFile(PIN_HASH_FILE, JSON.stringify({ hash: newPinHash, salt: newPinSalt }));
-        await setSecurePermissions(PIN_HASH_FILE);
+        await fs.writeFile(PIN_HASH_FILE(), JSON.stringify({ hash: newPinHash, salt: newPinSalt }));
+        await setSecurePermissions(PIN_HASH_FILE());
 
         return { success: true };
     } catch (error) {
@@ -645,12 +697,11 @@ ipcMain.handle('change-pin', async (event, { currentPassword, currentPin, newPin
     }
 });
 
-// Master-Passwort ändern
 ipcMain.handle('change-password', async (event, { currentPassword, currentPin, newPassword }) => {
     try {
-        // Verifiziere aktuelle Credentials
-        const masterData = JSON.parse(await fs.readFile(MASTER_HASH_FILE, 'utf8'));
-        const pinData = JSON.parse(await fs.readFile(PIN_HASH_FILE, 'utf8'));
+
+        const masterData = JSON.parse(await fs.readFile(MASTER_HASH_FILE(), 'utf8'));
+        const pinData = JSON.parse(await fs.readFile(PIN_HASH_FILE(), 'utf8'));
 
         const masterValid = verifyPassword(currentPassword, masterData.hash, masterData.salt);
         const pinValid = verifyPassword(currentPin, pinData.hash, pinData.salt);
@@ -659,23 +710,20 @@ ipcMain.handle('change-password', async (event, { currentPassword, currentPin, n
             return { success: false, error: 'Ungültige Zugangsdaten' };
         }
 
-        // Lade und entschlüssele Daten mit altem Passwort
-        const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
+        const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE(), 'utf8'));
         const decryptedData = decrypt(fileData.data, currentPassword, fileData.salt);
 
-        // Speichere neues Master-Passwort Hash
         const newMasterSalt = crypto.randomBytes(16).toString('hex');
         const newMasterHash = hashPassword(newPassword, newMasterSalt);
-        await fs.writeFile(MASTER_HASH_FILE, JSON.stringify({ hash: newMasterHash, salt: newMasterSalt }));
-        await setSecurePermissions(MASTER_HASH_FILE);
+        await fs.writeFile(MASTER_HASH_FILE(), JSON.stringify({ hash: newMasterHash, salt: newMasterSalt }));
+        await setSecurePermissions(MASTER_HASH_FILE());
 
-        // Re-verschlüssele Daten mit neuem Passwort
         const newStorageSalt = crypto.randomBytes(16).toString('hex');
         const encrypted = encrypt(decryptedData, newPassword, newStorageSalt);
-        await fs.writeFile(PASSWORDS_FILE, JSON.stringify({ salt: newStorageSalt, data: encrypted }));
-        await setSecurePermissions(PASSWORDS_FILE);
+        await fs.writeFile(PASSWORDS_FILE(), JSON.stringify({ salt: newStorageSalt, data: encrypted }));
+        await setSecurePermissions(PASSWORDS_FILE());
 
-        inMemoryMasterPassword = newPassword; // Keep in sync with renderer
+        inMemoryMasterPassword = newPassword;
 
         return { success: true };
     } catch (error) {
@@ -683,7 +731,6 @@ ipcMain.handle('change-password', async (event, { currentPassword, currentPin, n
     }
 });
 
-// Helper to resolve canonical paths to handle Windows 8.3 short name and symlink bypasses
 async function getCanonicalPath(filePath) {
     try {
         return await fs.realpath(filePath);
@@ -698,10 +745,9 @@ async function getCanonicalPath(filePath) {
     }
 }
 
-// Export Passwords
 ipcMain.handle('export-passwords', async (event, { password, filePath, data }) => {
     try {
-        // Validate file extension
+
         if (!filePath.toLowerCase().endsWith('.pass')) {
             return { success: false, error: 'Invalid file type. Only .pass files are allowed.' };
         }
@@ -713,7 +759,7 @@ ipcMain.handle('export-passwords', async (event, { password, filePath, data }) =
         if (!(await isPathSafe(filePath))) {
             return { success: false, error: 'Access to this location is not allowed.' };
         }
-        // Verschlüssele Daten mit Export-Passwort und zufälligem Salt
+
         const encrypted = encryptExport(JSON.stringify(data), password);
         await fs.writeFile(filePath, encrypted);
         return { success: true };
@@ -722,10 +768,9 @@ ipcMain.handle('export-passwords', async (event, { password, filePath, data }) =
     }
 });
 
-// Import Passwords
 ipcMain.handle('import-passwords', async (event, { password, filePath }) => {
     try {
-        // Validate file extension
+
         if (!filePath.toLowerCase().endsWith('.pass')) {
             return { success: false, error: 'Invalid file type. Only .pass files are allowed.' };
         }
@@ -746,12 +791,12 @@ ipcMain.handle('import-passwords', async (event, { password, filePath }) => {
     }
 });
 
-// [HOCH-03] Account löschen - jetzt mit PIN-Verifikation
 ipcMain.handle('delete-account', async (event, { password, pin }) => {
     try {
-        // Verifiziere Passwort UND PIN vor dem Löschen
-        const masterData = JSON.parse(await fs.readFile(MASTER_HASH_FILE, 'utf8'));
-        const pinData = JSON.parse(await fs.readFile(PIN_HASH_FILE, 'utf8'));
+        if (!currentUserDir) return { success: false, error: 'No user logged in' };
+
+        const masterData = JSON.parse(await fs.readFile(MASTER_HASH_FILE(), 'utf8'));
+        const pinData = JSON.parse(await fs.readFile(PIN_HASH_FILE(), 'utf8'));
 
         const masterValid = verifyPassword(password, masterData.hash, masterData.salt);
         const pinValid = verifyPassword(pin, pinData.hash, pinData.salt);
@@ -760,20 +805,14 @@ ipcMain.handle('delete-account', async (event, { password, pin }) => {
             return { success: false, error: 'Invalid credentials' };
         }
 
-        // Lösche alle Daten
-        await fs.unlink(MASTER_HASH_FILE);
-        await fs.unlink(PIN_HASH_FILE);
-        await fs.unlink(PASSWORDS_FILE);
-        try { await fs.unlink(IDS_FILE); } catch (e) {}
-        try { await fs.unlink(DOCUMENTS_FILE); } catch (e) {}
-        try { await fs.unlink(CARDS_FILE); } catch (e) {}
-        try { await fs.unlink(REPORTS_FILE); } catch (e) {}
+        await fs.rm(currentUserDir, { recursive: true, force: true });
+        currentUserDir = null;
+        currentUsername = null;
 
-        // Optional: Lösche Data Directory wenn leer
         try {
             await fs.rmdir(DATA_DIR);
         } catch (e) {
-            // Ignorieren wenn nicht leer
+
         }
 
         return { success: true };
@@ -782,28 +821,24 @@ ipcMain.handle('delete-account', async (event, { password, pin }) => {
     }
 });
 
-// [HOCH-04] Path safety check - verbessert gegen Traversal und UNC
 async function isPathSafe(filePath) {
     const canonical = await getCanonicalPath(filePath);
     const resolved = path.resolve(canonical);
 
-    // Block UNC paths (network shares)
     if (resolved.startsWith('\\\\') || resolved.startsWith('//')) return false;
 
-    // Block path traversal attempts
     if (filePath.includes('..') || resolved.includes('..')) return false;
 
     const dangerous = [
         path.join(process.env.SystemRoot || 'C:\\Windows'),
         path.join(process.env.ProgramFiles || 'C:\\Program Files'),
         path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'),
-        '/usr', '/etc', '/bin', '/sbin', '/var', '/sys', // Linux/Mac paths
-        DATA_DIR // Protect own data directory
+        '/usr', '/etc', '/bin', '/sbin', '/var', '/sys',
+        DATA_DIR
     ].map(p => p.toLowerCase());
-    
+
     const resolvedLower = resolved.toLowerCase();
-    
-    // Check if resolved path is inside or identical to any dangerous directory
+
     for (const d of dangerous) {
         if (resolvedLower === d || resolvedLower.startsWith(d + path.sep)) {
             return false;
@@ -812,7 +847,6 @@ async function isPathSafe(filePath) {
     return true;
 }
 
-// Read File (for file attachment upload)
 ipcMain.handle('read-file', async (event, filePath) => {
     try {
         const canonical = await getCanonicalPath(filePath);
@@ -824,8 +858,8 @@ ipcMain.handle('read-file', async (event, filePath) => {
             return { success: false, error: 'Access to this location is not allowed.' };
         }
         const stats = await fs.stat(filePath);
-        // [MITTEL-06] Fix: Kommentar und Code stimmen jetzt überein
-        const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+
+        const MAX_FILE_SIZE = 100 * 1024 * 1024;
         if (stats.size > MAX_FILE_SIZE) {
             return { success: false, error: `File too large. Maximum size is 100 MB.` };
         }
@@ -838,7 +872,6 @@ ipcMain.handle('read-file', async (event, filePath) => {
     }
 });
 
-// Write File (for file attachment download)
 ipcMain.handle('write-file', async (event, { filePath, data }) => {
     try {
         const canonical = await getCanonicalPath(filePath);
@@ -857,7 +890,6 @@ ipcMain.handle('write-file', async (event, { filePath, data }) => {
     }
 });
 
-// Show Save Dialog
 ipcMain.handle('show-save-dialog', async (event, options) => {
     const result = await dialog.showSaveDialog(mainWindow, options);
     if (result && result.filePath) {
@@ -870,7 +902,6 @@ ipcMain.handle('show-save-dialog', async (event, options) => {
     return result;
 });
 
-// Show Open Dialog
 ipcMain.handle('show-open-dialog', async (event, options) => {
     const result = await dialog.showOpenDialog(mainWindow, options);
     if (result && result.filePaths) {
@@ -885,12 +916,11 @@ ipcMain.handle('show-open-dialog', async (event, options) => {
     return result;
 });
 
-// Open external URL (for links)
 ipcMain.handle('open-external', async (event, url) => {
     try {
         let targetUrl = url;
         if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) {
-            // No protocol, default to https
+
             targetUrl = 'https://' + url;
         }
         const parsedUrl = new URL(targetUrl);
@@ -904,7 +934,6 @@ ipcMain.handle('open-external', async (event, url) => {
     }
 });
 
-// Clipboard operations (for secure clipboard access from renderer)
 ipcMain.handle('copy-to-clipboard', (event, text) => {
     clipboard.writeText(text);
     return { success: true };
@@ -915,7 +944,6 @@ ipcMain.handle('clear-clipboard', () => {
     return { success: true };
 });
 
-// Licensing Helpers
 function getLicenseKeyForEncryption(deviceId) {
     return crypto.pbkdf2Sync(deviceId, 'license-salt-12893812903', 1000, 32, 'sha256');
 }
@@ -943,7 +971,6 @@ function decryptLicense(encryptedData, deviceId) {
     return JSON.parse(decrypted);
 }
 
-// Licensing IPC Handlers
 ipcMain.handle('get-device-id', async () => {
     try {
         let deviceId;
@@ -1000,14 +1027,13 @@ ipcMain.handle('delete-license', async () => {
     }
 });
 
-// Load encrypted IDs
 ipcMain.handle('load-ids', async (event, { password }) => {
     try {
         let fileData;
         try {
-            fileData = JSON.parse(await fs.readFile(IDS_FILE, 'utf8'));
+            fileData = JSON.parse(await fs.readFile(IDS_FILE(), 'utf8'));
         } catch {
-            return { success: true, data: [] }; // File doesn't exist yet
+            return { success: true, data: [] };
         }
         let decryptedData = decrypt(fileData.data, password, fileData.salt);
         const parsedData = JSON.parse(decryptedData);
@@ -1017,27 +1043,25 @@ ipcMain.handle('load-ids', async (event, { password }) => {
     }
 });
 
-// Save encrypted IDs
 ipcMain.handle('save-ids', async (event, { password, ids }) => {
     try {
         const salt = crypto.randomBytes(16).toString('hex');
         const encrypted = encrypt(JSON.stringify(ids), password, salt);
-        await fs.writeFile(IDS_FILE, JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
-        await setSecurePermissions(IDS_FILE);
+        await fs.writeFile(IDS_FILE(), JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
+        await setSecurePermissions(IDS_FILE());
         return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
     }
 });
 
-// Load encrypted Documents
 ipcMain.handle('load-documents', async (event, { password }) => {
     try {
         let fileData;
         try {
-            fileData = JSON.parse(await fs.readFile(DOCUMENTS_FILE, 'utf8'));
+            fileData = JSON.parse(await fs.readFile(DOCUMENTS_FILE(), 'utf8'));
         } catch {
-            return { success: true, data: [] }; // File doesn't exist yet
+            return { success: true, data: [] };
         }
         let decryptedData = decrypt(fileData.data, password, fileData.salt);
         const parsedData = JSON.parse(decryptedData);
@@ -1047,11 +1071,10 @@ ipcMain.handle('load-documents', async (event, { password }) => {
     }
 });
 
-// Save encrypted Documents
 ipcMain.handle('save-documents', async (event, { password, documents }) => {
     try {
-        // [HOCH-06] 100MB File size limit check in main process (for documents and attachments)
-        const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+
+        const MAX_FILE_SIZE = 100 * 1024 * 1024;
         for (const doc of documents) {
             if (doc.files) {
                 for (const f of doc.files) {
@@ -1065,17 +1088,13 @@ ipcMain.handle('save-documents', async (event, { password, documents }) => {
 
         const salt = crypto.randomBytes(16).toString('hex');
         const encrypted = encrypt(JSON.stringify(documents), password, salt);
-        await fs.writeFile(DOCUMENTS_FILE, JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
-        await setSecurePermissions(DOCUMENTS_FILE);
+        await fs.writeFile(DOCUMENTS_FILE(), JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
+        await setSecurePermissions(DOCUMENTS_FILE());
         return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
     }
 });
-
-// ═══════════════════════════════════════════════════════════════════════
-// AUTO-UPDATE SYSTEM (via GitHub Releases + electron-updater)
-// ═══════════════════════════════════════════════════════════════════════
 
 function checkForUpdates() {
     if (!app.isPackaged) {
@@ -1086,10 +1105,9 @@ function checkForUpdates() {
     try {
         const { autoUpdater } = require('electron-updater');
 
-        autoUpdater.autoDownload = false; // Disable auto download (Option A)
+        autoUpdater.autoDownload = false;
         autoUpdater.autoInstallOnAppQuit = true;
 
-        // Bypass signature verification to prevent update failures/hangs on Windows
         autoUpdater.verifyUpdateCodeSignature = async (publisherName, path) => {
             return null;
         };
@@ -1130,7 +1148,6 @@ function checkForUpdates() {
     }
 }
 
-// Download update
 ipcMain.handle('download-update', async () => {
     try {
         const { autoUpdater } = require('electron-updater');
@@ -1144,7 +1161,6 @@ ipcMain.handle('download-update', async () => {
     }
 });
 
-// Install update and restart
 ipcMain.handle('install-update', async () => {
     try {
         const { autoUpdater } = require('electron-updater');
@@ -1154,7 +1170,6 @@ ipcMain.handle('install-update', async () => {
     }
 });
 
-// Manual check for updates
 ipcMain.handle('manual-check-updates', async () => {
     try {
         if (!app.isPackaged) {
@@ -1177,7 +1192,6 @@ ipcMain.handle('manual-check-updates', async () => {
     }
 });
 
-// Helper for semver comparison
 function isNewerVersion(current, latest) {
     const cParts = current.split('.').map(Number);
     const lParts = latest.split('.').map(Number);
@@ -1190,9 +1204,6 @@ function isNewerVersion(current, latest) {
     return false;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// LOCAL IPC BRIDGE FOR BROWSER EXTENSION (NATIVE MESSAGING)
-// ═══════════════════════════════════════════════════════════════════════
 let ipcServer;
 const pendingExtensionRequests = new Map();
 const PIPE_PATH = process.platform === 'win32'
@@ -1200,7 +1211,7 @@ const PIPE_PATH = process.platform === 'win32'
     : path.join(os.tmpdir(), 'passsafer-ipc.sock');
 
 function startIpcServer(authToken) {
-    // On non-Windows, clean up any existing socket file
+
     if (process.platform !== 'win32') {
         try {
             require('fs').unlinkSync(PIPE_PATH);
@@ -1212,7 +1223,6 @@ function startIpcServer(authToken) {
         socket.on('data', (chunk) => {
             dataBuffer += chunk.toString();
 
-            // Process all complete newline-delimited messages in the buffer
             let newlineIdx;
             while ((newlineIdx = dataBuffer.indexOf('\n')) !== -1) {
                 const message = dataBuffer.substring(0, newlineIdx).trim();
@@ -1223,13 +1233,12 @@ function startIpcServer(authToken) {
                 try {
                     const parsed = JSON.parse(message);
 
-                    // Validate IPC auth token
                     if (!parsed._token || parsed._token !== authToken) {
                         socket.write(JSON.stringify({ success: false, error: 'Unauthorized' }) + '\n');
                         socket.end();
                         return;
                     }
-                    delete parsed._token; // Don't forward token to renderer
+                    delete parsed._token;
 
                     if (global.touchIpcActivity) global.touchIpcActivity();
 
@@ -1241,7 +1250,6 @@ function startIpcServer(authToken) {
                         return;
                     }
 
-                    // 5-second timeout for request
                     const timeout = setTimeout(() => {
                         if (pendingExtensionRequests.has(requestId)) {
                             pendingExtensionRequests.delete(requestId);
@@ -1262,7 +1270,6 @@ function startIpcServer(authToken) {
 
                     pendingExtensionRequests.set(requestId, { socket, timeout, request: parsed });
 
-                    // Send request to renderer
                     mainWindow.webContents.send('native-request', { id: requestId, request: parsed });
                 } catch (e) {
                     socket.write(JSON.stringify({ success: false, error: 'Invalid JSON' }) + '\n');
@@ -1285,18 +1292,17 @@ function startIpcServer(authToken) {
     });
 }
 
-// Handle native response from renderer
 ipcMain.on('native-response', (event, { id, response }) => {
     const pending = pendingExtensionRequests.get(id);
     if (pending) {
         clearTimeout(pending.timeout);
         pendingExtensionRequests.delete(id);
-        
+
         if (pending.request && pending.request.action === 'save-credential' && response && response.error === 'Locked') {
             pendingExtensionCredentials.push(pending.request);
             response = { success: true, message: 'Saved to pending credentials' };
         }
-        
+
         if (pending.socket && !pending.socket.destroyed) {
             pending.socket.write(JSON.stringify(response) + '\n');
             pending.socket.end();
@@ -1317,6 +1323,276 @@ ipcMain.handle('clear-master-password', async () => {
 
 const dgram = require('dgram');
 const tls = require('tls');
+
+ipcMain.handle('sync-get-pairs', async () => {
+    try {
+        const data = await fs.readFile(SYNC_PAIRS_FILE, 'utf8');
+        const pairs = JSON.parse(data);
+
+        const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+        const activePairs = pairs.filter(p => (Date.now() - p.lastSync) < thirtyDays);
+        if (activePairs.length !== pairs.length) {
+            await fs.writeFile(SYNC_PAIRS_FILE, JSON.stringify(activePairs, null, 2));
+        }
+        return { success: true, pairs: activePairs };
+    } catch {
+        return { success: true, pairs: [] };
+    }
+});
+
+ipcMain.handle('sync-save-pair', async (event, { pair }) => {
+    try {
+        let pairs = [];
+        try {
+            pairs = JSON.parse(await fs.readFile(SYNC_PAIRS_FILE, 'utf8'));
+        } catch {}
+        const idx = pairs.findIndex(p => p.deviceId === pair.deviceId);
+        if (idx >= 0) pairs[idx] = pair;
+        else pairs.push(pair);
+        await fs.writeFile(SYNC_PAIRS_FILE, JSON.stringify(pairs, null, 2));
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('sync-remove-pair', async (event, { deviceId }) => {
+    try {
+        let pairs = [];
+        try {
+            pairs = JSON.parse(await fs.readFile(SYNC_PAIRS_FILE, 'utf8'));
+        } catch {}
+        pairs = pairs.filter(p => p.deviceId !== deviceId);
+        await fs.writeFile(SYNC_PAIRS_FILE, JSON.stringify(pairs, null, 2));
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+let autoSyncEnabled = false;
+let autoSyncDiscoverySocket = null;
+let autoSyncInterval = null;
+
+ipcMain.handle('sync-enable-auto', async () => {
+    if (autoSyncEnabled) return { success: true };
+    if (!inMemoryMasterPassword || !currentUserDir) return { success: false, error: 'Not logged in' };
+
+    autoSyncEnabled = true;
+
+    autoSyncDiscoverySocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    autoSyncDiscoverySocket.bind(41234, () => {
+        autoSyncDiscoverySocket.setBroadcast(true);
+        try { autoSyncDiscoverySocket.addMembership('224.0.0.251'); } catch(e) {}
+    });
+
+    autoSyncDiscoverySocket.on('message', async (msg) => {
+        try {
+            const data = JSON.parse(msg.toString());
+            if (data.service === '_passsafer-sync._tcp.local') {
+
+                let pairs = [];
+                try { pairs = JSON.parse(await fs.readFile(SYNC_PAIRS_FILE, 'utf8')); } catch {}
+                const pair = pairs.find(p => p.deviceName === data.device);
+                if (pair && inMemoryMasterPassword) {
+
+                    pair.lastSync = Date.now();
+                    await fs.writeFile(SYNC_PAIRS_FILE, JSON.stringify(pairs, null, 2));
+                    updateSyncState('auto-syncing');
+                }
+            }
+        } catch(e) {}
+    });
+
+    return { success: true };
+});
+
+ipcMain.handle('sync-disable-auto', async () => {
+    autoSyncEnabled = false;
+    if (autoSyncDiscoverySocket) {
+        try { autoSyncDiscoverySocket.close(); } catch(e) {}
+        autoSyncDiscoverySocket = null;
+    }
+    return { success: true };
+});
+
+async function discoverSyncServer(timeoutMs = 6000) {
+    if (syncServer && syncPort > 0) {
+        return { ip: '127.0.0.1', port: syncPort, device: os.hostname() };
+    }
+    return new Promise((resolve) => {
+        let discSocket = null;
+        let timer = null;
+        let resolved = false;
+
+        function cleanup() {
+            if (timer) clearTimeout(timer);
+            if (discSocket) {
+                try { discSocket.close(); } catch(e){}
+                discSocket = null;
+            }
+        }
+
+        timer = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                cleanup();
+                resolve(null);
+            }
+        }, timeoutMs);
+
+        try {
+            discSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+            discSocket.on('message', (msg, rinfo) => {
+                try {
+                    const data = JSON.parse(msg.toString());
+                    if (data.service === '_passsafer-sync._tcp.local' && data.port) {
+                        if (!resolved) {
+                            resolved = true;
+                            cleanup();
+                            resolve({ ip: rinfo.address, port: data.port, device: data.device || rinfo.address });
+                        }
+                    }
+                } catch(e) {}
+            });
+            discSocket.on('error', () => {});
+            discSocket.bind(41234, () => {
+                discSocket.setBroadcast(true);
+                try { discSocket.addMembership('224.0.0.251'); } catch(e){}
+            });
+        } catch(e) {
+            cleanup();
+            resolve(null);
+        }
+    });
+}
+
+ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
+    let targetIp = ip;
+    let targetPort = port;
+    let targetDevice = null;
+
+    if (!targetIp || !targetPort) {
+        updateSyncState('connecting');
+        const discovered = await discoverSyncServer(6000);
+        if (!discovered) {
+            updateSyncState('error');
+            return { success: false, error: 'Kein PassSafer-Gerät im lokalen Netzwerk gefunden.' };
+        }
+        targetIp = discovered.ip;
+        targetPort = discovered.port;
+        targetDevice = discovered.device;
+    }
+
+    return new Promise((resolve) => {
+        try {
+            updateSyncState('connecting');
+            const client = new net.Socket();
+            let ecdh = crypto.createECDH('prime256v1');
+            ecdh.generateKeys();
+            let sharedSecret = null;
+            let sessionPassword = null;
+            let buffer = '';
+
+            const timeout = setTimeout(() => {
+                client.destroy();
+                updateSyncState('error');
+                resolve({ success: false, error: 'Verbindungstimeout' });
+            }, 10000);
+
+            client.connect(targetPort, targetIp, () => {
+
+                client.write(JSON.stringify({
+                    type: 'hello',
+                    publicKey: ecdh.getPublicKey('hex')
+                }) + '\n');
+            });
+
+            client.on('data', async (data) => {
+                buffer += data.toString();
+                if (!buffer.includes('\n')) return;
+
+                const messages = buffer.split('\n');
+                buffer = messages.pop();
+
+                for (const msgStr of messages) {
+                    if (!msgStr.trim()) continue;
+                    try {
+                        const msg = JSON.parse(msgStr);
+
+                        if (msg.type === 'hello_reply') {
+                            const serverKey = Buffer.from(msg.publicKey, 'hex');
+                            sharedSecret = ecdh.computeSecret(serverKey);
+
+                            client.write(JSON.stringify({
+                                type: 'auth',
+                                pin: pin
+                            }) + '\n');
+
+                        } else if (msg.type === 'auth_reply') {
+                            if (!msg.success) {
+                                clearTimeout(timeout);
+                                client.destroy();
+                                updateSyncState('error');
+                                resolve({ success: false, error: 'Ungültige PIN' });
+                                return;
+                            }
+
+                            const sessionKey = crypto.pbkdf2Sync(pin, 'PassSaferSync2024', 100000, 32, 'sha256');
+                            sessionPassword = sessionKey.toString('hex');
+                            sessionKey.fill(0);
+
+                            updateSyncState('syncing');
+
+                            let dataToSend = '{}';
+                            if (direction === 'merge' || direction === 'push') {
+                                const localData = await getAllLocalData();
+                                dataToSend = JSON.stringify(localData);
+                            }
+                            const encryptedData = encryptExport(dataToSend, sessionPassword);
+
+                            client.write(JSON.stringify({
+                                type: 'sync_request',
+                                direction: direction || 'merge',
+                                data: encryptedData
+                            }) + '\n');
+
+                        } else if (msg.type === 'sync_reply') {
+                            clearTimeout(timeout);
+                            if (msg.success && msg.data) {
+                                if (direction === 'merge' || direction === 'pull') {
+                                    const decryptedStr = decryptExport(msg.data, sessionPassword);
+                                    const serverData = JSON.parse(decryptedStr);
+                                    await mergeAllFiles(serverData);
+                                }
+                            }
+                            updateSyncState('complete');
+                            client.destroy();
+                            resolve({ success: true, deviceName: targetDevice });
+                        }
+                    } catch (err) {
+                        clearTimeout(timeout);
+                        client.destroy();
+                        updateSyncState('error');
+                        resolve({ success: false, error: err.message });
+                    }
+                }
+            });
+
+            client.on('error', (err) => {
+                clearTimeout(timeout);
+                updateSyncState('error');
+                resolve({ success: false, error: err.message });
+            });
+
+            client.on('close', () => {
+                clearTimeout(timeout);
+            });
+        } catch (err) {
+            resolve({ success: false, error: err.message });
+        }
+    });
+});
 
 let syncState = 'idle';
 let syncServer = null;
@@ -1340,7 +1616,7 @@ function mergeArrays(local, remote) {
     local.forEach(item => {
         if (item.id) map.set(item.id, item);
     });
-    
+
     remote.forEach(item => {
         if (item.id) {
             const existing = map.get(item.id);
@@ -1355,70 +1631,94 @@ function mergeArrays(local, remote) {
             }
         }
     });
-    
+
     return Array.from(map.values());
 }
 
-async function getAllLocalData() {
+async function getAllLocalDataForUser(userDir, masterPassword) {
     let result = {};
-    if (!inMemoryMasterPassword) return result;
     try {
-        const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
-        result.pw = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+        const fileData = JSON.parse(await fs.readFile(path.join(userDir, '.pw'), 'utf8'));
+        result.pw = JSON.parse(decrypt(fileData.data, masterPassword, fileData.salt));
     } catch(e){}
     try {
-        const fileData = JSON.parse(await fs.readFile(IDS_FILE, 'utf8'));
-        result.id = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+        const fileData = JSON.parse(await fs.readFile(path.join(userDir, '.id'), 'utf8'));
+        result.id = JSON.parse(decrypt(fileData.data, masterPassword, fileData.salt));
     } catch(e){}
     try {
-        const fileData = JSON.parse(await fs.readFile(DOCUMENTS_FILE, 'utf8'));
-        result.doc = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+        const fileData = JSON.parse(await fs.readFile(path.join(userDir, '.doc'), 'utf8'));
+        result.doc = JSON.parse(decrypt(fileData.data, masterPassword, fileData.salt));
     } catch(e){}
     try {
-        const fileData = JSON.parse(await fs.readFile(CARDS_FILE, 'utf8'));
-        result.card = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+        const fileData = JSON.parse(await fs.readFile(path.join(userDir, '.card'), 'utf8'));
+        result.card = JSON.parse(decrypt(fileData.data, masterPassword, fileData.salt));
+    } catch(e){}
+    try {
+        const fileData = JSON.parse(await fs.readFile(path.join(userDir, '.report'), 'utf8'));
+        result.report = JSON.parse(decrypt(fileData.data, masterPassword, fileData.salt));
     } catch(e){}
     return result;
 }
 
-async function mergeAllFiles(clientData) {
-    if (!inMemoryMasterPassword) return;
+async function getAllLocalData() {
+    if (!inMemoryMasterPassword || !currentUserDir) return {};
+    return getAllLocalDataForUser(currentUserDir, inMemoryMasterPassword);
+}
+
+async function mergeAllFiles(clientData, masterPass = inMemoryMasterPassword, userDir = currentUserDir) {
+    if (!masterPass || !userDir) return;
+
+    const pwFile = path.join(userDir, '.pw');
+    const idFile = path.join(userDir, '.id');
+    const docFile = path.join(userDir, '.doc');
+    const cardFile = path.join(userDir, '.card');
+    const reportFile = path.join(userDir, '.report');
+
     if (clientData.pw) {
         try {
-            const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
-            let localData = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+            const fileData = JSON.parse(await fs.readFile(pwFile, 'utf8'));
+            let localData = JSON.parse(decrypt(fileData.data, masterPass, fileData.salt));
             localData.passwords = mergeArrays(localData.passwords || [], clientData.pw.passwords || []);
             localData.folders = mergeArrays(localData.folders || [], clientData.pw.folders || []);
             localData.trash = mergeArrays(localData.trash || [], clientData.pw.trash || []);
             const newSalt = crypto.randomBytes(16).toString('hex');
-            await fs.writeFile(PASSWORDS_FILE, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(localData), inMemoryMasterPassword, newSalt), kdf: 'scrypt' }));
+            await fs.writeFile(pwFile, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(localData), masterPass, newSalt), kdf: 'scrypt' }));
         } catch(e){}
     }
     if (clientData.id) {
         try {
-            const fileData = JSON.parse(await fs.readFile(IDS_FILE, 'utf8'));
-            let localData = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+            const fileData = JSON.parse(await fs.readFile(idFile, 'utf8'));
+            let localData = JSON.parse(decrypt(fileData.data, masterPass, fileData.salt));
             let merged = mergeArrays(localData, clientData.id);
             const newSalt = crypto.randomBytes(16).toString('hex');
-            await fs.writeFile(IDS_FILE, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), inMemoryMasterPassword, newSalt), kdf: 'scrypt' }));
+            await fs.writeFile(idFile, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), masterPass, newSalt), kdf: 'scrypt' }));
         } catch(e){}
     }
     if (clientData.doc) {
         try {
-            const fileData = JSON.parse(await fs.readFile(DOCUMENTS_FILE, 'utf8'));
-            let localData = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+            const fileData = JSON.parse(await fs.readFile(docFile, 'utf8'));
+            let localData = JSON.parse(decrypt(fileData.data, masterPass, fileData.salt));
             let merged = mergeArrays(localData, clientData.doc);
             const newSalt = crypto.randomBytes(16).toString('hex');
-            await fs.writeFile(DOCUMENTS_FILE, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), inMemoryMasterPassword, newSalt), kdf: 'scrypt' }));
+            await fs.writeFile(docFile, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), masterPass, newSalt), kdf: 'scrypt' }));
         } catch(e){}
     }
     if (clientData.card) {
         try {
-            const fileData = JSON.parse(await fs.readFile(CARDS_FILE, 'utf8'));
-            let localData = JSON.parse(decrypt(fileData.data, inMemoryMasterPassword, fileData.salt));
+            const fileData = JSON.parse(await fs.readFile(cardFile, 'utf8'));
+            let localData = JSON.parse(decrypt(fileData.data, masterPass, fileData.salt));
             let merged = mergeArrays(localData, clientData.card);
             const newSalt = crypto.randomBytes(16).toString('hex');
-            await fs.writeFile(CARDS_FILE, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), inMemoryMasterPassword, newSalt), kdf: 'scrypt' }));
+            await fs.writeFile(cardFile, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), masterPass, newSalt), kdf: 'scrypt' }));
+        } catch(e){}
+    }
+    if (clientData.report) {
+        try {
+            const fileData = JSON.parse(await fs.readFile(reportFile, 'utf8'));
+            let localData = JSON.parse(decrypt(fileData.data, masterPass, fileData.salt));
+            let merged = mergeArrays(localData, clientData.report);
+            const newSalt = crypto.randomBytes(16).toString('hex');
+            await fs.writeFile(reportFile, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), masterPass, newSalt), kdf: 'scrypt' }));
         } catch(e){}
     }
 }
@@ -1448,32 +1748,32 @@ function stopSyncServer() {
 
 ipcMain.handle('sync-start-server', async () => {
     if (syncState !== 'idle') return { success: false, error: 'Already running' };
-    
+
     syncPin = crypto.randomInt(100000, 999999).toString();
     syncAttempts = 0;
-    
+
     syncServer = net.createServer((socket) => {
         let ecdh = crypto.createECDH('prime256v1');
         ecdh.generateKeys();
-        
+
         let buffer = '';
         socket.on('data', async (data) => {
             buffer += data.toString();
             if (!buffer.includes('\n')) return;
-            
+
             const messages = buffer.split('\n');
             buffer = messages.pop();
-            
+
             for (const msgStr of messages) {
                 if (!msgStr.trim()) continue;
                 try {
                     const msg = JSON.parse(msgStr);
-                    
+
                     if (msg.type === 'hello') {
                         updateSyncState('pairing');
                         const clientKey = Buffer.from(msg.publicKey, 'hex');
                         socket.sharedSecret = ecdh.computeSecret(clientKey);
-                        
+
                         socket.write(JSON.stringify({
                             type: 'hello_reply',
                             publicKey: ecdh.getPublicKey('hex')
@@ -1484,23 +1784,44 @@ ipcMain.handle('sync-start-server', async () => {
                             socket.destroy();
                             return;
                         }
-                        
+
                         const sessionKey = crypto.pbkdf2Sync(syncPin, 'PassSaferSync2024', 100000, 32, 'sha256');
                         socket.sharedSecret.fill(0);
                         socket.sessionPassword = sessionKey.toString('hex');
                         sessionKey.fill(0);
-                        
+
                         updateSyncState('syncing');
                         socket.write(JSON.stringify({ type: 'auth_reply', success: true }) + '\n');
+                    } else if (msg.type === 'sync_request') {
+                        if (!socket.sessionPassword) return;
+                        const direction = msg.direction || 'merge';
+
+                        if (msg.data) {
+                            const decryptedStr = decryptExport(msg.data, socket.sessionPassword);
+                            const clientData = JSON.parse(decryptedStr);
+                            if (direction === 'merge' || direction === 'push') {
+                                await mergeAllFiles(clientData);
+                            }
+                        }
+
+                        if (direction === 'merge' || direction === 'pull') {
+                            const localData = await getAllLocalData();
+                            const serverEncrypted = encryptExport(JSON.stringify(localData), socket.sessionPassword);
+                            socket.write(JSON.stringify({ type: 'sync_reply', success: true, data: serverEncrypted }) + '\n');
+                        } else {
+                            socket.write(JSON.stringify({ type: 'sync_reply', success: true, data: encryptExport('{}', socket.sessionPassword) }) + '\n');
+                        }
+                        updateSyncState('complete');
+                        setTimeout(() => stopSyncServer(), 3000);
                     } else if (msg.type === 'sync') {
                         if (!socket.sessionPassword) return;
                         const decryptedStr = decryptExport(msg.data, socket.sessionPassword);
                         const clientData = JSON.parse(decryptedStr);
-                        
+
                         await mergeAllFiles(clientData);
                         const localData = await getAllLocalData();
                         const serverEncrypted = encryptExport(JSON.stringify(localData), socket.sessionPassword);
-                        
+
                         socket.write(JSON.stringify({ type: 'sync_reply', success: true, data: serverEncrypted }) + '\n');
                         updateSyncState('complete');
                         setTimeout(() => stopSyncServer(), 3000);
@@ -1511,17 +1832,17 @@ ipcMain.handle('sync-start-server', async () => {
             }
         });
     });
-    
+
     await new Promise((resolve) => {
         syncServer.listen(0, '0.0.0.0', () => {
             syncPort = syncServer.address().port;
-            
+
             syncUdpSocket = dgram.createSocket('udp4');
             syncUdpSocket.bind(() => {
                 syncUdpSocket.setBroadcast(true);
                 syncUdpSocket.setMulticastTTL(128);
                 syncUdpSocket.addMembership('224.0.0.251');
-                
+
                 mDnsInterval = setInterval(() => {
                     const payload = JSON.stringify({
                         service: '_passsafer-sync._tcp.local',
@@ -1534,17 +1855,17 @@ ipcMain.handle('sync-start-server', async () => {
                     } catch(e){}
                 }, 2000);
             });
-            
+
             updateSyncState('waiting');
-            
+
             syncTimeout = setTimeout(() => {
                 stopSyncServer();
             }, 5 * 60 * 1000);
-            
+
             resolve();
         });
     });
-    
+
     let localIps = [];
     const interfaces = os.networkInterfaces();
     for (const devName in interfaces) {
@@ -1558,14 +1879,14 @@ ipcMain.handle('sync-start-server', async () => {
     }
     const ipString = localIps.length > 0 ? localIps.join(', ') : '127.0.0.1';
     const primaryIp = localIps.length > 0 ? localIps[0] : '127.0.0.1';
-    
+
     const qrPayload = `passsafer://sync?ip=${primaryIp}&port=${syncPort}&pin=${syncPin}`;
     let qrDataUrl = null;
     try {
         const QRCode = require('qrcode');
         qrDataUrl = await QRCode.toDataURL(qrPayload, { width: 300, margin: 2, color: { dark: '#000000', light: '#FFFFFF' } });
     } catch(e) {}
-    
+
     return { success: true, pin: syncPin, port: syncPort, deviceName: os.hostname(), ip: ipString, qrDataUrl, qrPayload };
 });
 
@@ -1586,28 +1907,10 @@ app.on('will-quit', () => {
     inMemoryMasterPassword = null;
 });
 
-// ═══════════════════════════════════════════════════════════════════════
-// SYNC-PUSH AN BROWSER-ERWEITERUNG
-// ═══════════════════════════════════════════════════════════════════════
-
-/**
- * Sendet die aktualisierte verschlüsselte Datenbank über die Named Pipe
- * an die verbundene Browser-Erweiterung, damit diese ihren Cache aktualisieren kann.
- */
-function pushSyncToExtension(salt, encryptedData) {
-    // Note: Push to extension via self-connect is not supported.
-    // The extension pulls data when needed via pull-vault-from-app.
-    console.log('[PassSafer] Sync push to extension is handled by extension pull mechanism.');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// PASSWORT-SICHERHEITS-AUDIT (Weak, Reused, Leaked via HaveIBeenPwned)
-// ═══════════════════════════════════════════════════════════════════════
-
 ipcMain.handle('password-audit', async (event, { password }) => {
     try {
-        // 1. Passwörter laden und entschlüsseln
-        const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE, 'utf8'));
+
+        const fileData = JSON.parse(await fs.readFile(PASSWORDS_FILE(), 'utf8'));
         let decryptedData;
         try {
             decryptedData = decrypt(fileData.data, password, fileData.salt);
@@ -1623,25 +1926,22 @@ ipcMain.handle('password-audit', async (event, { password }) => {
 
         const results = [];
 
-        // 2. Analyse jedes Passworts
-        for (const entry of passwords) {
+        for (let idx = 0; idx < passwords.length; idx++) {
+            const entry = passwords[idx];
             if (!entry.password) continue;
 
             const issues = [];
             const pwd = entry.password;
 
-            // Weak Check: < 12 Zeichen oder mangelnde Komplexität
             if (pwd.length < 12) issues.push('weak_short');
             if (!/[A-Z]/.test(pwd)) issues.push('weak_no_upper');
             if (!/[a-z]/.test(pwd)) issues.push('weak_no_lower');
             if (!/[0-9]/.test(pwd)) issues.push('weak_no_digit');
             if (!/[^A-Za-z0-9]/.test(pwd)) issues.push('weak_no_special');
 
-            // Reused Check: identisches Passwort bei mehreren Einträgen
             const reusedCount = passwords.filter(p => p.password === pwd && p !== entry).length;
             if (reusedCount > 0) issues.push('reused');
 
-            // Passwort-Stärke-Score (0-100)
             let strength = 0;
             if (pwd.length >= 8) strength += 20;
             if (pwd.length >= 12) strength += 15;
@@ -1650,12 +1950,13 @@ ipcMain.handle('password-audit', async (event, { password }) => {
             if (/[a-z]/.test(pwd)) strength += 10;
             if (/[0-9]/.test(pwd)) strength += 10;
             if (/[^A-Za-z0-9]/.test(pwd)) strength += 15;
-            // Unique chars bonus
+
             const uniqueChars = new Set(pwd).size;
             if (uniqueChars >= 8) strength += 10;
             strength = Math.min(100, strength);
 
             results.push({
+                originalIndex: idx,
                 app: entry.app,
                 username: entry.username || '',
                 issues,
@@ -1670,7 +1971,6 @@ ipcMain.handle('password-audit', async (event, { password }) => {
     }
 });
 
-// HaveIBeenPwned K-Anonymity Leak-Check (SHA-1 Prefix-Abfrage)
 ipcMain.handle('check-pwned', async (event, { passwordHash }) => {
     try {
         const prefix = passwordHash.substring(0, 5).toUpperCase();
@@ -1688,7 +1988,6 @@ ipcMain.handle('check-pwned', async (event, { passwordHash }) => {
             req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')); });
         });
 
-        // Suche nach unserem Hash-Suffix in der Antwort
         const lines = response.split('\n');
         for (const line of lines) {
             const [hashSuffix, count] = line.trim().split(':');
@@ -1703,12 +2002,11 @@ ipcMain.handle('check-pwned', async (event, { passwordHash }) => {
     }
 });
 
-// Load encrypted Cards
 ipcMain.handle('load-cards', async (event, { password }) => {
     try {
         let fileData;
         try {
-            fileData = JSON.parse(await fs.readFile(CARDS_FILE, 'utf8'));
+            fileData = JSON.parse(await fs.readFile(CARDS_FILE(), 'utf8'));
         } catch (e) {
             return { success: true, data: [] };
         }
@@ -1720,25 +2018,23 @@ ipcMain.handle('load-cards', async (event, { password }) => {
     }
 });
 
-// Save encrypted Cards
 ipcMain.handle('save-cards', async (event, { password, cards }) => {
     try {
         const salt = crypto.randomBytes(16).toString('hex');
         const encrypted = encrypt(JSON.stringify(cards), password, salt);
-        await fs.writeFile(CARDS_FILE, JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
-        await setSecurePermissions(CARDS_FILE);
+        await fs.writeFile(CARDS_FILE(), JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
+        await setSecurePermissions(CARDS_FILE());
         return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
     }
 });
 
-// Load encrypted Reports
 ipcMain.handle('load-reports', async (event, { password }) => {
     try {
         let fileData;
         try {
-            fileData = JSON.parse(await fs.readFile(REPORTS_FILE, 'utf8'));
+            fileData = JSON.parse(await fs.readFile(REPORTS_FILE(), 'utf8'));
         } catch (e) {
             return { success: true, data: [] };
         }
@@ -1750,50 +2046,14 @@ ipcMain.handle('load-reports', async (event, { password }) => {
     }
 });
 
-// Save encrypted Reports
 ipcMain.handle('save-reports', async (event, { password, reports }) => {
     try {
         const salt = crypto.randomBytes(16).toString('hex');
         const encrypted = encrypt(JSON.stringify(reports), password, salt);
-        await fs.writeFile(REPORTS_FILE, JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
-        await setSecurePermissions(REPORTS_FILE);
+        await fs.writeFile(REPORTS_FILE(), JSON.stringify({ salt, data: encrypted, kdf: 'scrypt' }));
+        await setSecurePermissions(REPORTS_FILE());
         return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
-    }
-});
-
-// Fetch local favicon (bypassing CORS)
-ipcMain.handle('fetch-local-favicon', async (event, domainStr) => {
-    try {
-        let d = domainStr.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split('?')[0];
-        let targetUrl = domainStr.startsWith('https') ? 'https://' + d : 'http://' + d;
-        
-        // Timeout 3 seconds so we don't hang if IP is dead
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        
-        const response = await fetch(targetUrl, { signal: controller.signal });
-        clearTimeout(timeout);
-        
-        const html = await response.text();
-        const match = html.match(/<link[^>]*rel=["'](?:shortcut )?icon["'][^>]*href=["']([^"']+)["']/i);
-        let iconUrl = match && match[1] ? new URL(match[1], response.url).href : new URL('favicon.ico', response.url).href;
-        
-        // Fetch the actual image to return a Data URI (bypasses all renderer CSP/CORS issues)
-        const iconCtrl = new AbortController();
-        const iconTimeout = setTimeout(() => iconCtrl.abort(), 2000);
-        const iconRes = await fetch(iconUrl, { signal: iconCtrl.signal });
-        clearTimeout(iconTimeout);
-        
-        if (!iconRes.ok) return null;
-        
-        const buffer = await iconRes.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString('base64');
-        const mimeType = iconRes.headers.get('content-type') || 'image/x-icon';
-        
-        return `data:${mimeType};base64,${base64}`;
-    } catch (err) {
-        return null; // Let the frontend fallback to the letter
     }
 });

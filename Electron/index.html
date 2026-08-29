@@ -22,54 +22,55 @@
             </div>
             <div class="sidebar-nav">
                 <div class="nav-item active" data-nav="dashboard">
-                    <span class="nav-icon"><img src="../logos/dashboard.png" alt="Dashboard"></span>
+                    <span class="nav-icon"><img src="../icons_new/sidebar/dashboard_withe.svg" alt="Dashboard"></span>
                     <span class="nav-label" data-i18n="nav_dashboard">Dashboard</span>
                 </div>
                 <div class="nav-item" data-nav="passwords">
-                    <span class="nav-icon"><img src="../logos/password.png" alt="Passwords"></span>
+                    <span class="nav-icon"><img src="../icons_new/sidebar/key_withe.svg" alt="Passwords"></span>
                     <span class="nav-label" data-i18n="nav_passwords">Passwords</span>
                 </div>
                 <div class="nav-item" data-nav="cards">
-                    <span class="nav-icon"><img src="../logos/credit_card.png" alt="Cards"></span>
+                    <span class="nav-icon"><img src="../icons_new/sidebar/credit-card_withe.svg" alt="Cards"></span>
                     <span class="nav-label" data-i18n="nav_cards">Credit Cards</span>
                 </div>
                 <div class="nav-item" data-nav="ids">
-                    <span class="nav-icon"><img src="../logos/id.png" alt="IDs"></span>
+                    <span class="nav-icon"><img src="../icons_new/sidebar/id_withe.svg" alt="IDs"></span>
                     <span class="nav-label" data-i18n="nav_ids">IDs</span>
                 </div>
                 <div class="nav-item" data-nav="documents">
-                    <span class="nav-icon"><img src="../logos/documents.png" alt="Documents"></span>
+                    <span class="nav-icon"><img src="../icons_new/sidebar/documents_withe.svg" alt="Documents"></span>
                     <span class="nav-label" data-i18n="nav_documents">Documents</span>
                 </div>
                 <div class="nav-item" data-nav="watchtower">
-                    <span class="nav-icon"><img src="../logos/shield.png" alt="Watchtower"></span>
+                    <span class="nav-icon"><img src="../icons_new/sidebar/shield_withe.svg" alt="Watchtower"></span>
                     <span class="nav-label" data-i18n="nav_watchtower">Watchtower</span>
                 </div>
                 <div class="nav-item" data-nav="reports">
-                    <span class="nav-icon"><img src="../logos/report.png" alt="Reports"></span>
+                    <span class="nav-icon"><img src="../icons_new/sidebar/report_withe.svg" alt="Reports"></span>
                     <span class="nav-label" data-i18n="nav_reports">Reports</span>
                 </div>
                 <div class="nav-item" data-nav="trash">
-                    <span class="nav-icon"><img src="../logos/garbage.png" alt="Trash"></span>
+                    <span class="nav-icon"><img src="../icons_new/sidebar/trash_withe.svg" alt="Trash"></span>
                     <span class="nav-label" data-i18n="nav_trash">Trash</span>
                 </div>
-                <div style="border-top: 1px solid var(--color-border); margin: 8px 0;"></div>
+            </div>
+            <div class="sidebar-bottom" style="display: flex; flex-direction: column; gap: 4px;">
+                <div class="sidebar-divider"></div>
                 <div class="nav-item" data-nav="import">
-                    <span class="nav-icon"><img src="../logos/import.png" alt="Import"></span>
+                    <span class="nav-icon"><img src="../icons_new/sidebar/import_withe.svg" alt="Import"></span>
                     <span class="nav-label" data-i18n="settings_import">Import Passwords</span>
                 </div>
                 <div class="nav-item" data-nav="export">
-                    <span class="nav-icon"><img src="../logos/export.png" alt="Export"></span>
+                    <span class="nav-icon"><img src="../icons_new/sidebar/export_withe.svg" alt="Export"></span>
                     <span class="nav-label" data-i18n="settings_export">Export Passwords</span>
                 </div>
                 <div class="nav-item" data-nav="csv-import">
-                    <span class="nav-icon"><img src="../logos/import.png" alt="CSV Import"></span>
+                    <span class="nav-icon"><img src="../icons_new/sidebar/import_withe.svg" alt="CSV Import"></span>
                     <span class="nav-label" data-i18n="settings_import_csv">Import from CSV (Browser)</span>
                 </div>
-            </div>
-            <div class="sidebar-bottom">
+                <div class="sidebar-divider"></div>
                 <div class="nav-item" data-nav="settings">
-                    <span class="nav-icon"><img src="../logos/settings.png" alt="Settings"></span>
+                    <span class="nav-icon"><img src="../icons_new/sidebar/settings_withe.svg" alt="Settings"></span>
                     <span class="nav-label" data-i18n="title_settings">Settings</span>
                 </div>
             </div>
@@ -189,14 +190,18 @@
 
     <!-- Main Screen -->
     <div id="main-screen" class="screen hidden">
-        <!-- Header -->
-        <header class="app-header">
-
-            <h1 class="header-title" id="header-title" data-i18n="header_passwords">Passwords</h1>
-            <button class="icon-button" id="add-password-btn" data-i18n="title_add" title="Add Password">
-                <img src="../logos/plus.png" alt="Add">
-            </button>
-        </header>
+        <!-- Workspace Header -->
+        <div class="workspace-header" style="display: grid; grid-template-columns: 1fr auto 1fr; width: 100%; align-items: center;">
+            <div></div>
+            <div class="search-container">
+                <input type="text" id="search-input" data-i18n="placeholder_search" placeholder="Search passwords or folders..." class="search-input">
+                <img src="../icons_new/search-bar/search-bar.svg" alt="Search" class="search-icon">
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button class="icon-button" id="add-password-btn" data-i18n="title_add" title="Add Password"><img src="../icons_new/add/plus_withe.svg" alt="Add"></button>
+                <button class="icon-button folder-btn" id="create-folder-btn" data-i18n="btn_create_folder" title="Create Folder"><img src="../icons_new/add-folder/add_folder_withe.svg" alt="Folder"></button>
+            </div>
+        </div>
 
         <!-- Auto Update Banner -->
         <div id="update-banner" class="update-banner hidden">
@@ -212,22 +217,16 @@
             </div>
         </div>
 
-        <!-- Search and Folder Controls -->
-        <div class="main-controls" id="main-controls">
-            <div class="search-container">
-                <img src="../logos/search.png" alt="Search" class="search-icon">
-                <input type="text" id="search-input" data-i18n="placeholder_search" placeholder="Search passwords or folders..." class="search-input">
-            </div>
-            <button class="button primary folder-btn" id="create-folder-btn" data-i18n="btn_create_folder" title="Create Folder">
-                <img src="../logos/folder.png" alt="Folder">
-            </button>
-        </div>
-
         <!-- Back button (hidden by default) -->
         <div id="back-container" class="back-container hidden">
             <button class="button secondary" id="back-btn">
-                <img src="../logos/left.png" alt="Back">
+                <img src="../icons_new/settings/logout_withe1.svg" alt="Back">
             </button>
+            <div style="display:flex; gap:8px;">
+                <button class="icon-button" id="edit-folder-btn" title="Edit Folder">
+                    <img src="../icons_new/edit_withe1.svg" alt="Edit">
+                </button>
+            </div>
         </div>
 
         <!-- Password/Folder List -->
@@ -255,7 +254,7 @@
                 <div class="detail-row">
                     <a href="#" id="detail-link" target="_blank" style="color: var(--color-accent); text-decoration: none; word-break: break-all;"></a>
                     <button class="button icon-only-modern" id="copy-link-btn" data-i18n="title_copy_link" title="Copy Link">
-                        <img src="../logos/copy.png" alt="Copy">
+                        <img src="../icons_new/copy_withe.svg" alt="Copy">
                     </button>
                 </div>
             </div>
@@ -264,7 +263,7 @@
                 <div class="detail-row">
                     <p id="detail-username"></p>
                     <button class="button icon-only-modern" id="copy-username-btn" data-i18n="title_copy_username" title="Copy Username">
-                        <img src="../logos/copy.png" alt="Copy">
+                        <img src="../icons_new/copy_withe.svg" alt="Copy">
                     </button>
                 </div>
             </div>
@@ -274,10 +273,10 @@
                     <p id="detail-password">••••••••</p>
                     <div class="button-group-inline" style="gap: 10px;">
                         <button class="button icon-only-modern" id="toggle-password-btn" data-i18n="title_show_password" title="Show Password">
-                            <img src="../logos/eye.png" alt="Show">
+                            <img src="../icons_new/eye_open_withe.svg" alt="Show">
                         </button>
                         <button class="button icon-only-modern" id="copy-password-btn" data-i18n="title_copy_password" title="Copy Password">
-                            <img src="../logos/copy.png" alt="Copy">
+                            <img src="../icons_new/copy_withe.svg" alt="Copy">
                         </button>
                     </div>
                 </div>
@@ -306,11 +305,11 @@
             </div>
             <div class="detail-actions">
                 <button class="button primary" id="edit-password-btn">
-                    <img src="../logos/pencil.png" alt="Edit" class="btn-icon">
+                    <img src="../icons_new/edit_withe1.svg" alt="Edit" class="btn-icon">
                     <span data-i18n="btn_edit">Edit</span>
                 </button>
                 <button class="button danger" id="delete-password-btn">
-                    <img src="../logos/trash.png" alt="Delete" class="btn-icon">
+                    <img src="../icons_new/trash/trash_withe.svg" alt="Delete" class="btn-icon">
                     <span data-i18n="btn_delete">Delete</span>
                 </button>
             </div>
@@ -343,7 +342,7 @@
                     <input type="text" id="edit-password" placeholder="Password" style="flex:1;">
                     <button class="button icon-only-modern" id="generate-password-btn" type="button"
                         title="Generate strong password">
-                        <img src="../logos/reload.png" alt="Generate">
+                        <img src="../icons_new/generate_password_withe.svg" alt="Generate">
                     </button>
                 </div>
             </div>
@@ -355,7 +354,7 @@
                 <label data-i18n="label_files">Files (max. 5)</label>
                 <div class="file-upload-row">
                     <button class="icon-button" id="upload-file-btn" type="button" title="Upload File">
-                        <img src="../logos/upload.png" alt="Upload">
+                        <img src="../icons_new/dashboard/upload_withe.svg" alt="Upload">
                     </button>
                     <span id="edit-file-hint" class="file-name-display" data-i18n="label_no_file_selected">No files selected</span>
                 </div>
@@ -396,16 +395,16 @@
         <div class="settings-content">
             <div class="settings-section">
                 <h3 class="settings-section-title" data-i18n="settings_security">Security</h3>
-                <button class="settings-option" id="change-pin-btn">
-                    <img src="../logos/settings.png" alt="Settings" class="btn-icon">
+                <button class="settings-option" style="height: 56px; padding: 0 24px;" id="change-pin-btn">
+                    <img src="../icons_new/settings/change_pin_withe1.svg" alt="Settings" class="btn-icon">
                     <span data-i18n="settings_change_pin">Change PIN</span>
                 </button>
-                <button class="settings-option" id="change-password-btn">
-                    <img src="../logos/settings.png" alt="Settings" class="btn-icon">
+                <button class="settings-option" style="height: 56px; padding: 0 24px;" id="change-password-btn">
+                    <img src="../icons_new/settings/change_master_password_withe1.svg" alt="Settings" class="btn-icon">
                     <span data-i18n="settings_change_master">Change Master Password</span>
                 </button>
-                <button class="settings-option" id="generate-report-btn">
-                    <img src="../logos/report.png" alt="Report" class="btn-icon">
+                <button class="settings-option" style="height: 56px; padding: 0 24px;" id="generate-report-btn">
+                    <img src="../icons_new/settings/generate_security_reports_withe1.svg" alt="Report" class="btn-icon">
                     <span data-i18n="settings_generate_report">Generate Security Report</span>
                 </button>
 
@@ -431,18 +430,72 @@
                         <strong id="settings-license-sync">-</strong>
                     </div>
                 </div>
-                <button class="settings-option" id="settings-activate-license-btn">
-                    <img src="../logos/settings.png" alt="License" class="btn-icon">
+                <button class="settings-option" style="height: 56px; padding: 0 24px;" id="settings-activate-license-btn">
+                    <img src="../icons_new/settings/manager_license_withe1.svg" alt="License" class="btn-icon">
                     <span data-i18n="settings_manage_license">Manage / Change License</span>
                 </button>
             </div>
 
 
 
+
+            <div class="settings-section">
+                <h3 class="settings-section-title">PC Sync</h3>
+                <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 15px; background: rgba(255, 255, 255, 0.03); border-radius: 6px; border: 1px solid var(--color-border); margin-bottom: 12px;">
+                    <div style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
+                        <span style="color: var(--color-text-secondary);">Status:</span>
+                        <strong id="sync-status" style="color: var(--color-text);">Idel</strong>
+                    </div>
+                    <div style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
+                        <span style="color: var(--color-text-secondary);">Last Synced:</span>
+                        <strong id="sync-last" style="color: var(--color-text);">13.8.2026 17:04:00</strong>
+                    </div>
+                </div>
+                
+                <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 16px; padding: 16px 15px; background: rgba(255, 255, 255, 0.03); border-radius: 6px; border: 1px solid var(--color-border); margin-bottom: 12px;">
+                    <span style="font-weight: 600; font-size: 14px;">Sync Direction</span>
+                    <div style="display: flex; gap: 8px; width: 100%;">
+                        <button class="button secondary" style="flex: 1; padding: 10px; font-weight: 600;">Merge</button>
+                        <button class="button secondary" style="flex: 1; padding: 10px; font-weight: 600;">Push</button>
+                        <button class="button secondary" style="flex: 1; padding: 10px; font-weight: 600;">Pull</button>
+                    </div>
+                </div>
+                
+                <button class="settings-option" style="height: 56px; padding: 0 24px;">
+                    <img src="../icons_new/settings/play_circle_start_sync_withe1.svg" alt="Start Sync" class="btn-icon">
+                    <span>Start Sync</span>
+                </button>
+                <button class="settings-option" style="height: 56px; padding: 0 24px;">
+                    <img src="../icons_new/settings/connect_to_sync_withe1.svg" alt="Connect" class="btn-icon">
+                    <span>Connect to Sync</span>
+                </button>
+                <div class="settings-row settings-option-like" style="display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; margin-bottom: 16px; background: var(--color-dark); border-radius: var(--border-radius); border: 1px solid var(--color-border);">
+                    <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                        <img src="../icons_new/settings/auto_sync_withe1.svg" alt="Auto Sync" style="width: 22px; height: 22px; filter: brightness(0) invert(1);">
+                        <span style="font-size: 14px; font-weight: 600;">Auto Sync</span>
+                    </div>
+                    <label class="switch" style="margin: 0;">
+                        <input type="checkbox" id="auto-sync-toggle">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                
+                <div class="settings-row settings-option-like" style="display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; margin-bottom: 16px; background: var(--color-dark); border-radius: var(--border-radius); border: 1px solid var(--color-border);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <img src="../icons_new/settings/connected_devices_withe1.svg" alt="Devices" style="width: 22px; height: 22px; filter: brightness(0) invert(1);">
+                        <span style="font-weight: 600; font-size: 14px;">Connected Devices</span>
+                    </div>
+                    <span style="color: var(--color-text-secondary); font-size: 13px;">No paired devices</span>
+                </div>
+            </div>
+
             <div class="settings-section">
                 <h3 class="settings-section-title" data-i18n="settings_app">Application</h3>
-                <div class="settings-row">
-                    <label data-i18n="settings_language">Language</label>
+                <div class="settings-row settings-option-like" style="display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <img src="../icons_new/settings/language_with1.svg" alt="Language" style="width: 22px; height: 22px; filter: brightness(0) invert(1);">
+                        <label data-i18n="settings_language" style="margin: 0;">Language</label>
+                    </div>
                     <select id="language-select" class="folder-select" style="width: auto; min-width: 150px;">
                         <option value="en">English</option>
                         <option value="de">Deutsch</option>
@@ -450,12 +503,12 @@
                         <option value="fr">Français</option>
                     </select>
                 </div>
-                <button class="settings-option" id="restart-onboarding-btn">
-                    <img src="../logos/shield.png" alt="Tour" class="btn-icon">
+                <button class="settings-option" style="height: 56px; padding: 0 24px;" id="restart-onboarding-btn">
+                    <img src="../icons_new/settings/restart_onboarding_withe1.svg" alt="Tour" class="btn-icon">
                     <span data-i18n="settings_onboarding">Restart Onboarding</span>
                 </button>
-                <button class="settings-option" id="check-updates-btn">
-                    <img src="../logos/reload.png" alt="Update" class="btn-icon">
+                <button class="settings-option" style="height: 56px; padding: 0 24px;" id="check-updates-btn">
+                    <img src="../icons_new/settings/check_for_Updates_withe1.svg" alt="Update" class="btn-icon">
                     <span data-i18n="settings_updates">Check for Updates</span>
                 </button>
             </div>
@@ -464,12 +517,12 @@
 
             <div class="settings-section">
                 <h3 class="settings-section-title" style="color: var(--color-danger);" data-i18n="settings_danger">Danger Zone</h3>
-                <button class="settings-option" id="logout-btn">
-                    <img src="../logos/left.png" alt="Logout" class="btn-icon">
+                <button class="settings-option" style="height: 56px; padding: 0 24px;" id="logout-btn">
+                    <img src="../icons_new/settings/logout_withe1.svg" alt="Logout" class="btn-icon">
                     <span data-i18n="settings_logout">Logout</span>
                 </button>
-                <button class="settings-option danger-option" id="delete-account-btn">
-                    <img src="../logos/trash.png" alt="Delete" class="btn-icon">
+                <button class="settings-option danger-option" id="delete-account-btn" style="height: 56px; padding: 0 24px;">
+                    <img src="../icons_new/settings/delete_account_withe1.svg" alt="Delete" class="btn-icon">
                     <span data-i18n="settings_delete">Delete Account</span>
                 </button>
             </div>
@@ -478,31 +531,36 @@
 
     <!-- Security Audit Screen -->
     <div id="audit-screen" class="screen hidden">
-        <header class="app-header">
-            <h1 class="header-title" data-i18n="nav_watchtower">🛡️ Watchtower</h1>
-        </header>
         <div class="settings-content" style="padding-bottom: 30px;">
             <!-- Summary Cards -->
-            <div id="audit-summary" class="audit-summary" style="display: none;">
-                <div class="audit-card audit-card-total">
-                    <div class="audit-card-number" id="audit-total">0</div>
-                    <div class="audit-card-label" data-i18n="audit_total">Total Passwords</div>
+            <div id="audit-summary" class="audit-summary watchtower-bento" style="display: none;">
+                <!-- Main alert card -->
+                <div class="audit-card audit-card-leaked watchtower-card" data-filter="leaked" style="cursor:pointer;">
+                    <div class="audit-card-content">
+                        <div class="audit-card-number" id="audit-leaked">0</div>
+                        <div class="audit-card-label" data-i18n="audit_leaked">Leaked</div>
+                        <div class="audit-card-desc">Immediate action required.</div>
+                    </div>
                 </div>
-                <div class="audit-card audit-card-strong">
-                    <div class="audit-card-number" id="audit-strong">0</div>
-                    <div class="audit-card-label" data-i18n="audit_strong">Strong</div>
-                </div>
-                <div class="audit-card audit-card-weak">
+                
+                <!-- Secondary alerts -->
+                <div class="audit-card audit-card-weak watchtower-card" data-filter="weak" style="cursor:pointer;">
                     <div class="audit-card-number" id="audit-weak">0</div>
                     <div class="audit-card-label" data-i18n="audit_weak">Weak</div>
                 </div>
-                <div class="audit-card audit-card-reused">
+                <div class="audit-card audit-card-reused watchtower-card" data-filter="reused" style="cursor:pointer;">
                     <div class="audit-card-number" id="audit-reused">0</div>
                     <div class="audit-card-label" data-i18n="audit_reused">Reused</div>
                 </div>
-                <div class="audit-card audit-card-leaked">
-                    <div class="audit-card-number" id="audit-leaked">0</div>
-                    <div class="audit-card-label" data-i18n="audit_leaked">Leaked</div>
+
+                <!-- Health stats -->
+                <div class="audit-card audit-card-strong watchtower-card" data-filter="strong" style="cursor:pointer;">
+                    <div class="audit-card-number" id="audit-strong">0</div>
+                    <div class="audit-card-label" data-i18n="audit_strong">Strong</div>
+                </div>
+                <div class="audit-card audit-card-total watchtower-card" data-filter="all" style="cursor:pointer;">
+                    <div class="audit-card-number" id="audit-total">0</div>
+                    <div class="audit-card-label" data-i18n="audit_total">Total</div>
                 </div>
             </div>
 
@@ -529,9 +587,6 @@
 
     <!-- Export Screen -->
     <div id="export-screen" class="screen hidden">
-        <header class="app-header">
-            <h1 class="header-title" data-i18n="header_export">Export Passwords</h1>
-        </header>
         <div class="form-container">
             <div class="settings-info-box" style="margin-bottom: 20px;">
                 <p data-i18n="export_info_desc">Exports: Passwords, Folders, IDs, Documents & Cards</p>
@@ -549,9 +604,6 @@
 
     <!-- Import Screen -->
     <div id="import-screen" class="screen hidden">
-        <header class="app-header">
-            <h1 class="header-title" data-i18n="header_import">Import Passwords</h1>
-        </header>
         <div class="form-container">
             <div class="settings-info-box" style="margin-bottom: 20px;">
                 <p data-i18n="import_info_desc">Imports: Passwords, Folders, IDs, Documents & Cards</p>
@@ -608,9 +660,6 @@
 
     <!-- CSV Import Screen -->
     <div id="csv-import-screen" class="screen hidden">
-        <header class="app-header">
-            <h1 class="header-title" data-i18n="settings_import_csv">Import from CSV (Browser)</h1>
-        </header>
         <div class="form-container">
             <div class="settings-info-box" style="margin-bottom: 20px;">
                 <p data-i18n="csv_import_desc">Support for Google Chrome and Firefox CSV exports.</p>
@@ -689,7 +738,7 @@
             <!-- Global Dashboard Search -->
             <div class="dashboard-search-wrapper">
                 <div class="dashboard-search-box">
-                    <img src="../logos/search.png" alt="Search" class="dashboard-search-icon">
+                    <img src="../icons_new/search-bar/search-bar.svg" alt="Search" class="dashboard-search-icon">
                     <input type="text" id="dashboard-search-input" data-i18n="placeholder_search_global" placeholder="Search passwords, IDs, cards, documents, settings..." class="dashboard-search-input" autocomplete="off">
                     <button id="dashboard-search-clear" class="dashboard-search-clear hidden" type="button" title="Clear">✕</button>
                 </div>
@@ -711,66 +760,68 @@
                 </div>
             </div>
 
-            <!-- Welcome -->
-            <div class="dashboard-welcome">
-                <h2 id="dashboard-greeting">Welcome back!</h2>
-                <p class="dashboard-date" id="dashboard-date"></p>
-            </div>
+            <!-- New Dashboard Bento Layout -->
+            <div class="dashboard-bento-hero">
+                <!-- Main context card -->
+                <div class="bento-card welcome-card">
+                    <div class="welcome-text">
+                        <h2 id="dashboard-greeting" style="font-size: 32px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.02em; color: var(--color-text); text-align: left;">Welcome back!</h2>
+                        <p class="dashboard-date" id="dashboard-date" style="color: var(--color-text-secondary); text-align: left; font-size: 15px;"></p>
+                    </div>
+                    
+                    <!-- Quick Actions moved into the welcome card for rhythm -->
+                    <div class="quick-actions-inline">
+                        <button class="quick-action-btn" id="qa-add-password">
+                            <span class="qa-icon"><img src="../icons_new/sidebar/key_withe.svg" alt="Add Password"></span>
+                            <span data-i18n="btn_add_password">Add Password</span>
+                        </button>
+                        <button class="quick-action-btn" id="qa-watchtower">
+                            <span class="qa-icon"><img src="../icons_new/sidebar/shield_withe.svg" alt="Watchtower"></span>
+                            <span data-i18n="nav_watchtower">Watchtower</span>
+                        </button>
+                        <button class="quick-action-btn" id="qa-export">
+                            <span class="qa-icon"><img src="../icons_new/sidebar/export_withe.svg" alt="Export"></span>
+                            <span data-i18n="settings_export">Export</span>
+                        </button>
+                    </div>
+                </div>
 
-            <!-- Security Score Ring -->
-            <div class="dashboard-score-section">
-                <div class="security-ring-container">
-                    <svg class="security-ring" viewBox="0 0 120 120">
-                        <circle class="ring-bg" cx="60" cy="60" r="52" />
-                        <circle class="ring-fill" id="score-ring-fill" cx="60" cy="60" r="52" />
-                    </svg>
-                    <div class="ring-label">
-                        <span class="ring-score" id="dashboard-score">0</span>
-                        <span class="ring-text" data-i18n="dashboard_score_label">Score</span>
+                <!-- Score Card -->
+                <div class="bento-card score-card">
+                    <h3 class="bento-title" data-i18n="dashboard_score_label" style="margin-bottom: 16px; font-size: 14px; font-weight: 600; color: var(--color-text-secondary); text-align: left; text-transform: none; letter-spacing: 0;">Security Score</h3>
+                    <div class="security-ring-container" style="margin: 0;">
+                        <svg class="security-ring" viewBox="0 0 120 120">
+                            <circle class="ring-bg" cx="60" cy="60" r="52" />
+                            <circle class="ring-fill" id="score-ring-fill" cx="60" cy="60" r="52" />
+                        </svg>
+                        <div class="ring-label">
+                            <span class="ring-score" id="dashboard-score">0</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Stats Grid -->
-            <div class="dashboard-stats">
-                <div class="stat-card">
-                    <div class="stat-icon"><img src="../logos/password_color.png" alt="Passwords"></div>
+            <!-- Stats Grid as Bento -->
+            <div class="dashboard-stats dashboard-stats-bento">
+                <div class="stat-card stat-bento">
+                    <div class="stat-icon"><img src="../icons_new/dashboard/key_withe1.svg" alt="Passwords"></div>
                     <div class="stat-value" id="stat-total-passwords">0</div>
                     <div class="stat-label" data-i18n="dashboard_total_passwords">Total Passwords</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-icon"><img src="../logos/folder_color.png" alt="Folders"></div>
+                <div class="stat-card stat-bento">
+                    <div class="stat-icon"><img src="../icons_new/folder_wihte1.svg" alt="Folders"></div>
                     <div class="stat-value" id="stat-total-folders">0</div>
                     <div class="stat-label" data-i18n="dashboard_total_folders">Folders</div>
                 </div>
-                <div class="stat-card stat-card-success">
-                    <div class="stat-icon"><img src="../logos/strong_color.png" alt="Strong"></div>
+                <div class="stat-card stat-card-success stat-bento">
+                    <div class="stat-icon"><img src="../icons_new/dashboard/activity_green.svg" alt="Strong"></div>
                     <div class="stat-value" id="stat-strong">0%</div>
                     <div class="stat-label" data-i18n="dashboard_strong">Strong</div>
                 </div>
-                <div class="stat-card stat-card-warning">
-                    <div class="stat-icon"><img src="../logos/danger_color.png" alt="At Risk"></div>
+                <div class="stat-card stat-card-warning stat-bento">
+                    <div class="stat-icon"><img src="../icons_new/dashboard/alert-triangle_red.svg" alt="At Risk"></div>
                     <div class="stat-value" id="stat-weak">0</div>
                     <div class="stat-label" data-i18n="dashboard_weak">At Risk</div>
-                </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="dashboard-section">
-                <h3 class="dashboard-section-title" data-i18n="dashboard_quick_actions">Quick Actions</h3>
-                <div class="quick-actions">
-                    <button class="quick-action-btn" id="qa-add-password">
-                        <span class="qa-icon"><img src="../logos/password.png" alt="Add Password"></span>
-                        <span data-i18n="btn_add_password">Add Password</span>
-                    </button>
-                    <button class="quick-action-btn" id="qa-watchtower">
-                        <span class="qa-icon"><img src="../logos/shield.png" alt="Watchtower"></span>
-                        <span data-i18n="nav_watchtower">Watchtower</span>
-                    </button>
-                    <button class="quick-action-btn" id="qa-export">
-                        <span class="qa-icon"><img src="../logos/export.png" alt="Export"></span>
-                        <span data-i18n="settings_export">Export</span>
-                    </button>
                 </div>
             </div>
 
@@ -784,14 +835,17 @@
 
     <!-- Trash Screen -->
     <div id="trash-screen" class="screen hidden">
-        <header class="app-header">
-            <h1 class="header-title" data-i18n="nav_trash">Trash</h1>
-            <button class="button small danger" id="empty-trash-btn" data-i18n="trash_empty_all">Empty Trash</button>
-        </header>
-        <div class="main-controls">
+        <!-- Workspace Header -->
+        <div class="workspace-header" style="display: grid; grid-template-columns: 1fr auto 1fr; width: 100%; align-items: center;">
+            <div></div>
             <div class="search-container">
-                <img src="../logos/search.png" alt="Search" class="search-icon">
                 <input type="text" id="trash-search-input" data-i18n="placeholder_search_trash" placeholder="Search trash..." class="search-input">
+                <img src="../icons_new/search-bar/search-bar.svg" alt="Search" class="search-icon">
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button id="empty-trash-btn" title="Empty Trash">
+                    <img src="../icons_new/trash/trash_withe.svg" alt="Empty Trash" style="width: 20px; height: 20px; filter: none;">
+                </button>
             </div>
         </div>
         <div class="trash-info">
@@ -807,16 +861,15 @@
 
     <!-- IDs Screen -->
     <div id="ids-screen" class="screen hidden">
-        <header class="app-header">
-            <h1 class="header-title" data-i18n="nav_ids">Identity Documents</h1>
-            <button class="icon-button" id="add-id-btn" title="Add ID">
-                <img src="../logos/plus.png" alt="Add">
-            </button>
-        </header>
-        <div class="main-controls">
+        <!-- Workspace Header -->
+        <div class="workspace-header" style="display: grid; grid-template-columns: 1fr auto 1fr; width: 100%; align-items: center;">
+            <div></div>
             <div class="search-container">
-                <img src="../logos/search.png" alt="Search" class="search-icon">
                 <input type="text" id="ids-search-input" data-i18n="placeholder_search_ids" placeholder="Search IDs..." class="search-input">
+                <img src="../icons_new/search-bar/search-bar.svg" alt="Search" class="search-icon">
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button class="icon-button" id="add-id-btn" title="Add ID"><img src="../icons_new/add/plus_withe.svg" alt="Add"></button>
             </div>
         </div>
         <div id="ids-list" class="password-list">
@@ -869,7 +922,7 @@
                 <label data-i18n="id_files">Scans / Photos (max. 5)</label>
                 <div class="file-upload-row">
                     <button class="icon-button" id="upload-id-file-btn" type="button" title="Upload File">
-                        <img src="../logos/upload.png" alt="Upload">
+                        <img src="../icons_new/dashboard/upload_withe.svg" alt="Upload">
                     </button>
                     <span id="edit-id-file-hint" class="file-name-display">No files selected</span>
                 </div>
@@ -885,16 +938,15 @@
 
     <!-- Documents Screen -->
     <div id="documents-screen" class="screen hidden">
-        <header class="app-header">
-            <h1 class="header-title" data-i18n="nav_documents">Secure Documents</h1>
-            <button class="icon-button" id="add-document-btn" title="Add Document">
-                <img src="../logos/plus.png" alt="Add">
-            </button>
-        </header>
-        <div class="main-controls">
+        <!-- Workspace Header -->
+        <div class="workspace-header" style="display: grid; grid-template-columns: 1fr auto 1fr; width: 100%; align-items: center;">
+            <div></div>
             <div class="search-container">
-                <img src="../logos/search.png" alt="Search" class="search-icon">
                 <input type="text" id="docs-search-input" data-i18n="placeholder_search_docs" placeholder="Search documents..." class="search-input">
+                <img src="../icons_new/search-bar/search-bar.svg" alt="Search" class="search-icon">
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button class="icon-button" id="add-document-btn" title="Add Document"><img src="../icons_new/add/plus_withe.svg" alt="Add"></button>
             </div>
         </div>
         <div id="documents-list" class="password-list">
@@ -924,7 +976,7 @@
                 <label data-i18n="doc_files">Files (max 100MB per file)</label>
                 <div class="file-upload-row">
                     <button class="icon-button" id="upload-doc-file-btn" type="button" title="Upload File">
-                        <img src="../logos/upload.png" alt="Upload">
+                        <img src="../icons_new/dashboard/upload_withe.svg" alt="Upload">
                     </button>
                     <span id="edit-doc-file-hint" class="file-name-display">No files selected</span>
                 </div>
@@ -940,16 +992,15 @@
 
     <!-- Credit Cards Screen -->
     <div id="cards-screen" class="screen hidden">
-        <header class="app-header">
-            <h1 class="header-title" data-i18n="nav_cards">Credit Cards</h1>
-            <button class="icon-button" id="add-card-btn" title="Add Credit Card">
-                <img src="../logos/plus.png" alt="Add">
-            </button>
-        </header>
-        <div class="main-controls">
+        <!-- Workspace Header -->
+        <div class="workspace-header" style="display: grid; grid-template-columns: 1fr auto 1fr; width: 100%; align-items: center;">
+            <div></div>
             <div class="search-container">
-                <img src="../logos/search.png" alt="Search" class="search-icon">
                 <input type="text" id="cards-search-input" data-i18n="placeholder_search_cards" placeholder="Search credit cards..." class="search-input">
+                <img src="../icons_new/search-bar/search-bar.svg" alt="Search" class="search-icon">
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button class="icon-button" id="add-card-btn" title="Add Credit Card"><img src="../icons_new/add/plus_withe.svg" alt="Add"></button>
             </div>
         </div>
         <div id="cards-list" class="password-list">
@@ -1017,9 +1068,16 @@
 
     <!-- Reports Screen -->
     <div id="reports-screen" class="screen hidden">
-        <header class="app-header">
-            <h1 class="header-title" data-i18n="nav_reports">Monthly Security Reports</h1>
-        </header>
+        <!-- Workspace Header -->
+        <div class="workspace-header" style="display: grid; grid-template-columns: 1fr auto 1fr; width: 100%; align-items: center;">
+            <div></div>
+            <div class="search-container">
+                <input type="text" id="reports-search-input" placeholder="Search reports..." class="search-input">
+                <img src="../icons_new/search-bar/search-bar.svg" alt="Search" class="search-icon">
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+            </div>
+        </div>
         <div id="reports-list" class="password-list">
             <div class="empty-state">
                 <p data-i18n="reports_empty">No reports saved yet.</p>
@@ -1027,35 +1085,58 @@
             </div>
         </div>
     </div>
-
     <!-- Report Detail Screen -->
     <div id="report-detail-screen" class="screen hidden">
         <header class="app-header">
             <h1 class="header-title" data-i18n="report_title">Monthly Security Report</h1>
-            <button class="icon-button close-btn" id="report-close-btn">✕</button>
+            <button class="icon-button close-btn" id="report-close-btn">X</button>
         </header>
         <div class="report-detail-container">
-            <div class="report-content">
-                <div class="report-score-section" style="text-align: center; margin-bottom: 24px;">
-                    <div class="report-score" id="report-score" style="font-size: 48px; font-weight: bold; color: var(--color-accent);">0</div>
-                    <div class="report-score-label" data-i18n="report_score_label" style="font-size: 14px; color: var(--color-text-muted);">Security Score</div>
+            <div class="report-bento-grid">
+                <!-- Big Score Card -->
+                <div class="report-bento-score">
+                    <div class="score-label" data-i18n="report_score_label">Security Score</div>
+                    <div class="score-value" id="report-score-val">0</div>
+                    <div class="score-context" id="report-score-context">Analyzing your vault...</div>
                 </div>
-                <div class="report-stats" id="report-stats"></div>
-                <div class="report-recommendations" id="report-recommendations" style="margin-top: 16px; border-top: 1px solid var(--color-border); padding-top: 16px;"></div>
+
+                <!-- Small Stat Cards -->
+                <div class="report-bento-stats">
+                    <div class="stat-cell">
+                        <div class="stat-val" id="report-stat-total">0</div>
+                        <div class="stat-label" data-i18n="report_passwords_total">Total</div>
+                    </div>
+                    <div class="stat-cell stat-success">
+                        <div class="stat-val" id="report-stat-strong">0</div>
+                        <div class="stat-label" data-i18n="report_passwords_strong">Strong</div>
+                    </div>
+                    <div class="stat-cell stat-warning">
+                        <div class="stat-val" id="report-stat-weak">0</div>
+                        <div class="stat-label" data-i18n="report_passwords_weak">Weak</div>
+                    </div>
+                    <div class="stat-cell stat-danger">
+                        <div class="stat-val" id="report-stat-reused">0</div>
+                        <div class="stat-label" data-i18n="report_passwords_reused">Reused</div>
+                    </div>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="report-bento-recommendations" id="report-recommendations">
+                </div>
             </div>
             <div class="button-group" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
-                <button class="button danger" id="report-delete-btn" data-i18n="btn_delete">Delete</button>
+                <button class="button danger" id="report-delete-btn" data-i18n="btn_delete">Delete Report</button>
                 <button class="button secondary" id="report-cancel-btn" data-i18n="btn_close">Close</button>
             </div>
         </div>
     </div>
-
         </div><!-- #content-area -->
     </div><!-- #app-shell -->
 
     <!-- Toast Notification -->
     <div id="toast" class="toast hidden">
-        <span id="toast-message"></span>
+        <div id="toast-lottie" style="width: 36px; height: 36px; flex-shrink: 0; margin-right: 12px; display: flex; align-items: center; justify-content: center;"></div>
+        <span id="toast-message" style="font-weight: 500;"></span>
     </div>
 
     <!-- Custom Confirmation Modal -->
@@ -1072,32 +1153,45 @@
 
     <!-- Onboarding Trail / Feature Tour Overlay -->
     <div id="onboarding-overlay" class="onboarding-overlay hidden">
-        <div id="onboarding-spotlight-box" class="onboarding-spotlight-box hidden" title="Click to continue"></div>
-        <div class="onboarding-modal">
-            <div class="onboarding-header">
-                <span class="onboarding-step-label" id="onboarding-step-label">Step 1 of 5</span>
-                <button class="icon-button close-btn" id="onboarding-skip-btn" title="Skip Tour">✕</button>
+        <div class="onboarding-modal-new">
+            <div class="onboarding-hero-image">
+                <img src="../logos/locked.png" alt="PassSafer" style="width: 64px; height: 64px;">
             </div>
-            <div class="onboarding-body">
-                <div class="onboarding-icon-container">
-                    <img src="../logos/locked.png" alt="Tour" class="onboarding-icon-img">
+            <div class="onboarding-content-new">
+                <h1 style="font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 8px; text-align: center; letter-spacing: -0.5px;">Welcome to PassSafer</h1>
+                <p style="font-size: 15px; color: var(--color-text-secondary); margin-bottom: 32px; text-align: center;">Your digital life, secured and organized. Here's what you can do:</p>
+                
+                <div class="onboarding-features-grid">
+                    <div class="onboarding-feature">
+                        <div class="onboarding-feature-icon"><img src="../icons_new/sidebar/key_withe.svg"></div>
+                        <div class="onboarding-feature-text">
+                            <h3>Store Passwords</h3>
+                            <p>Keep your logins safe with military-grade encryption.</p>
+                        </div>
+                    </div>
+                    <div class="onboarding-feature">
+                        <div class="onboarding-feature-icon"><img src="../icons_new/sidebar/shield_withe.svg"></div>
+                        <div class="onboarding-feature-text">
+                            <h3>Watchtower</h3>
+                            <p>Get alerted about leaked, reused, or weak passwords.</p>
+                        </div>
+                    </div>
+                    <div class="onboarding-feature">
+                        <div class="onboarding-feature-icon"><img src="../icons_new/sidebar/credit-card_withe.svg"></div>
+                        <div class="onboarding-feature-text">
+                            <h3>Cards & IDs</h3>
+                            <p>Securely store credit cards and important documents.</p>
+                        </div>
+                    </div>
                 </div>
-                <h2 class="onboarding-title" id="onboarding-title">Welcome to PassSafer</h2>
-                <p class="onboarding-text" id="onboarding-text">Let's take a quick interactive tour through PassSafer.</p>
             </div>
-            <div class="onboarding-dots" id="onboarding-dots">
-                <span class="onboarding-dot active"></span>
-                <span class="onboarding-dot"></span>
-                <span class="onboarding-dot"></span>
-                <span class="onboarding-dot"></span>
-                <span class="onboarding-dot"></span>
-            </div>
-            <div class="onboarding-footer">
-                <button class="button primary" id="onboarding-next-btn">Next</button>
+            <div class="onboarding-footer-new">
+                <button class="button primary" id="onboarding-start-btn" style="width: 100%; font-size: 16px; font-weight: 600; padding: 16px; border-radius: 12px; transition: transform 0.2s; cursor: pointer;">Get Started</button>
             </div>
         </div>
     </div>
 
+    <script src="lottie.min.js"></script>
     <script src="renderer.js"></script>
 </body>
 

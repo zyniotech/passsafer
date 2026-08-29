@@ -44,7 +44,7 @@
 </head>
 <body>
     <div class="license-container">
-        <!-- Header -->
+
         <div class="license-header">
             <div class="license-logo-glow"></div>
             <div class="expired-icon">⏰</div>
@@ -52,7 +52,6 @@
             <p class="license-subtitle">Your PassSafer license has expired</p>
         </div>
 
-        <!-- Info Card -->
         <div class="license-form">
             <div class="expired-info">
                 <div class="expired-info-row">
@@ -73,7 +72,6 @@
                 Your license has expired. Renew your plan to continue using PassSafer.
             </div>
 
-            <!-- Buttons -->
             <div class="license-buttons">
                 <button id="renew-btn" class="button primary">Renew License →</button>
                 <button id="new-key-btn" class="button secondary">Enter New License Key</button>
@@ -95,9 +93,9 @@
                         'lifetime': 'Lifetime License'
                     };
                     document.getElementById('expired-plan').textContent = planNames[info.plan] || info.plan;
-                    document.getElementById('expired-purchased').textContent = 
+                    document.getElementById('expired-purchased').textContent =
                         info.purchasedAt ? new Date(info.purchasedAt).toLocaleDateString() : '—';
-                    document.getElementById('expired-date').textContent = 
+                    document.getElementById('expired-date').textContent =
                         info.expiresAt ? new Date(info.expiresAt).toLocaleDateString() : '—';
                 }
             } catch (err) {

@@ -1,6 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose geschützte IPC-Methoden an Renderer
 contextBridge.exposeInMainWorld('api', {
     checkFirstRun: () => ipcRenderer.invoke('check-first-run'),
     register: (data) => ipcRenderer.invoke('register', data),
@@ -24,14 +23,11 @@ contextBridge.exposeInMainWorld('api', {
     saveCards: (data) => ipcRenderer.invoke('save-cards', data),
     loadReports: (data) => ipcRenderer.invoke('load-reports', data),
     saveReports: (data) => ipcRenderer.invoke('save-reports', data),
-    fetchLocalFavicon: (domainStr) => ipcRenderer.invoke('fetch-local-favicon', domainStr),
 
-    // Utilities
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
     copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
     clearClipboard: () => ipcRenderer.invoke('clear-clipboard'),
 
-    // Auto-Update
     downloadUpdate: () => ipcRenderer.invoke('download-update'),
     installUpdate: () => ipcRenderer.invoke('install-update'),
     manualCheckUpdates: () => ipcRenderer.invoke('manual-check-updates'),
@@ -40,27 +36,29 @@ contextBridge.exposeInMainWorld('api', {
     onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (e, info) => callback(info)),
     onUpdateError: (callback) => ipcRenderer.on('update-error', (e, message) => callback(message)),
 
-    // Licensing
     getDeviceId: () => ipcRenderer.invoke('get-device-id'),
     loadLicense: () => ipcRenderer.invoke('load-license'),
     saveLicense: (data) => ipcRenderer.invoke('save-license', data),
-    deleteLicense: () => ipcRenderer.invoke('delete-license'),
 
-    // Native Messaging
     onNativeRequest: (callback) => ipcRenderer.on('native-request', (e, data) => callback(data)),
     sendNativeResponse: (data) => ipcRenderer.send('native-response', data),
 
-    // Password Security Audit
     passwordAudit: (data) => ipcRenderer.invoke('password-audit', data),
     checkPwned: (data) => ipcRenderer.invoke('check-pwned', data),
 
-    // LAN Sync
+    loadSettings: () => ipcRenderer.invoke('load-settings'),
+    saveSettings: (settings) => ipcRenderer.invoke('save-settings', { settings }),
+
     syncStartServer: () => ipcRenderer.invoke('sync-start-server'),
     syncStopServer: () => ipcRenderer.invoke('sync-stop-server'),
-    syncGetStatus: () => ipcRenderer.invoke('sync-get-status'),
     onSyncStatusUpdate: (callback) => ipcRenderer.on('sync-status-update', (e, data) => callback(data)),
 
-    // Extension Sync
-    getPendingExtensionCredentials: () => ipcRenderer.invoke('get-pending-extension-credentials'),
+    syncConnect: (data) => ipcRenderer.invoke('sync-connect', data),
+    syncEnableAuto: () => ipcRenderer.invoke('sync-enable-auto'),
+    syncDisableAuto: () => ipcRenderer.invoke('sync-disable-auto'),
+    syncGetPairs: () => ipcRenderer.invoke('sync-get-pairs'),
+    syncSavePair: (pair) => ipcRenderer.invoke('sync-save-pair', { pair }),
+    syncRemovePair: (deviceId) => ipcRenderer.invoke('sync-remove-pair', { deviceId }),
+
     clearMasterPassword: () => ipcRenderer.invoke('clear-master-password')
 });

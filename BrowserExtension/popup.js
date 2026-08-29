@@ -1,17 +1,5 @@
-/**
- * PassSafer – Popup Script
- *
- * Controls the popup interface of the browser extension:
- *   - PIN entry and setup
- *   - Status display (locked/unlocked)
- *   - Settings (locking behavior)
- *   - Synchronization with the desktop app
- */
-'use strict';
 
-// ─────────────────────────────────────────────
-// DOM References
-// ─────────────────────────────────────────────
+'use strict';
 
 const views = {
   noVault: document.getElementById('view-no-vault'),
@@ -38,33 +26,21 @@ const elements = {
   syncFooter: document.getElementById('sync-footer'),
 };
 
-// ─────────────────────────────────────────────
-// PIN Input Groups Management
-// ─────────────────────────────────────────────
-
-/**
- * Initializes a group of PIN input fields with auto-focus logic.
- * @param {string} containerId – ID of the container
- * @param {Function} [onComplete] – Callback when all 6 digits are entered
- * @returns {{ getPin: () => string, clear: () => void, setError: () => void }}
- */
 function initPinInputGroup(containerId, onComplete) {
   const container = document.getElementById(containerId);
   const inputs = Array.from(container.querySelectorAll('.pin-digit'));
 
   inputs.forEach((input, index) => {
     input.addEventListener('input', () => {
-      // Allow digits only
+
       input.value = input.value.replace(/\D/g, '').slice(0, 1);
 
       if (input.value && index < inputs.length - 1) {
         inputs[index + 1].focus();
       }
 
-      // Remove error class on input
       input.classList.remove('error');
 
-      // Check if all fields are filled
       const pin = inputs.map(i => i.value).join('');
       if (pin.length === 6 && onComplete) {
         onComplete(pin);
@@ -90,7 +66,6 @@ function initPinInputGroup(containerId, onComplete) {
       }
     });
 
-    // Paste handler: insert full PIN
     input.addEventListener('paste', (e) => {
       e.preventDefault();
       const pasted = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
@@ -124,32 +99,18 @@ function initPinInputGroup(containerId, onComplete) {
   };
 }
 
-// ─────────────────────────────────────────────
-// Initialize PIN Groups
-// ─────────────────────────────────────────────
-
 const pinSetup = initPinInputGroup('pin-setup-inputs', () => updateSavePinButton());
 const pinConfirm = initPinInputGroup('pin-confirm-inputs', () => updateSavePinButton());
 const pinUnlock = initPinInputGroup('pin-unlock-inputs', (pin) => {
   elements.btnUnlock.disabled = false;
 });
 
-/** Enables the Save PIN button only when both PINs have 6 digits */
 function updateSavePinButton() {
   const pin1 = pinSetup.getPin();
   const pin2 = pinConfirm.getPin();
   elements.btnSavePin.disabled = !(pin1.length === 6 && pin2.length === 6);
 }
 
-// ─────────────────────────────────────────────
-// Communication with the Background Worker
-// ─────────────────────────────────────────────
-
-/**
- * Sends a message to the background worker.
- * @param {object} message
- * @returns {Promise<*>}
- */
 function sendToBackground(message) {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
@@ -162,57 +123,34 @@ function sendToBackground(message) {
   });
 }
 
-// ─────────────────────────────────────────────
-// Show Messages
-// ─────────────────────────────────────────────
-
-/**
- * Displays a message in an element.
- * @param {HTMLElement} el
- * @param {string} text
- * @param {'error'|'success'|'info'} type
- */
 function showMessage(el, text, type) {
   el.className = `message ${type}`;
   el.textContent = text;
 }
 
-/** Hides a message. */
 function hideMessage(el) {
   el.className = 'message';
   el.textContent = '';
 }
 
-// ─────────────────────────────────────────────
-// View Control
-// ─────────────────────────────────────────────
-
-/** Shows exactly one view and hides all others. */
 function showView(viewName) {
   for (const [name, el] of Object.entries(views)) {
     el.classList.toggle('active', name === viewName);
   }
 }
 
-// ─────────────────────────────────────────────
-// Load and Display Status
-// ─────────────────────────────────────────────
-
-/** Loads the current status and shows the appropriate view. */
 async function loadStatus() {
   try {
     const status = await sendToBackground({ action: 'get-vault-status' });
 
     if (!status.hasVault && !status.hasPinSetup) {
-      // No vault and no PIN configured
+
       showView('noVault');
       return;
     }
 
     if (status.hasVault && !status.hasPinSetup) {
-      // Vault exists, but no PIN has been set up yet.
-      // CRITICAL BUG FIX: If we are currently locked (no master password in memory), we cannot set up the PIN!
-      // We must show the connect screen so the user can pull the vault (which populates the master password).
+
       if (!status.isUnlocked) {
         showView('noVault');
         showMessage(elements.msgNoVault, 'Please connect to the desktop app to retrieve the vault and set up your PIN.', 'info');
@@ -224,13 +162,12 @@ async function loadStatus() {
     }
 
     if (!status.isUnlocked) {
-      // Vault exists + PIN configured, but locked
+
       showView('locked');
       pinUnlock.focus();
       return;
     }
 
-    // Unlocked → display status details
     showView('unlocked');
     elements.vaultCount.textContent = status.credentialCount ?? '–';
     elements.lastSync.textContent = status.lastSync
@@ -238,7 +175,6 @@ async function loadStatus() {
       : 'Never';
     elements.appStatus.textContent = status.appConnected ? 'Connected' : 'Not Connected';
 
-    // Load locking behavior
     const data = await chrome.storage.local.get('pin_lock_policy');
     const policy = data.pin_lock_policy || 'browser_restart';
     elements.lockPolicySelect.value = policy;
@@ -248,11 +184,6 @@ async function loadStatus() {
   }
 }
 
-// ─────────────────────────────────────────────
-// Event Handlers
-// ─────────────────────────────────────────────
-
-// --- Connect to Desktop App ---
 elements.btnConnect.addEventListener('click', async () => {
   hideMessage(elements.msgNoVault);
   elements.btnConnect.disabled = true;
@@ -274,7 +205,6 @@ elements.btnConnect.addEventListener('click', async () => {
   }
 });
 
-// --- Save PIN ---
 elements.btnSavePin.addEventListener('click', async () => {
   hideMessage(elements.msgSetup);
   const pin1 = pinSetup.getPin();
@@ -318,7 +248,6 @@ elements.btnSavePin.addEventListener('click', async () => {
   }
 });
 
-// --- Unlock Vault ---
 elements.btnUnlock.addEventListener('click', async () => {
   hideMessage(elements.msgUnlock);
   const pin = pinUnlock.getPin();
@@ -354,7 +283,6 @@ elements.btnUnlock.addEventListener('click', async () => {
   }
 });
 
-// --- Lock Vault ---
 elements.btnLock.addEventListener('click', async () => {
   try {
     await sendToBackground({ action: 'lock-vault' });
@@ -364,7 +292,6 @@ elements.btnLock.addEventListener('click', async () => {
   }
 });
 
-// --- Sync Now ---
 elements.btnSync.addEventListener('click', async () => {
   elements.btnSync.disabled = true;
   elements.btnSync.textContent = 'Synchronizing...';
@@ -385,13 +312,11 @@ elements.btnSync.addEventListener('click', async () => {
   }
 });
 
-// --- Change Locking Behavior ---
 elements.lockPolicySelect.addEventListener('change', async () => {
   const policy = elements.lockPolicySelect.value;
   await sendToBackground({ action: 'set-lock-policy', policy });
 });
 
-// --- Reset PIN & Cache ---
 elements.btnReset.addEventListener('click', async () => {
   const confirmed = confirm(
     'Are you sure you want to reset the PIN and the local cache?\n\n' +
@@ -406,9 +331,5 @@ elements.btnReset.addEventListener('click', async () => {
     console.error('[PassSafer Popup] Error resetting:', err);
   }
 });
-
-// ─────────────────────────────────────────────
-// Initialization
-// ─────────────────────────────────────────────
 
 loadStatus();
