@@ -1378,7 +1378,10 @@ ipcMain.handle('sync-enable-auto', async () => {
         try { autoSyncDiscoverySocket.addMembership('224.0.0.251'); } catch(e) {}
     });
 
-    autoSyncDiscoverySocket.on('message', async (msg) => {
+    autoSyncDiscoverySocket.on('message', async (msg, rinfo) => {
+        const ownIps = Object.values(os.networkInterfaces()).flat().filter(i => i.family === 'IPv4').map(i => i.address);
+        if (ownIps.includes(rinfo.address)) return;
+
         try {
             const data = JSON.parse(msg.toString());
             if (data.service === '_passsafer-sync._tcp.local') {
@@ -1409,9 +1412,6 @@ ipcMain.handle('sync-disable-auto', async () => {
 });
 
 async function discoverSyncServer(timeoutMs = 6000) {
-    if (syncServer && syncPort > 0) {
-        return { ip: '127.0.0.1', port: syncPort, device: os.hostname() };
-    }
     return new Promise((resolve) => {
         let discSocket = null;
         let timer = null;
@@ -1436,6 +1436,9 @@ async function discoverSyncServer(timeoutMs = 6000) {
         try {
             discSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
             discSocket.on('message', (msg, rinfo) => {
+                const ownIps = Object.values(os.networkInterfaces()).flat().filter(i => i.family === 'IPv4').map(i => i.address);
+                if (ownIps.includes(rinfo.address)) return;
+
                 try {
                     const data = JSON.parse(msg.toString());
                     if (data.service === '_passsafer-sync._tcp.local' && data.port) {
@@ -1485,6 +1488,7 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
             let sharedSecret = null;
             let sessionPassword = null;
             let buffer = '';
+            let activeSyncDirection = direction || 'merge';
 
             const timeout = setTimeout(() => {
                 client.destroy();
@@ -1537,8 +1541,10 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
 
                             updateSyncState('syncing');
 
+                            activeSyncDirection = msg.server_direction || activeSyncDirection;
+
                             let dataToSend = '{}';
-                            if (direction === 'merge' || direction === 'push') {
+                            if (activeSyncDirection === 'merge' || activeSyncDirection === 'push') {
                                 const localData = await getAllLocalData();
                                 dataToSend = JSON.stringify(localData);
                             }
@@ -1546,14 +1552,14 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
 
                             client.write(JSON.stringify({
                                 type: 'sync_request',
-                                direction: direction || 'merge',
+                                direction: activeSyncDirection,
                                 data: encryptedData
                             }) + '\n');
 
                         } else if (msg.type === 'sync_reply') {
                             clearTimeout(timeout);
                             if (msg.success && msg.data) {
-                                if (direction === 'merge' || direction === 'pull') {
+                                if (activeSyncDirection === 'merge' || activeSyncDirection === 'pull') {
                                     const decryptedStr = decryptExport(msg.data, sessionPassword);
                                     const serverData = JSON.parse(decryptedStr);
                                     await mergeAllFiles(serverData);
@@ -1723,9 +1729,12 @@ function stopSyncServer() {
     updateSyncState('idle');
 }
 
-ipcMain.handle('sync-start-server', async () => {
+let syncServerDirection = 'merge';
+
+ipcMain.handle('sync-start-server', async (event, data) => {
     if (syncState !== 'idle') return { success: false, error: 'Already running' };
 
+    syncServerDirection = (data && data.direction) ? data.direction : 'merge';
     syncPin = crypto.randomInt(100000, 999999).toString();
     syncAttempts = 0;
 
@@ -1768,7 +1777,12 @@ ipcMain.handle('sync-start-server', async () => {
                         sessionKey.fill(0);
 
                         updateSyncState('syncing');
-                        socket.write(JSON.stringify({ type: 'auth_reply', success: true }) + '\n');
+                        
+                        let clientDirectionFromServer = 'merge';
+                        if (syncServerDirection === 'push') clientDirectionFromServer = 'pull';
+                        if (syncServerDirection === 'pull') clientDirectionFromServer = 'push';
+                        
+                        socket.write(JSON.stringify({ type: 'auth_reply', success: true, server_direction: clientDirectionFromServer }) + '\n');
                     } else if (msg.type === 'sync_request') {
                         if (!socket.sessionPassword) return;
                         const direction = msg.direction || 'merge';
@@ -1805,6 +1819,10 @@ ipcMain.handle('sync-start-server', async () => {
                     }
                 } catch (err) {
                     updateSyncState('error');
+                    try {
+                        socket.write(JSON.stringify({ type: 'sync_reply', success: false, error: err.message }) + '\n');
+                        socket.destroy();
+                    } catch(e) {}
                 }
             }
         });

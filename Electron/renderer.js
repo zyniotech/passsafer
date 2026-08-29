@@ -4700,7 +4700,7 @@ function setupSyncEventListeners() {
 }
 
 async function handleSyncStart() {
-    const result = await window.api.syncStartServer();
+    const result = await window.api.syncStartServer({ direction: syncDirection });
     if (!result.success) {
         showToast(result.error || t('msg_sync_conn_failed'), 'error', true);
         return;

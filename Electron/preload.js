@@ -49,7 +49,7 @@ contextBridge.exposeInMainWorld('api', {
     loadSettings: () => ipcRenderer.invoke('load-settings'),
     saveSettings: (settings) => ipcRenderer.invoke('save-settings', { settings }),
 
-    syncStartServer: () => ipcRenderer.invoke('sync-start-server'),
+    syncStartServer: (data) => ipcRenderer.invoke('sync-start-server', data),
     syncStopServer: () => ipcRenderer.invoke('sync-stop-server'),
     onSyncStatusUpdate: (callback) => ipcRenderer.on('sync-status-update', (e, data) => callback(data)),
 
