@@ -4578,6 +4578,16 @@ function setupSyncEventListeners() {
         });
     });
 
+    const confirmDirectionBtn = document.getElementById('sync-confirm-direction-btn');
+    if (confirmDirectionBtn) {
+        confirmDirectionBtn.addEventListener('click', async () => {
+            const result = await window.api.syncSendDirection(syncDirection);
+            if (!result.success) {
+                showToast(result.error || 'Fehler beim Senden der Richtung', 'error', true);
+            }
+        });
+    }
+
     const syncStartBtn = document.getElementById('sync-start-btn');
     if (syncStartBtn) {
         syncStartBtn.addEventListener('click', handleSyncStart);
@@ -4807,6 +4817,7 @@ function updateSyncStatusDisplay(state) {
         'pairing': { key: 'sync_status_pairing', fallback: 'Pairing...', color: 'var(--color-accent)' },
         'syncing': { key: 'sync_status_syncing', fallback: 'Syncing...', color: 'var(--color-accent)' },
         'auto-syncing': { key: 'sync_status_auto_syncing', fallback: 'Auto-syncing...', color: 'var(--color-accent)' },
+        'connected_wait_direction': { key: 'sync_status_wait_direction', fallback: 'Connected. Wähle Sync-Richtung...', color: 'var(--color-accent)' },
         'complete': { key: 'sync_status_complete', fallback: 'Success ✓', color: '#4caf50' },
         'error': { key: 'sync_status_error', fallback: 'Error ✗', color: 'var(--color-danger)' }
     };
@@ -4814,6 +4825,12 @@ function updateSyncStatusDisplay(state) {
     const info = stateMap[state] || stateMap['idle'];
     statusEl.textContent = t(info.key) || info.fallback;
     statusEl.style.color = info.color;
+
+    const directionBlock = document.getElementById('sync-direction-block');
+    if (directionBlock) {
+        if (state === 'connected_wait_direction') directionBlock.classList.remove('hidden');
+        else directionBlock.classList.add('hidden');
+    }
 }
 
 async function loadSyncDevices() {

@@ -1494,7 +1494,7 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
                 client.destroy();
                 updateSyncState('error');
                 resolve({ success: false, error: 'Verbindungstimeout' });
-            }, 10000);
+            }, 60000);
 
             client.connect(targetPort, targetIp, () => {
 
@@ -1726,10 +1726,12 @@ function stopSyncServer() {
     }
     syncAttempts = 0;
     syncPort = 0;
+    activeSyncSocket = null;
     updateSyncState('idle');
 }
 
 let syncServerDirection = 'merge';
+let activeSyncSocket = null;
 
 ipcMain.handle('sync-start-server', async (event, data) => {
     if (syncState !== 'idle') return { success: false, error: 'Already running' };
@@ -1776,13 +1778,8 @@ ipcMain.handle('sync-start-server', async (event, data) => {
                         socket.sessionPassword = sessionKey.toString('hex');
                         sessionKey.fill(0);
 
-                        updateSyncState('syncing');
-                        
-                        let clientDirectionFromServer = 'merge';
-                        if (syncServerDirection === 'push') clientDirectionFromServer = 'pull';
-                        if (syncServerDirection === 'pull') clientDirectionFromServer = 'push';
-                        
-                        socket.write(JSON.stringify({ type: 'auth_reply', success: true, server_direction: clientDirectionFromServer }) + '\n');
+                        activeSyncSocket = socket;
+                        updateSyncState('connected_wait_direction');
                     } else if (msg.type === 'sync_request') {
                         if (!socket.sessionPassword) return;
                         const direction = msg.direction || 'merge';
@@ -1847,6 +1844,18 @@ ipcMain.handle('sync-start-server', async (event, data) => {
                     try {
                         syncUdpSocket.send(payload, 0, payload.length, 5353, '224.0.0.251');
                         syncUdpSocket.send(payload, 0, payload.length, 41234, '255.255.255.255');
+                        
+                        const ifaces = os.networkInterfaces();
+                        for (const name of Object.keys(ifaces)) {
+                            for (const iface of ifaces[name]) {
+                                if (iface.family === 'IPv4' && !iface.internal) {
+                                    const ipParts = iface.address.split('.').map(Number);
+                                    const maskParts = iface.netmask.split('.').map(Number);
+                                    const bcast = ipParts.map((p, i) => (p & maskParts[i]) | (~maskParts[i] & 255)).join('.');
+                                    syncUdpSocket.send(payload, 0, payload.length, 41234, bcast);
+                                }
+                            }
+                        }
                     } catch(e){}
                 }, 2000);
             });
@@ -1883,6 +1892,19 @@ ipcMain.handle('sync-start-server', async (event, data) => {
     } catch(e) {}
 
     return { success: true, pin: syncPin, port: syncPort, deviceName: os.hostname(), ip: ipString, qrDataUrl, qrPayload };
+});
+
+ipcMain.handle('sync-send-direction', async (event, { direction }) => {
+    if (!activeSyncSocket) return { success: false, error: 'Keine aktive Verbindung' };
+    
+    syncServerDirection = direction || 'merge';
+    let clientDirectionFromServer = 'merge';
+    if (syncServerDirection === 'push') clientDirectionFromServer = 'pull';
+    if (syncServerDirection === 'pull') clientDirectionFromServer = 'push';
+    
+    updateSyncState('syncing');
+    activeSyncSocket.write(JSON.stringify({ type: 'auth_reply', success: true, server_direction: clientDirectionFromServer }) + '\n');
+    return { success: true };
 });
 
 ipcMain.handle('sync-stop-server', async () => {
