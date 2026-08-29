@@ -610,6 +610,14 @@ async function handleLogin() {
             showToast('msg_login_success', 'success');
             resetLogoutTimer();
             checkOnboarding();
+            
+            try {
+                const sr = await window.api.loadSettings();
+                if (sr.success && sr.settings && sr.settings.autoSync) {
+                    await window.api.syncEnableAuto();
+                    document.getElementById('sync-auto-toggle').checked = true;
+                }
+            } catch(e) {}
         } else {
             showToast('msg_load_pwd_error', 'error');
         }
@@ -2324,15 +2332,14 @@ function renderAuditResults(filter) {
         if (hasReused) badges += '<span class="audit-badge audit-badge-reused">🔄 ' + t('audit_reused') + ' (' + result.reusedCount + ')</span>';
         if (isStrong) badges += '<span class="audit-badge audit-badge-strong">' + t('audit_filter_strong') + '</span>';
 
-        let cardStateColor = '#2ecc71'; // default strong
+        let stateName = 'strong';
         if (hasLeaked) {
-            cardStateColor = '#e74c3c';
+            stateName = 'leaked';
         } else if (hasWeak || hasReused) {
-            cardStateColor = '#d5b500';
+            stateName = 'warn';
         }
         
-        card.style.boxShadow = `0px 0px 3px 0px ${cardStateColor}80`;
-        card.style.borderColor = `${cardStateColor}80`;
+        card.setAttribute('data-state', stateName);
 
         card.innerHTML = `
             <div class="audit-result-header" style="display: flex; align-items: center; gap: 12px; margin-bottom: 0;">
@@ -2510,10 +2517,7 @@ function setupNewEventListeners() {
         });
     }
 
-    document.getElementById('report-close-btn').addEventListener('click', () => {
-        showReportsScreen();
-        currentActiveReport = null;
-    });
+
     document.getElementById('report-cancel-btn').addEventListener('click', () => {
         showReportsScreen();
         currentActiveReport = null;
@@ -2530,21 +2534,19 @@ function setupNewEventListeners() {
     document.getElementById('add-id-btn').addEventListener('click', showAddId);
     document.getElementById('save-id-btn').addEventListener('click', handleSaveId);
     document.getElementById('delete-id-btn').addEventListener('click', handleDeleteId);
-    document.getElementById('cancel-id-btn').addEventListener('click', showIdsScreen);
     document.getElementById('close-edit-id-btn').addEventListener('click', showIdsScreen);
     document.getElementById('upload-id-file-btn').addEventListener('click', handleIdFileUpload);
 
     document.getElementById('add-document-btn').addEventListener('click', showAddDocument);
     document.getElementById('save-doc-btn').addEventListener('click', handleSaveDocument);
     document.getElementById('delete-doc-btn').addEventListener('click', handleDeleteDocument);
-    document.getElementById('cancel-doc-btn').addEventListener('click', showDocumentsScreen);
     document.getElementById('close-edit-doc-btn').addEventListener('click', showDocumentsScreen);
     document.getElementById('upload-doc-file-btn').addEventListener('click', handleDocFileUpload);
 
     document.getElementById('add-card-btn').addEventListener('click', showAddCard);
     document.getElementById('save-card-btn').addEventListener('click', handleSaveCard);
     document.getElementById('delete-card-btn').addEventListener('click', handleDeleteCard);
-    document.getElementById('cancel-card-btn').addEventListener('click', showCardsScreen);
+    document.getElementById('close-edit-card-btn').addEventListener('click', showCardsScreen);
     document.getElementById('close-edit-card-btn').addEventListener('click', showCardsScreen);
 }
 
@@ -3663,34 +3665,34 @@ function renderTrashList() {
         const badgeClass = daysLeft <= 7 ? 'danger' : 'warn';
 
         let displayName = item.app || item.name || '';
-        let displaySubtitle = item.username || '';
         let typeBadgeKey = 'nav_passwords';
+        let iconSrc = '../icons_new/sidebar/documents_withe.svg';
 
         if (item.type === 'card') {
-            const maskedNumber = item.cardNumber ? ('•••• ' + item.cardNumber.replace(/\s+/g, '').slice(-4)) : '';
-            const brandLabel = item.brand ? item.brand.toUpperCase() : '';
-            displaySubtitle = `${brandLabel} ${maskedNumber}`.trim();
             typeBadgeKey = 'nav_cards';
+            iconSrc = '../icons_new/sidebar/credit-card_withe.svg';
         } else if (item.type === 'id') {
-            displaySubtitle = item.number || '';
             typeBadgeKey = 'nav_ids';
+            iconSrc = '../icons_new/sidebar/id_withe.svg';
         } else if (item.type === 'document') {
-            displaySubtitle = item.description || '';
             typeBadgeKey = 'nav_documents';
+            // already documents_withe
         }
 
         card.innerHTML = `
-            <div class="trash-card-info" style="display:flex; flex-direction:column; gap:4px; flex:1;">
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <span class="trash-card-name" style="font-weight:bold;">${escapeHtml(displayName)}</span>
-                    <span class="badge" style="background:var(--color-border); color:var(--color-text-muted); padding:2px 6px; border-radius:4px; font-size:10px;">${t(typeBadgeKey)}</span>
-                </div>
-                <span class="trash-card-user" style="font-size:12px; color:var(--color-text-muted);">${escapeHtml(displaySubtitle)}</span>
+            <div style="display:flex; align-items:center; gap:12px; flex:1;">
+                <img src="${iconSrc}" style="width: 20px; height: 20px; opacity: 0.7;">
+                <span class="trash-card-name" style="font-weight:500; font-size:15px; margin:0;">${escapeHtml(displayName)}</span>
+                <span class="badge" style="background:var(--color-border); color:var(--color-text-muted); padding:0 4px; border-radius:3px; font-size:8px; height:10px; display:inline-flex; align-items:center; justify-content:center; margin-left: 4px;">${t(typeBadgeKey)}</span>
             </div>
-            <div class="trash-card-actions" style="display:flex; align-items:center; gap:8px;">
+            <div class="trash-card-actions" style="display:flex; align-items:center; gap:12px;">
                 <span class="trash-days-badge ${badgeClass}">${t('trash_days_left', { days: daysLeft })}</span>
-                <button class="button small secondary restore-btn">${t('trash_restore')}</button>
-                <button class="button small danger delete-permanent-btn">${t('trash_delete_permanent')}</button>
+                <button class="trash-action-btn restore-btn" title="${t('trash_restore')}">
+                    <img src="../icons_new/trash/restore_withe.svg">
+                </button>
+                <button class="trash-action-btn delete-permanent-btn" title="${t('trash_delete_permanent')}">
+                    <img src="../icons_new/trash/trash_withe.svg">
+                </button>
             </div>
         `;
 

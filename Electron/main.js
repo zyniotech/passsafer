@@ -108,7 +108,7 @@ function createWindow() {
                 ...details.responseHeaders,
                 'Content-Security-Policy': [
                     "default-src 'self'; " +
-                    "script-src 'self' 'unsafe-inline'; " +
+                    "script-src 'self'; " +
                     "style-src 'self' 'unsafe-inline'; " +
                     "img-src 'self' data: https: http:; " +
                     "font-src 'self'; " +
@@ -156,6 +156,7 @@ function registerNativeMessagingHost() {
         fsSync.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2), 'utf8');
 
         if (process.platform === 'win32') {
+            const { execFileSync } = require('child_process');
             const regPaths = [
                 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\de.passsafer.helper',
                 'HKCU\\Software\\BraveSoftware\\Brave\\NativeMessagingHosts\\de.passsafer.helper',
@@ -163,7 +164,7 @@ function registerNativeMessagingHost() {
             ];
             for (const regPath of regPaths) {
                 try {
-                    execSync(`reg add "${regPath}" /ve /t REG_SZ /d "${manifestFile}" /f`, { stdio: 'ignore' });
+                    execFileSync('reg', ['add', regPath, '/ve', '/t', 'REG_SZ', '/d', manifestFile, '/f'], { stdio: 'ignore' });
                 } catch (e) {
 
                 }
@@ -945,7 +946,7 @@ ipcMain.handle('clear-clipboard', () => {
 });
 
 function getLicenseKeyForEncryption(deviceId) {
-    return crypto.pbkdf2Sync(deviceId, 'license-salt-12893812903', 1000, 32, 'sha256');
+    return crypto.pbkdf2Sync(deviceId, 'license-salt-12893812903', 100000, 32, 'sha256');
 }
 
 function encryptLicense(data, deviceId) {
@@ -1105,12 +1106,9 @@ function checkForUpdates() {
     try {
         const { autoUpdater } = require('electron-updater');
 
+
         autoUpdater.autoDownload = false;
         autoUpdater.autoInstallOnAppQuit = true;
-
-        autoUpdater.verifyUpdateCodeSignature = async (publisherName, path) => {
-            return null;
-        };
 
         autoUpdater.on('update-available', (info) => {
             if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1151,9 +1149,6 @@ function checkForUpdates() {
 ipcMain.handle('download-update', async () => {
     try {
         const { autoUpdater } = require('electron-updater');
-        autoUpdater.verifyUpdateCodeSignature = async (publisherName, path) => {
-            return null;
-        };
         autoUpdater.downloadUpdate();
         return { success: true };
     } catch (err) {
@@ -1176,9 +1171,6 @@ ipcMain.handle('manual-check-updates', async () => {
             return { success: false, error: 'Auto-update is only available in packaged app.' };
         }
         const { autoUpdater } = require('electron-updater');
-        autoUpdater.verifyUpdateCodeSignature = async (publisherName, path) => {
-            return null;
-        };
         const result = await autoUpdater.checkForUpdates();
         if (!result || !result.updateInfo) {
             return { success: true, updateAvailable: false };
@@ -1538,9 +1530,10 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
                                 return;
                             }
 
-                            const sessionKey = crypto.pbkdf2Sync(pin, 'PassSaferSync2024', 100000, 32, 'sha256');
+                            const sessionKey = crypto.pbkdf2Sync(pin + sharedSecret.toString('hex'), 'PassSaferSync2024', 100000, 32, 'sha256');
                             sessionPassword = sessionKey.toString('hex');
                             sessionKey.fill(0);
+                            sharedSecret.fill(0);
 
                             updateSyncState('syncing');
 
@@ -1785,7 +1778,7 @@ ipcMain.handle('sync-start-server', async () => {
                             return;
                         }
 
-                        const sessionKey = crypto.pbkdf2Sync(syncPin, 'PassSaferSync2024', 100000, 32, 'sha256');
+                        const sessionKey = crypto.pbkdf2Sync(syncPin + socket.sharedSecret.toString('hex'), 'PassSaferSync2024', 100000, 32, 'sha256');
                         socket.sharedSecret.fill(0);
                         socket.sessionPassword = sessionKey.toString('hex');
                         sessionKey.fill(0);

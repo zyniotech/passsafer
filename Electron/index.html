@@ -252,7 +252,7 @@
             <div class="detail-section" id="link-section">
                 <label data-i18n="label_link">Link / URL</label>
                 <div class="detail-row">
-                    <a href="#" id="detail-link" target="_blank" style="color: var(--color-accent); text-decoration: none; word-break: break-all;"></a>
+                    <a href="#" id="detail-link" target="_blank" rel="noopener noreferrer" style="color: var(--color-accent); text-decoration: none; word-break: break-all;"></a>
                     <button class="button icon-only-modern" id="copy-link-btn" data-i18n="title_copy_link" title="Copy Link">
                         <img src="../icons_new/copy_withe.svg" alt="Copy">
                     </button>
@@ -444,38 +444,54 @@
                 <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 15px; background: rgba(255, 255, 255, 0.03); border-radius: 6px; border: 1px solid var(--color-border); margin-bottom: 12px;">
                     <div style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
                         <span style="color: var(--color-text-secondary);">Status:</span>
-                        <strong id="sync-status" style="color: var(--color-text);">Idel</strong>
+                        <strong id="sync-status-display" style="color: var(--color-text);">Idle</strong>
                     </div>
                     <div style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
                         <span style="color: var(--color-text-secondary);">Last Synced:</span>
-                        <strong id="sync-last" style="color: var(--color-text);">13.8.2026 17:04:00</strong>
+                        <strong id="sync-last-display" style="color: var(--color-text);">-</strong>
                     </div>
                 </div>
                 
                 <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 16px; padding: 16px 15px; background: rgba(255, 255, 255, 0.03); border-radius: 6px; border: 1px solid var(--color-border); margin-bottom: 12px;">
                     <span style="font-weight: 600; font-size: 14px;">Sync Direction</span>
                     <div style="display: flex; gap: 8px; width: 100%;">
-                        <button class="button secondary" style="flex: 1; padding: 10px; font-weight: 600;">Merge</button>
-                        <button class="button secondary" style="flex: 1; padding: 10px; font-weight: 600;">Push</button>
-                        <button class="button secondary" style="flex: 1; padding: 10px; font-weight: 600;">Pull</button>
+                        <button class="button secondary sync-direction-btn active" data-direction="merge" style="flex: 1; padding: 10px; font-weight: 600;">Merge</button>
+                        <button class="button secondary sync-direction-btn" data-direction="push" style="flex: 1; padding: 10px; font-weight: 600;">Push</button>
+                        <button class="button secondary sync-direction-btn" data-direction="pull" style="flex: 1; padding: 10px; font-weight: 600;">Pull</button>
                     </div>
                 </div>
                 
-                <button class="settings-option" style="height: 56px; padding: 0 24px;">
+                <button class="settings-option" id="sync-start-btn" style="height: 56px; padding: 0 24px;">
                     <img src="../icons_new/settings/play_circle_start_sync_withe1.svg" alt="Start Sync" class="btn-icon">
                     <span>Start Sync</span>
                 </button>
-                <button class="settings-option" style="height: 56px; padding: 0 24px;">
+                <button class="settings-option" id="sync-connect-btn" style="height: 56px; padding: 0 24px;">
                     <img src="../icons_new/settings/connect_to_sync_withe1.svg" alt="Connect" class="btn-icon">
                     <span>Connect to Sync</span>
                 </button>
+
+                <div id="sync-pin-display" class="settings-row hidden" style="flex-direction: column; gap: 12px; padding: 16px 15px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--color-border); margin-bottom: 12px;">
+                    <div style="font-size: 14px; text-align: center;">Enter this PIN on your other device:</div>
+                    <div id="sync-pin-code" style="font-size: 32px; font-weight: 700; letter-spacing: 4px; text-align: center; color: var(--color-text);"></div>
+                    <button class="button secondary" id="sync-cancel-btn" style="width: 100%;">Cancel Sync</button>
+                </div>
+
+                <div id="sync-pin-input" class="settings-row hidden" style="flex-direction: column; gap: 12px; padding: 16px 15px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--color-border); margin-bottom: 12px;">
+                    <label style="font-size: 14px;">Enter PIN from other device:</label>
+                    <input type="text" id="sync-pin-field" class="form-input" maxlength="6" style="text-align: center; font-size: 24px; letter-spacing: 4px;">
+                    <div style="display: flex; gap: 8px; width: 100%;">
+                        <button class="button primary" id="sync-connect-confirm-btn" style="flex: 1;">Connect</button>
+                        <button class="button secondary" id="sync-connect-cancel-btn" style="flex: 1;">Cancel</button>
+                    </div>
+                </div>
+
                 <div class="settings-row settings-option-like" style="display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; margin-bottom: 16px; background: var(--color-dark); border-radius: var(--border-radius); border: 1px solid var(--color-border);">
                     <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
                         <img src="../icons_new/settings/auto_sync_withe1.svg" alt="Auto Sync" style="width: 22px; height: 22px; filter: brightness(0) invert(1);">
                         <span style="font-size: 14px; font-weight: 600;">Auto Sync</span>
                     </div>
                     <label class="switch" style="margin: 0;">
-                        <input type="checkbox" id="auto-sync-toggle">
+                        <input type="checkbox" id="sync-auto-toggle">
                         <span class="slider round"></span>
                     </label>
                 </div>
@@ -594,7 +610,7 @@
             </div>
             <div class="form-group">
                 <label data-i18n="export_pwd_label">Set Export Password</label>
-                <input type="password" id="export-password" data-i18n="placeholder_password" placeholder="Password for export file">
+                <input type="password" id="export-password" data-i18n="placeholder_password" placeholder="Password for export file" autocomplete="off" spellcheck="false">
             </div>
             <div class="button-group">
                 <button class="button primary" id="do-export-btn" data-i18n="settings_export">Export</button>
@@ -618,7 +634,7 @@
             </div>
             <div class="form-group">
                 <label data-i18n="import_pwd_label">Import Password</label>
-                <input type="password" id="import-password" data-i18n="placeholder_password" placeholder="Password of export file">
+                <input type="password" id="import-password" data-i18n="placeholder_password" placeholder="Password of export file" autocomplete="off" spellcheck="false">
             </div>
             <div class="button-group">
                 <button class="button primary" id="do-import-btn" data-i18n="settings_import">Import</button>
@@ -931,7 +947,6 @@
             <div class="button-group">
                 <button class="button primary" id="save-id-btn" data-i18n="btn_save">Save</button>
                 <button class="button danger hidden" id="delete-id-btn" data-i18n="btn_delete">Delete</button>
-                <button class="button secondary" id="cancel-id-btn" data-i18n="btn_cancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -985,7 +1000,6 @@
             <div class="button-group">
                 <button class="button primary" id="save-doc-btn" data-i18n="btn_save">Save</button>
                 <button class="button danger hidden" id="delete-doc-btn" data-i18n="btn_delete">Delete</button>
-                <button class="button secondary" id="cancel-doc-btn" data-i18n="btn_cancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -1061,7 +1075,6 @@
             <div class="button-group">
                 <button class="button primary" id="save-card-btn" data-i18n="btn_save">Save</button>
                 <button class="button danger hidden" id="delete-card-btn" data-i18n="btn_delete">Delete</button>
-                <button class="button secondary" id="cancel-card-btn" data-i18n="btn_cancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -1089,7 +1102,6 @@
     <div id="report-detail-screen" class="screen hidden">
         <header class="app-header">
             <h1 class="header-title" data-i18n="report_title">Monthly Security Report</h1>
-            <button class="icon-button close-btn" id="report-close-btn">X</button>
         </header>
         <div class="report-detail-container">
             <div class="report-bento-grid">

@@ -1181,8 +1181,8 @@ textarea {
 }
 
 .audit-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-hover);
+    transform: none;
+    box-shadow: none;
 }
 
 .audit-card-number {
@@ -1260,9 +1260,7 @@ textarea {
     transition: border-color 0.2s;
 }
 
-.audit-result-card:hover {
-    border-color: var(--color-accent);
-}
+
 
 .audit-result-header {
     display: flex;
@@ -1803,12 +1801,39 @@ textarea {
 
 .trash-card-actions {
     display: flex;
-    gap: 8px;
+    align-items: center;
+    gap: 12px;
 }
 
-.trash-card-actions .button {
-    padding: 6px 12px;
-    font-size: 12px;
+.trash-action-btn {
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    outline: none;
+}
+
+.trash-action-btn img {
+    width: 16px;
+    height: 16px;
+    opacity: 0.8;
+}
+
+.trash-action-btn.restore-btn:hover {
+    border-color: #b3b3b3D9 !important;
+    background: transparent !important;
+}
+
+.trash-action-btn.delete-permanent-btn:hover {
+    border-color: #e74c3c !important;
+    background: transparent !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1927,9 +1952,8 @@ textarea {
 .report-detail-container {
     width: 100%;
     padding: 20px;
-    background: var(--color-dark);
-    border-radius: 12px;
-    border: 1px solid var(--color-border);
+    background: transparent;
+    border: none;
 }
 
 .report-score-section {
@@ -2002,11 +2026,16 @@ textarea {
 .audit-card-reused .audit-card-number { color: #b388ff; }
 .audit-card-leaked .audit-card-number { color: var(--color-danger); }
 
-.audit-card-total { border-top-color: var(--color-accent); }
-.audit-card-strong { border-top-color: var(--color-success); }
-.audit-card-weak { border-top-color: #f59e0b; }
-.audit-card-reused { border-top-color: #b388ff; }
-.audit-card-leaked { border-top-color: var(--color-danger); }
+.audit-card-total { border-top-color: var(--color-accent); border: 1px solid var(--color-border); }
+.audit-card-strong { border-top-color: var(--color-success); border: 1px solid var(--color-border); }
+.audit-card-weak { border-top-color: #f59e0b; border: 1px solid var(--color-border); }
+.audit-card-reused { border-top-color: #b388ff; border: 1px solid var(--color-border); }
+.audit-card-leaked { border-top-color: var(--color-danger); border: 1px solid var(--color-border); }
+
+.audit-card-total:hover { border: 1px solid #ffffff !important; }
+.audit-card-strong:hover { border: 1px solid #2ecc71 !important; }
+.audit-card-weak:hover, .audit-card-reused:hover { border: 1px solid #d5b500 !important; }
+.audit-card-leaked:hover { border: 1px solid #e74c3c !important; }
 
 /* Responsive sidebar */
 @media (max-width: 900px) {
@@ -2548,12 +2577,32 @@ textarea {
     background-color: transparent !important;
 }
 
-/* ---- Remove orange from audit result card hover ---- */
-.audit-result-card:hover {
-    border: 1px solid #b3b3b3D9 !important;
+/* ---- Audit result card hover logic driven by data-state ---- */
+.audit-result-card[data-state="strong"] {
+    border: 1px solid #2ecc7180 !important;
+}
+.audit-result-card[data-state="strong"]:hover {
+    border-color: #2ecc71 !important;
     background-color: var(--color-dark) !important;
     transform: none !important;
-    box-shadow: none !important;
+}
+
+.audit-result-card[data-state="warn"] {
+    border: 1px solid #d5b50080 !important;
+}
+.audit-result-card[data-state="warn"]:hover {
+    border-color: #d5b500 !important;
+    background-color: var(--color-dark) !important;
+    transform: none !important;
+}
+
+.audit-result-card[data-state="leaked"] {
+    border: 1px solid #e74c3c80 !important;
+}
+.audit-result-card[data-state="leaked"]:hover {
+    border-color: #e74c3c !important;
+    background-color: var(--color-dark) !important;
+    transform: none !important;
 }
 
 /* ---- Remove orange from settings option hover ---- */
@@ -2793,10 +2842,7 @@ textarea {
 /* ---- Watchtower Cards: clickable + active state ---- */
 
 
-.watchtower-card.active {
-    border-color: #b3b3b3D9 !important;
-    box-shadow: 0 0 0 1px var(--color-text);
-}
+
 
 /* ---- Audit card total: white number (not orange) ---- */
 .audit-card-total .audit-card-number {
@@ -2845,13 +2891,20 @@ textarea {
 }
 
 .watchtower-bento .audit-card:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+    transform: none !important;
+    box-shadow: none !important;
 }
 
-.watchtower-bento .audit-card.active {
-    /* No border color change */
-}
+.watchtower-bento .audit-card-leaked:hover { border: 1px solid #e74c3c !important; }
+.watchtower-bento .audit-card-weak:hover, 
+.watchtower-bento .audit-card-reused:hover { border: 1px solid #d5b500 !important; }
+.watchtower-bento .audit-card-strong:hover { border: 1px solid #2ecc71 !important; }
+.watchtower-bento .audit-card-total:hover { border: 1px solid #b3b3b3D9 !important; }
+
+.watchtower-bento .audit-card-leaked.active { border: 1px solid #e74c3c !important; }
+.watchtower-bento .audit-card-weak.active, 
+.watchtower-bento .audit-card-reused.active { border: 1px solid #d5b500 !important; }
+.watchtower-bento .audit-card-strong.active { border: 1px solid #2ecc71 !important; }
 
 .watchtower-bento .audit-card-number {
     font-size: 36px !important;
@@ -3342,6 +3395,15 @@ textarea {
     padding: 0 20px !important;
 }
 
+/* --- Force ALL trash-card items to exactly 56px height --- */
+.trash-card {
+    height: 56px !important;
+    min-height: 56px !important;
+    padding: 0 20px !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
 
 /* --- Bento Grid for Monthly Security Report --- */
 .report-bento-grid {
@@ -3565,8 +3627,8 @@ select:focus,
 .audit-filter-btn[data-filter="weak"].active,
 .audit-filter-btn[data-filter="reused"]:hover,
 .audit-filter-btn[data-filter="reused"].active {
-    border-color: #f39c12 !important;
-    color: #f39c12 !important;
+    border-color: #d5b500 !important;
+    color: #d5b500 !important;
     background-color: transparent !important;
     box-shadow: none !important;
 }
@@ -3589,12 +3651,6 @@ select:focus,
     box-shadow: none !important;
 }
 
-
-.trash-card-actions .button:hover {
-    box-shadow: inset 0 0 0 1px #b3b3b3D9 !important;
-    border-color: transparent !important;
-    color: var(--color-text) !important;
-}
 
 
 /* --- Date Picker Styling --- */
@@ -3668,7 +3724,6 @@ input:checked + .slider:before {
     border-radius: 50%;
 }
 
-.watchtower-bento .audit-card:hover,
 .watchtower-bento .stat-cell:hover {
     border: 1px solid transparent !important;
     background: transparent !important;
