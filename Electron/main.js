@@ -1490,14 +1490,17 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
             let buffer = '';
             let activeSyncDirection = direction || 'merge';
 
+            let isFinished = false;
+
             const timeout = setTimeout(() => {
+                if (isFinished) return;
+                isFinished = true;
                 client.destroy();
                 updateSyncState('error');
                 resolve({ success: false, error: 'Verbindungstimeout' });
             }, 60000);
 
             client.connect(targetPort, targetIp, () => {
-
                 client.write(JSON.stringify({
                     type: 'hello',
                     publicKey: ecdh.getPublicKey('hex')
@@ -1527,6 +1530,8 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
 
                         } else if (msg.type === 'auth_reply') {
                             if (!msg.success) {
+                                if (isFinished) return;
+                                isFinished = true;
                                 clearTimeout(timeout);
                                 client.destroy();
                                 updateSyncState('error');
@@ -1557,6 +1562,8 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
                             }) + '\n');
 
                         } else if (msg.type === 'sync_reply') {
+                            if (isFinished) return;
+                            isFinished = true;
                             clearTimeout(timeout);
                             if (msg.success && msg.data) {
                                 if (activeSyncDirection === 'merge' || activeSyncDirection === 'pull') {
@@ -1564,12 +1571,19 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
                                     const serverData = JSON.parse(decryptedStr);
                                     await mergeAllFiles(serverData);
                                 }
+                            } else if (!msg.success) {
+                                updateSyncState('error');
+                                client.destroy();
+                                resolve({ success: false, error: msg.error || 'Server error' });
+                                return;
                             }
                             updateSyncState('complete');
                             client.destroy();
                             resolve({ success: true, deviceName: targetDevice });
                         }
                     } catch (err) {
+                        if (isFinished) return;
+                        isFinished = true;
                         clearTimeout(timeout);
                         client.destroy();
                         updateSyncState('error');
@@ -1579,6 +1593,8 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
             });
 
             client.on('error', (err) => {
+                if (isFinished) return;
+                isFinished = true;
                 clearTimeout(timeout);
                 updateSyncState('error');
                 resolve({ success: false, error: err.message });
@@ -1821,6 +1837,12 @@ ipcMain.handle('sync-start-server', async (event, data) => {
                         socket.destroy();
                     } catch(e) {}
                 }
+            }
+        });
+
+        socket.on('error', (err) => {
+            if (syncState !== 'complete' && syncState !== 'idle') {
+                updateSyncState('error');
             }
         });
     });
