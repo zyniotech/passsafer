@@ -4657,9 +4657,44 @@ function setupSyncEventListeners() {
     }
 
     if (window.api.onSyncStatusUpdate) {
-        window.api.onSyncStatusUpdate((state) => {
+        window.api.onSyncStatusUpdate(async (state) => {
             syncCurrentState = state;
             updateSyncStatusDisplay(state);
+            
+            if (state === 'complete') {
+                showToast('msg_sync_success', 'success');
+                const loadResult = await window.api.loadPasswords({ password: currentPassword });
+                if (loadResult.success) {
+                    passwords = loadResult.data || [];
+                    folders = loadResult.folders || [];
+                    trash = loadResult.trash || [];
+                    renderPasswordList();
+                    loadFoldersToSidebar();
+                    loadTrash();
+                    updateWatchtower();
+                }
+                
+                const idResult = await window.api.loadIds({ password: currentPassword });
+                if (idResult.success) {
+                    ids = idResult.data || [];
+                    renderIdList();
+                }
+                
+                const docResult = await window.api.loadDocuments({ password: currentPassword });
+                if (docResult.success) {
+                    documents = docResult.data || [];
+                    renderDocList();
+                }
+                
+                const cardResult = await window.api.loadCards({ password: currentPassword });
+                if (cardResult.success) {
+                    cards = cardResult.data || [];
+                    renderCardList();
+                }
+                
+                const reportsResult = await window.api.loadReports({ password: currentPassword });
+                if (reportsResult.success) reports = reportsResult.data || [];
+            }
         });
     }
 }
@@ -4718,16 +4753,29 @@ async function handleSyncConnect() {
             if (syncDirection !== 'push') {
                 const loadResult = await window.api.loadPasswords({ password: currentPassword });
                 if (loadResult.success) {
-                    passwords = loadResult.data;
-                    folders = loadResult.folders;
+                    passwords = loadResult.data || [];
+                    folders = loadResult.folders || [];
                     trash = loadResult.trash || [];
+                    renderPasswordList();
+                    loadFoldersToSidebar();
+                    loadTrash();
+                    updateWatchtower();
                 }
                 const idsResult = await window.api.loadIds({ password: currentPassword });
-                if (idsResult.success) ids = idsResult.data || [];
+                if (idsResult.success) {
+                    ids = idsResult.data || [];
+                    renderIdList();
+                }
                 const docsResult = await window.api.loadDocuments({ password: currentPassword });
-                if (docsResult.success) documents = docsResult.data || [];
+                if (docsResult.success) {
+                    documents = docsResult.data || [];
+                    renderDocList();
+                }
                 const cardsResult = await window.api.loadCards({ password: currentPassword });
-                if (cardsResult.success) cards = cardsResult.data || [];
+                if (cardsResult.success) {
+                    cards = cardsResult.data || [];
+                    renderCardList();
+                }
                 const reportsResult = await window.api.loadReports({ password: currentPassword });
                 if (reportsResult.success) reports = reportsResult.data || [];
             }

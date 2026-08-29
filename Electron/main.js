@@ -1605,6 +1605,8 @@ function updateSyncState(state) {
 }
 
 function mergeArrays(local, remote) {
+    if (!Array.isArray(local)) local = [];
+    if (!Array.isArray(remote)) remote = [];
     const map = new Map();
     local.forEach(item => {
         if (item.id) map.set(item.id, item);
@@ -1628,28 +1630,35 @@ function mergeArrays(local, remote) {
     return Array.from(map.values());
 }
 
+function safeDecryptData(fileDataStr, masterPass) {
+    if (!fileDataStr) return null;
+    try {
+        const fileData = JSON.parse(fileDataStr);
+        let decryptedData;
+        try {
+            decryptedData = decrypt(fileData.data, masterPass, fileData.salt);
+        } catch {
+            decryptedData = decryptWithPBKDF2(fileData.data, masterPass, fileData.salt);
+        }
+        return JSON.parse(decryptedData);
+    } catch (e) {
+        return null;
+    }
+}
+
 async function getAllLocalDataForUser(userDir, masterPassword) {
     let result = {};
-    try {
-        const fileData = JSON.parse(await fs.readFile(path.join(userDir, '.pw'), 'utf8'));
-        result.pw = JSON.parse(decrypt(fileData.data, masterPassword, fileData.salt));
-    } catch(e){}
-    try {
-        const fileData = JSON.parse(await fs.readFile(path.join(userDir, '.id'), 'utf8'));
-        result.id = JSON.parse(decrypt(fileData.data, masterPassword, fileData.salt));
-    } catch(e){}
-    try {
-        const fileData = JSON.parse(await fs.readFile(path.join(userDir, '.doc'), 'utf8'));
-        result.doc = JSON.parse(decrypt(fileData.data, masterPassword, fileData.salt));
-    } catch(e){}
-    try {
-        const fileData = JSON.parse(await fs.readFile(path.join(userDir, '.card'), 'utf8'));
-        result.card = JSON.parse(decrypt(fileData.data, masterPassword, fileData.salt));
-    } catch(e){}
-    try {
-        const fileData = JSON.parse(await fs.readFile(path.join(userDir, '.report'), 'utf8'));
-        result.report = JSON.parse(decrypt(fileData.data, masterPassword, fileData.salt));
-    } catch(e){}
+    const files = ['.pw', '.id', '.doc', '.card', '.report'];
+    const keys = ['pw', 'id', 'doc', 'card', 'report'];
+    for (let i = 0; i < files.length; i++) {
+        try {
+            const fileDataStr = await fs.readFile(path.join(userDir, files[i]), 'utf8');
+            const data = safeDecryptData(fileDataStr, masterPassword);
+            if (data !== null) {
+                result[keys[i]] = data;
+            }
+        } catch(e){}
+    }
     return result;
 }
 
@@ -1661,58 +1670,33 @@ async function getAllLocalData() {
 async function mergeAllFiles(clientData, masterPass = inMemoryMasterPassword, userDir = currentUserDir) {
     if (!masterPass || !userDir) return;
 
-    const pwFile = path.join(userDir, '.pw');
-    const idFile = path.join(userDir, '.id');
-    const docFile = path.join(userDir, '.doc');
-    const cardFile = path.join(userDir, '.card');
-    const reportFile = path.join(userDir, '.report');
-
-    if (clientData.pw) {
-        try {
-            const fileData = JSON.parse(await fs.readFile(pwFile, 'utf8'));
-            let localData = JSON.parse(decrypt(fileData.data, masterPass, fileData.salt));
-            localData.passwords = mergeArrays(localData.passwords || [], clientData.pw.passwords || []);
-            localData.folders = mergeArrays(localData.folders || [], clientData.pw.folders || []);
-            localData.trash = mergeArrays(localData.trash || [], clientData.pw.trash || []);
+    const files = ['.pw', '.id', '.doc', '.card', '.report'];
+    const keys = ['pw', 'id', 'doc', 'card', 'report'];
+    
+    for (let i = 0; i < files.length; i++) {
+        const key = keys[i];
+        if (clientData[key]) {
+            let fileDataStr = '';
+            try { fileDataStr = await fs.readFile(path.join(userDir, files[i]), 'utf8'); } catch(e){}
+            let localData = safeDecryptData(fileDataStr, masterPass);
+            
+            if (key === 'pw') {
+                if (!localData) localData = { passwords: [], folders: [], trash: [] };
+                localData.passwords = mergeArrays(localData.passwords || [], clientData.pw.passwords || []);
+                localData.folders = mergeArrays(localData.folders || [], clientData.pw.folders || []);
+                localData.trash = mergeArrays(localData.trash || [], clientData.pw.trash || []);
+            } else {
+                if (!localData) localData = [];
+                localData = mergeArrays(localData, clientData[key] || []);
+            }
+            
             const newSalt = crypto.randomBytes(16).toString('hex');
-            await fs.writeFile(pwFile, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(localData), masterPass, newSalt), kdf: 'scrypt' }));
-        } catch(e){}
-    }
-    if (clientData.id) {
-        try {
-            const fileData = JSON.parse(await fs.readFile(idFile, 'utf8'));
-            let localData = JSON.parse(decrypt(fileData.data, masterPass, fileData.salt));
-            let merged = mergeArrays(localData, clientData.id);
-            const newSalt = crypto.randomBytes(16).toString('hex');
-            await fs.writeFile(idFile, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), masterPass, newSalt), kdf: 'scrypt' }));
-        } catch(e){}
-    }
-    if (clientData.doc) {
-        try {
-            const fileData = JSON.parse(await fs.readFile(docFile, 'utf8'));
-            let localData = JSON.parse(decrypt(fileData.data, masterPass, fileData.salt));
-            let merged = mergeArrays(localData, clientData.doc);
-            const newSalt = crypto.randomBytes(16).toString('hex');
-            await fs.writeFile(docFile, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), masterPass, newSalt), kdf: 'scrypt' }));
-        } catch(e){}
-    }
-    if (clientData.card) {
-        try {
-            const fileData = JSON.parse(await fs.readFile(cardFile, 'utf8'));
-            let localData = JSON.parse(decrypt(fileData.data, masterPass, fileData.salt));
-            let merged = mergeArrays(localData, clientData.card);
-            const newSalt = crypto.randomBytes(16).toString('hex');
-            await fs.writeFile(cardFile, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), masterPass, newSalt), kdf: 'scrypt' }));
-        } catch(e){}
-    }
-    if (clientData.report) {
-        try {
-            const fileData = JSON.parse(await fs.readFile(reportFile, 'utf8'));
-            let localData = JSON.parse(decrypt(fileData.data, masterPass, fileData.salt));
-            let merged = mergeArrays(localData, clientData.report);
-            const newSalt = crypto.randomBytes(16).toString('hex');
-            await fs.writeFile(reportFile, JSON.stringify({ salt: newSalt, data: encrypt(JSON.stringify(merged), masterPass, newSalt), kdf: 'scrypt' }));
-        } catch(e){}
+            await fs.writeFile(path.join(userDir, files[i]), JSON.stringify({ 
+                salt: newSalt, 
+                data: encrypt(JSON.stringify(localData), masterPass, newSalt), 
+                kdf: 'scrypt' 
+            }));
+        }
     }
 }
 
