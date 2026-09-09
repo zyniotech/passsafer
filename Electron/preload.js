@@ -52,8 +52,10 @@ contextBridge.exposeInMainWorld('api', {
     syncStartServer: (data) => ipcRenderer.invoke('sync-start-server', data),
     syncStopServer: () => ipcRenderer.invoke('sync-stop-server'),
     onSyncStatusUpdate: (callback) => ipcRenderer.on('sync-status-update', (e, data) => callback(data)),
+    onSyncPairsUpdated: (callback) => ipcRenderer.on('sync-pairs-updated', () => callback()),
 
     syncConnect: (data) => ipcRenderer.invoke('sync-connect', data),
+    syncExecute: (direction) => ipcRenderer.invoke('sync-execute', { direction }),
     syncSendDirection: (direction) => ipcRenderer.invoke('sync-send-direction', { direction }),
     syncEnableAuto: () => ipcRenderer.invoke('sync-enable-auto'),
     syncDisableAuto: () => ipcRenderer.invoke('sync-disable-auto'),

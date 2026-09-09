@@ -451,25 +451,26 @@
                         <strong id="sync-last-display" style="color: var(--color-text);">-</strong>
                     </div>
                 </div>
-                
-                <div id="sync-direction-block" class="settings-row hidden" style="flex-direction: column; align-items: flex-start; gap: 16px; padding: 16px 15px; background: rgba(255, 255, 255, 0.03); border-radius: 6px; border: 1px solid var(--color-border); margin-bottom: 12px;">
-                    <span style="font-weight: 600; font-size: 14px;">Wähle die Sync-Richtung (Du hast die PIN erstellt)</span>
+                <div id="sync-direction-block" class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px 15px; background: rgba(255, 255, 255, 0.03); border-radius: 6px; border: 1px solid var(--color-border); margin-bottom: 12px;">
+                    <span style="font-weight: 600; font-size: 13px; color: var(--color-text-secondary);">Sync Direction</span>
                     <div style="display: flex; gap: 8px; width: 100%;">
                         <button class="button secondary sync-direction-btn active" data-direction="merge" style="flex: 1; padding: 10px; font-weight: 600;">Merge</button>
                         <button class="button secondary sync-direction-btn" data-direction="push" style="flex: 1; padding: 10px; font-weight: 600;">Push</button>
                         <button class="button secondary sync-direction-btn" data-direction="pull" style="flex: 1; padding: 10px; font-weight: 600;">Pull</button>
                     </div>
-                    <button class="button primary" id="sync-confirm-direction-btn" style="width: 100%; padding: 12px; font-weight: bold; justify-content: center;">Sync Starten</button>
+                    <button class="button primary" id="sync-execute-btn" style="width: 100%; margin-top: 8px; font-weight: bold; justify-content: center;">Execute Sync</button>
                 </div>
-                
-                <button class="settings-option" id="sync-start-btn" style="height: 56px; padding: 0 24px;">
-                    <img src="../icons_new/settings/play_circle_start_sync_withe1.svg" alt="Start Sync" class="btn-icon">
-                    <span>Start Sync</span>
-                </button>
-                <button class="settings-option" id="sync-connect-btn" style="height: 56px; padding: 0 24px;">
-                    <img src="../icons_new/settings/connect_to_sync_withe1.svg" alt="Connect" class="btn-icon">
-                    <span>Connect to Sync</span>
-                </button>
+
+                <div id="sync-action-buttons">
+                    <button class="settings-option" id="sync-start-btn" style="height: 56px; padding: 0 24px;">
+                        <img src="../icons_new/settings/play_circle_start_sync_withe1.svg" alt="Host Sync" class="btn-icon">
+                        <span>Host Sync (Generate PIN)</span>
+                    </button>
+                    <button class="settings-option" id="sync-connect-btn" style="height: 56px; padding: 0 24px;">
+                        <img src="../icons_new/settings/connect_to_sync_withe1.svg" alt="Connect" class="btn-icon">
+                        <span>Connect to Host</span>
+                    </button>
+                </div>
 
                 <div id="sync-pin-display" class="settings-row hidden" style="flex-direction: column; gap: 12px; padding: 16px 15px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--color-border); margin-bottom: 12px;">
                     <div style="font-size: 14px; text-align: center;">Enter this PIN on your other device:</div>
@@ -497,12 +498,12 @@
                     </label>
                 </div>
                 
-                <div class="settings-row settings-option-like" style="display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; margin-bottom: 16px; background: var(--color-dark); border-radius: var(--border-radius); border: 1px solid var(--color-border);">
-                    <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 15px; background: var(--color-dark); border-radius: var(--border-radius); border: 1px solid var(--color-border);">
+                    <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
                         <img src="../icons_new/settings/connected_devices_withe1.svg" alt="Devices" style="width: 22px; height: 22px; filter: brightness(0) invert(1);">
                         <span style="font-weight: 600; font-size: 14px;">Connected Devices</span>
                     </div>
-                    <span style="color: var(--color-text-secondary); font-size: 13px;">No paired devices</span>
+                    <div id="sync-devices-list" style="width: 100%;"></div>
                 </div>
             </div>
 

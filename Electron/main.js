@@ -202,6 +202,281 @@ async function migrateToMultiUser() {
     console.log(`[PassSafer] Migrated existing data to users/${defaultUser}/`);
 }
 
+async function initAutoSyncSystem() {
+    let hasPairs = false;
+    try {
+        const pairs = JSON.parse(await fs.readFile(SYNC_PAIRS_FILE, 'utf8'));
+        hasPairs = Array.isArray(pairs) && pairs.length > 0 && pairs.some(p => p.autoSyncToken);
+    } catch(e) {}
+    if (!hasPairs) return;
+
+    if (autoSyncEnabled) return;
+    autoSyncEnabled = true;
+
+    autoSyncTcpServer = net.createServer((socket) => {
+        let buffer = '';
+        socket.on('data', async (data) => {
+            buffer += data.toString();
+            if (!buffer.includes('\n')) return;
+            const msgs = buffer.split('\n');
+            buffer = msgs.pop();
+
+            for (const msgStr of msgs) {
+                if (!msgStr) continue;
+                try {
+                    const msg = JSON.parse(msgStr);
+                    if (msg.type === 'auto_auth') {
+                        let pairs = [];
+                        try { pairs = JSON.parse(await fs.readFile(SYNC_PAIRS_FILE, 'utf8')); } catch {}
+                        const pair = pairs.find(p => p.deviceId === msg.device);
+                        
+                        if (pair && pair.autoSyncToken) {
+                            const expectedMac = crypto.createHmac('sha256', pair.autoSyncToken).update('auth').digest('hex');
+                            if (msg.mac === expectedMac) {
+                                socket.sessionPassword = crypto.createHash('sha256').update(pair.autoSyncToken + 'PassSaferAutoSync').digest('hex');
+                                socket.clientDeviceName = msg.device;
+                                socket.isAutoConnection = true;
+                                socket.autoSyncToken = pair.autoSyncToken;
+
+                                if (activeSyncSocket && activeSyncSocket !== socket && !activeSyncSocket.destroyed) {
+                                    try { activeSyncSocket.destroy(); } catch(e) {}
+                                }
+                                activeSyncSocket = socket;
+
+                                updateSyncState('connected_wait_direction');
+                                socket.write(JSON.stringify({ type: 'auto_auth_reply', success: true, status: 'wait_direction' }) + '\n');
+                            } else {
+                                socket.write(JSON.stringify({ type: 'auto_auth_reply', success: false }) + '\n');
+                                socket.destroy();
+                            }
+                        } else {
+                            socket.write(JSON.stringify({ type: 'auto_auth_reply', success: false }) + '\n');
+                            socket.destroy();
+                        }
+                    } else if (msg.type === 'sync_request_delegated') {
+                        if (!socket.sessionPassword) return;
+                        if (msg.data) {
+                            const decryptedStr = decryptExport(msg.data, socket.sessionPassword);
+                            const payload = JSON.parse(decryptedStr);
+                            const direction = payload.direction || msg.direction || 'merge';
+                            
+                            const targetUserDir = getUserDir(payload.username);
+                            await fs.mkdir(targetUserDir, { recursive: true }).catch(()=>{});
+
+                            if (direction === 'merge' || direction === 'push') {
+                                await mergeAllFiles(payload.data, payload.masterPassword, targetUserDir);
+                            }
+                            
+                            let responseData = {};
+                            if (direction === 'merge' || direction === 'pull') {
+                                responseData = await getAllLocalDataForUser(targetUserDir, payload.masterPassword);
+                            }
+                            const serverEncrypted = encryptExport(JSON.stringify(responseData), socket.sessionPassword);
+                            
+                            socket.write(JSON.stringify({ type: 'sync_reply', success: true, data: serverEncrypted }) + '\n');
+                            
+                            if (currentUsername === payload.username && inMemoryMasterPassword) {
+                                updateSyncState('complete');
+                                setTimeout(() => updateSyncState('connected_wait_direction'), 3000);
+                            } else {
+                                const { Notification } = require('electron');
+                                if (Notification.isSupported()) {
+                                    new Notification({
+                                        title: 'PassSafer Sync',
+                                        body: `Synchronisation mit ${msg.device || 'einem Gerät'} abgeschlossen.`
+                                    }).show();
+                                }
+                            }
+                        }
+                    } else if (msg.type === 'sync_reply') {
+                        if (msg.success && msg.data) {
+                            const decryptedStr = decryptExport(msg.data, socket.sessionPassword);
+                            const serverData = JSON.parse(decryptedStr);
+                            const direction = socket.lastSyncDirection || 'merge';
+                            if (direction === 'merge' || direction === 'pull') {
+                                await mergeAllFiles(serverData);
+                            }
+                            
+                            updateSyncState('complete');
+                            setTimeout(() => updateSyncState('connected_wait_direction'), 3000);
+                        }
+                    }
+                } catch(e) {}
+            }
+        });
+        socket.on('error', () => {});
+        socket.on('close', () => {
+            if (activeSyncSocket === socket) {
+                activeSyncSocket = null;
+                if (syncState === 'connected_wait_direction' || syncState === 'connected_client') {
+                    updateSyncState('idle');
+                }
+            }
+        });
+    });
+
+    autoSyncTcpServer.listen(0, '0.0.0.0', () => {
+        autoSyncPort = autoSyncTcpServer.address().port;
+        
+        autoSyncDiscoverySocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+        autoSyncDiscoverySocket.bind(41234, () => {
+            autoSyncDiscoverySocket.setBroadcast(true);
+            try { autoSyncDiscoverySocket.addMembership('224.0.0.251'); } catch(e) {}
+        });
+
+        autoSyncBroadcastInterval = setInterval(() => {
+            if (!autoSyncDiscoverySocket) return;
+            const beacon = JSON.stringify({
+                service: '_passsafer-autosync._tcp.local',
+                device: os.hostname(),
+                port: autoSyncPort
+            });
+            autoSyncDiscoverySocket.send(beacon, 0, beacon.length, 41234, '224.0.0.251');
+        }, 10000);
+
+        autoSyncDiscoverySocket.on('message', async (msgStr, rinfo) => {
+            const ownIps = Object.values(os.networkInterfaces()).flat().filter(i => i.family === 'IPv4').map(i => i.address);
+            if (ownIps.includes(rinfo.address)) return;
+
+            try {
+                const data = JSON.parse(msgStr.toString());
+                if (data.service === '_passsafer-autosync._tcp.local' && data.port && data.device) {
+                    if (activeAutoSyncs.has(rinfo.address)) return;
+                    if (activeSyncSocket && !activeSyncSocket.destroyed) return;
+
+                    let pairs = [];
+                    try { pairs = JSON.parse(await fs.readFile(SYNC_PAIRS_FILE, 'utf8')); } catch {}
+                    const pair = pairs.find(p => p.deviceId === data.device);
+
+                    if (pair && pair.autoSyncToken && os.hostname() < data.device) {
+                        activeAutoSyncs.add(rinfo.address);
+                        
+                        const client = new net.Socket();
+                        client.connect(data.port, rinfo.address, () => {
+                            const mac = crypto.createHmac('sha256', pair.autoSyncToken).update('auth').digest('hex');
+                            client.write(JSON.stringify({ type: 'auto_auth', device: os.hostname(), mac }) + '\n');
+                        });
+
+                        let cbuffer = '';
+                        client.on('data', async (cdata) => {
+                            cbuffer += cdata.toString();
+                            if (!cbuffer.includes('\n')) return;
+                            const msgs = cbuffer.split('\n');
+                            cbuffer = msgs.pop();
+
+                            for (const cmsgStr of msgs) {
+                                if (!cmsgStr) continue;
+                                try {
+                                    const cmsg = JSON.parse(cmsgStr);
+                                    if (cmsg.type === 'auto_auth_reply') {
+                                        if (cmsg.success) {
+                                            const sessionPassword = crypto.createHash('sha256').update(pair.autoSyncToken + 'PassSaferAutoSync').digest('hex');
+                                            client.sessionPassword = sessionPassword;
+                                            client.isAutoConnection = true;
+                                            client.autoSyncToken = pair.autoSyncToken;
+                                            client.clientDeviceName = data.device;
+                                            
+                                            if (activeSyncSocket && activeSyncSocket !== client && !activeSyncSocket.destroyed) {
+                                                try { activeSyncSocket.destroy(); } catch(e) {}
+                                            }
+                                            activeSyncSocket = client;
+
+                                            let autoSyncSetting = false;
+                                            try {
+                                                const sr = await fs.readFile(path.join(DATA_DIR, 'settings.json'), 'utf8');
+                                                autoSyncSetting = JSON.parse(sr).autoSync === true;
+                                            } catch(e) {}
+
+                                            if (autoSyncSetting && inMemoryMasterPassword && currentUsername) {
+                                                updateSyncState('auto-syncing');
+                                                const localData = await getAllLocalData();
+                                                const payload = {
+                                                    data: localData,
+                                                    masterPassword: inMemoryMasterPassword,
+                                                    username: currentUsername,
+                                                    direction: 'merge'
+                                                };
+                                                const encryptedData = encryptExport(JSON.stringify(payload), sessionPassword);
+                                                client.write(JSON.stringify({ type: 'sync_request_delegated', device: os.hostname(), data: encryptedData }) + '\n');
+                                            } else {
+                                                updateSyncState('connected_wait_direction');
+                                            }
+                                        } else {
+                                            client.destroy();
+                                        }
+                                    } else if (cmsg.type === 'sync_reply') {
+                                        if (cmsg.success && cmsg.data) {
+                                            const decryptedStr = decryptExport(cmsg.data, client.sessionPassword);
+                                            const serverData = JSON.parse(decryptedStr);
+                                            const direction = client.lastSyncDirection || 'merge';
+                                            if (direction === 'merge' || direction === 'pull') {
+                                                await mergeAllFiles(serverData);
+                                            }
+                                            
+                                            pair.lastSync = Date.now();
+                                            await fs.writeFile(SYNC_PAIRS_FILE, JSON.stringify(pairs, null, 2));
+                                            
+                                            updateSyncState('complete');
+                                            setTimeout(() => updateSyncState('connected_wait_direction'), 3000);
+                                        }
+                                    } else if (cmsg.type === 'sync_request_delegated') {
+                                        if (!client.sessionPassword) return;
+                                        if (cmsg.data) {
+                                            const decryptedStr = decryptExport(cmsg.data, client.sessionPassword);
+                                            const payload = JSON.parse(decryptedStr);
+                                            const direction = payload.direction || cmsg.direction || 'merge';
+                                            
+                                            const targetUserDir = getUserDir(payload.username);
+                                            await fs.mkdir(targetUserDir, { recursive: true }).catch(()=>{});
+
+                                            if (direction === 'merge' || direction === 'push') {
+                                                await mergeAllFiles(payload.data, payload.masterPassword, targetUserDir);
+                                            }
+                                            
+                                            let responseData = {};
+                                            if (direction === 'merge' || direction === 'pull') {
+                                                responseData = await getAllLocalDataForUser(targetUserDir, payload.masterPassword);
+                                            }
+                                            const encrypted = encryptExport(JSON.stringify(responseData), client.sessionPassword);
+                                            client.write(JSON.stringify({ type: 'sync_reply', success: true, data: encrypted }) + '\n');
+
+                                            if (currentUsername === payload.username && inMemoryMasterPassword) {
+                                                updateSyncState('complete');
+                                                setTimeout(() => updateSyncState('connected_wait_direction'), 3000);
+                                            } else {
+                                                const { Notification } = require('electron');
+                                                if (Notification.isSupported()) {
+                                                    new Notification({
+                                                        title: 'PassSafer Sync',
+                                                        body: `Synchronisation mit ${cmsg.device || 'einem Gerät'} abgeschlossen.`
+                                                    }).show();
+                                                }
+                                            }
+                                        }
+                                    }
+                                } catch(e) {}
+                            }
+                        });
+
+                        client.on('close', () => {
+                            activeAutoSyncs.delete(rinfo.address);
+                            if (activeSyncSocket === client) {
+                                activeSyncSocket = null;
+                                if (syncState === 'connected_wait_direction' || syncState === 'connected_client') {
+                                    updateSyncState('idle');
+                                }
+                            }
+                        });
+                        client.on('error', () => {
+                            client.destroy();
+                        });
+                    }
+                }
+            } catch(e) {}
+        });
+    });
+}
+
 app.whenReady().then(async () => {
     await ensureDataDir();
     await migrateToMultiUser();
@@ -228,6 +503,8 @@ app.whenReady().then(async () => {
         ]));
         tray.on('double-click', () => { mainWindow.show(); mainWindow.focus(); });
     }
+
+    initAutoSyncSystem();
 
     if (isTrayStart) {
         let lastIpcActivity = Date.now();
@@ -1364,66 +1641,68 @@ ipcMain.handle('sync-remove-pair', async (event, { deviceId }) => {
 
 let autoSyncEnabled = false;
 let autoSyncDiscoverySocket = null;
-let autoSyncInterval = null;
+let autoSyncTcpServer = null;
+let autoSyncPort = 0;
+let autoSyncBroadcastInterval = null;
+let activeAutoSyncs = new Set(); // Track IPs to avoid loops
 
 ipcMain.handle('sync-enable-auto', async () => {
     if (autoSyncEnabled) return { success: true };
-    if (!inMemoryMasterPassword || !currentUserDir) return { success: false, error: 'Not logged in' };
-
-    autoSyncEnabled = true;
-
-    autoSyncDiscoverySocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
-    autoSyncDiscoverySocket.bind(41234, () => {
-        autoSyncDiscoverySocket.setBroadcast(true);
-        try { autoSyncDiscoverySocket.addMembership('224.0.0.251'); } catch(e) {}
-    });
-
-    autoSyncDiscoverySocket.on('message', async (msg, rinfo) => {
-        const ownIps = Object.values(os.networkInterfaces()).flat().filter(i => i.family === 'IPv4').map(i => i.address);
-        if (ownIps.includes(rinfo.address)) return;
-
-        try {
-            const data = JSON.parse(msg.toString());
-            if (data.service === '_passsafer-sync._tcp.local') {
-
-                let pairs = [];
-                try { pairs = JSON.parse(await fs.readFile(SYNC_PAIRS_FILE, 'utf8')); } catch {}
-                const pair = pairs.find(p => p.deviceName === data.device);
-                if (pair && inMemoryMasterPassword) {
-
-                    pair.lastSync = Date.now();
-                    await fs.writeFile(SYNC_PAIRS_FILE, JSON.stringify(pairs, null, 2));
-                    updateSyncState('auto-syncing');
-                }
-            }
-        } catch(e) {}
-    });
-
+    await initAutoSyncSystem();
     return { success: true };
 });
 
 ipcMain.handle('sync-disable-auto', async () => {
     autoSyncEnabled = false;
+    if (autoSyncBroadcastInterval) {
+        clearInterval(autoSyncBroadcastInterval);
+        autoSyncBroadcastInterval = null;
+    }
     if (autoSyncDiscoverySocket) {
         try { autoSyncDiscoverySocket.close(); } catch(e) {}
         autoSyncDiscoverySocket = null;
     }
+    if (autoSyncTcpServer) {
+        try { autoSyncTcpServer.close(); } catch(e) {}
+        autoSyncTcpServer = null;
+    }
+    activeAutoSyncs.clear();
     return { success: true };
 });
 
 async function discoverSyncServer(timeoutMs = 6000) {
     return new Promise((resolve) => {
         let discSocket = null;
+        let usingSharedSocket = false;
         let timer = null;
         let resolved = false;
+        let messageHandler = null;
 
         function cleanup() {
             if (timer) clearTimeout(timer);
-            if (discSocket) {
-                try { discSocket.close(); } catch(e){}
+            if (usingSharedSocket && autoSyncDiscoverySocket && messageHandler) {
+                try { autoSyncDiscoverySocket.removeListener('message', messageHandler); } catch(e) {}
+            } else if (discSocket) {
+                try { discSocket.close(); } catch(e) {}
                 discSocket = null;
             }
         }
+
+        const ownIps = Object.values(os.networkInterfaces()).flat().filter(i => i.family === 'IPv4').map(i => i.address);
+
+        messageHandler = (msg, rinfo) => {
+            if (ownIps.includes(rinfo.address)) return;
+            try {
+                const data = JSON.parse(msg.toString());
+                if (data.service === '_passsafer-sync._tcp.local' && data.port) {
+                    if (!resolved) {
+                        resolved = true;
+                        cleanup();
+                        resolve({ ip: rinfo.address, port: data.port, device: data.device || rinfo.address });
+                    }
+                }
+            } catch(e) {}
+        };
 
         timer = setTimeout(() => {
             if (!resolved) {
@@ -1434,27 +1713,25 @@ async function discoverSyncServer(timeoutMs = 6000) {
         }, timeoutMs);
 
         try {
-            discSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
-            discSocket.on('message', (msg, rinfo) => {
-                const ownIps = Object.values(os.networkInterfaces()).flat().filter(i => i.family === 'IPv4').map(i => i.address);
-                if (ownIps.includes(rinfo.address)) return;
-
-                try {
-                    const data = JSON.parse(msg.toString());
-                    if (data.service === '_passsafer-sync._tcp.local' && data.port) {
-                        if (!resolved) {
-                            resolved = true;
-                            cleanup();
-                            resolve({ ip: rinfo.address, port: data.port, device: data.device || rinfo.address });
-                        }
+            if (autoSyncDiscoverySocket) {
+                usingSharedSocket = true;
+                autoSyncDiscoverySocket.on('message', messageHandler);
+            } else {
+                discSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+                discSocket.on('message', messageHandler);
+                discSocket.on('error', () => {});
+                discSocket.bind(41234, () => {
+                    discSocket.setBroadcast(true);
+                    try { discSocket.addMembership('224.0.0.251'); } catch(e) {}
+                });
+                discSocket.on('error', () => {
+                    if (!resolved) {
+                        resolved = true;
+                        cleanup();
+                        resolve(null);
                     }
-                } catch(e) {}
-            });
-            discSocket.on('error', () => {});
-            discSocket.bind(41234, () => {
-                discSocket.setBroadcast(true);
-                try { discSocket.addMembership('224.0.0.251'); } catch(e){}
-            });
+                });
+            }
         } catch(e) {
             cleanup();
             resolve(null);
@@ -1463,6 +1740,7 @@ async function discoverSyncServer(timeoutMs = 6000) {
 }
 
 ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
+    if (!inMemoryMasterPassword || !currentUserDir) return { success: false, error: 'Not logged in' };
     let targetIp = ip;
     let targetPort = port;
     let targetDevice = null;
@@ -1500,10 +1778,30 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
                 resolve({ success: false, error: 'Verbindungstimeout' });
             }, 60000);
 
-            client.connect(targetPort, targetIp, () => {
+            client.connect(targetPort, targetIp, async () => {
+                try {
+                    let pairs = [];
+                    try { pairs = JSON.parse(await fs.readFile(SYNC_PAIRS_FILE, 'utf8')); } catch {}
+                    const pair = pairs.find(p => p.deviceId === targetDevice || p.deviceId === targetIp);
+                    
+                    if (pair && pair.autoSyncToken && (!pin || pin.trim() === '')) {
+                        const mac = crypto.createHmac('sha256', pair.autoSyncToken).update('auth').digest('hex');
+                        client.write(JSON.stringify({ type: 'auto_auth', device: os.hostname(), mac }) + '\n');
+                        return;
+                    }
+                } catch(e) {}
+
+                if (!pin || pin.trim() === '') {
+                    client.destroy();
+                    updateSyncState('error');
+                    resolve({ success: false, error: 'Keine PIN eingegeben' });
+                    return;
+                }
+
                 client.write(JSON.stringify({
                     type: 'hello',
-                    publicKey: ecdh.getPublicKey('hex')
+                    publicKey: ecdh.getPublicKey('hex'),
+                    deviceName: os.hostname()
                 }) + '\n');
             });
 
@@ -1528,6 +1826,32 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
                                 pin: pin
                             }) + '\n');
 
+                        } else if (msg.type === 'auto_auth_reply') {
+                            if (!msg.success) {
+                                if (isFinished) return;
+                                isFinished = true;
+                                clearTimeout(timeout);
+                                client.destroy();
+                                updateSyncState('error');
+                                resolve({ success: false, error: 'Auto-Auth fehlgeschlagen' });
+                                return;
+                            }
+                            
+                            clearTimeout(timeout);
+                            let pairs = [];
+                            try { pairs = JSON.parse(await fs.readFile(SYNC_PAIRS_FILE, 'utf8')); } catch {}
+                            const pair = pairs.find(p => p.deviceId === targetDevice || p.deviceId === targetIp);
+                            if (pair && pair.autoSyncToken) {
+                                sessionPassword = crypto.createHash('sha256').update(pair.autoSyncToken + 'PassSaferAutoSync').digest('hex');
+                            }
+                            
+                            if (msg.status === 'wait_direction') {
+                                activeSyncSocket = client;
+                                client.isAutoConnection = true;
+                                client.autoSyncToken = pair.autoSyncToken;
+                                updateSyncState('connected_client');
+                                resolve({ success: true, deviceName: targetDevice || targetIp });
+                            }
                         } else if (msg.type === 'auth_reply') {
                             if (!msg.success) {
                                 if (isFinished) return;
@@ -1539,13 +1863,55 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
                                 return;
                             }
 
+                            clearTimeout(timeout); // Connected, stop the timeout
+
+                            if (msg.token) {
+                                try {
+                                    let pairs = [];
+                                    try { pairs = JSON.parse(await fs.readFile(SYNC_PAIRS_FILE, 'utf8')); } catch {}
+                                    const resolvedName = targetDevice || targetIp;
+                                    const idx = pairs.findIndex(p => p.deviceId === resolvedName);
+                                    if (idx >= 0) {
+                                        pairs[idx].autoSyncToken = msg.token;
+                                    } else {
+                                        pairs.push({
+                                            deviceId: resolvedName,
+                                            deviceName: resolvedName,
+                                            lastSync: Date.now(),
+                                            createdAt: Date.now(),
+                                            autoSyncToken: msg.token
+                                        });
+                                    }
+                                    await fs.writeFile(SYNC_PAIRS_FILE, JSON.stringify(pairs, null, 2));
+                                } catch(e) {}
+                            }
+
                             const sessionKey = crypto.pbkdf2Sync(pin + sharedSecret.toString('hex'), 'PassSaferSync2024', 100000, 32, 'sha256');
                             sessionPassword = sessionKey.toString('hex');
                             sessionKey.fill(0);
                             sharedSecret.fill(0);
 
-                            updateSyncState('syncing');
+                            if (msg.status === 'wait_direction') {
+                                updateSyncState('connected_client');
+                            } else {
+                                updateSyncState('syncing');
+                                activeSyncDirection = msg.server_direction || activeSyncDirection;
 
+                                let dataToSend = '{}';
+                                if (activeSyncDirection === 'merge' || activeSyncDirection === 'push') {
+                                    const localData = await getAllLocalData();
+                                    dataToSend = JSON.stringify(localData);
+                                }
+                                const encryptedData = encryptExport(dataToSend, sessionPassword);
+
+                                client.write(JSON.stringify({
+                                    type: 'sync_request',
+                                    direction: activeSyncDirection,
+                                    data: encryptedData
+                                }) + '\n');
+                            }
+                        } else if (msg.type === 'sync_start') {
+                            updateSyncState('syncing');
                             activeSyncDirection = msg.server_direction || activeSyncDirection;
 
                             let dataToSend = '{}';
@@ -1562,24 +1928,30 @@ ipcMain.handle('sync-connect', async (event, { ip, port, pin, direction }) => {
                             }) + '\n');
 
                         } else if (msg.type === 'sync_reply') {
-                            if (isFinished) return;
-                            isFinished = true;
+                            if (!client.isAutoConnection && isFinished) return;
+                            if (!client.isAutoConnection) isFinished = true;
                             clearTimeout(timeout);
                             if (msg.success && msg.data) {
                                 if (activeSyncDirection === 'merge' || activeSyncDirection === 'pull') {
-                                    const decryptedStr = decryptExport(msg.data, sessionPassword);
+                                    // if it's auto connection, sessionPassword might be client.sessionPassword
+                                    const pwToUse = client.isAutoConnection ? client.sessionPassword : sessionPassword;
+                                    const decryptedStr = decryptExport(msg.data, pwToUse);
                                     const serverData = JSON.parse(decryptedStr);
                                     await mergeAllFiles(serverData);
                                 }
                             } else if (!msg.success) {
                                 updateSyncState('error');
                                 client.destroy();
-                                resolve({ success: false, error: msg.error || 'Server error' });
+                                if (!client.isAutoConnection) resolve({ success: false, error: msg.error || 'Server error' });
                                 return;
                             }
                             updateSyncState('complete');
-                            client.destroy();
-                            resolve({ success: true, deviceName: targetDevice });
+                            if (!client.isAutoConnection) {
+                                client.destroy();
+                                resolve({ success: true, deviceName: targetDevice || targetIp });
+                            } else {
+                                setTimeout(() => updateSyncState('connected_client'), 3000);
+                            }
                         }
                     } catch (err) {
                         if (isFinished) return;
@@ -1629,6 +2001,10 @@ function updateSyncState(state) {
 function mergeArrays(local, remote) {
     if (!Array.isArray(local)) local = [];
     if (!Array.isArray(remote)) remote = [];
+
+    const localNoId = local.filter(item => !item.id);
+    const remoteNoId = remote.filter(item => !item.id);
+
     const map = new Map();
     local.forEach(item => {
         if (item.id) map.set(item.id, item);
@@ -1640,8 +2016,8 @@ function mergeArrays(local, remote) {
             if (!existing) {
                 map.set(item.id, item);
             } else {
-                const timeLocal = existing.updatedAt || 0;
-                const timeRemote = item.updatedAt || 0;
+                const timeLocal = existing.updatedAt || existing.createdAt || new Date(existing.date || existing.uploadedAt || 0).getTime() || existing.created || 0;
+                const timeRemote = item.updatedAt || item.createdAt || new Date(item.date || item.uploadedAt || 0).getTime() || item.created || 0;
                 if (timeRemote > timeLocal) {
                     map.set(item.id, item);
                 }
@@ -1649,7 +2025,13 @@ function mergeArrays(local, remote) {
         }
     });
 
-    return Array.from(map.values());
+    const noIdMerged = [...localNoId];
+    remoteNoId.forEach(remItem => {
+        const alreadyExists = localNoId.some(lItem => JSON.stringify(lItem) === JSON.stringify(remItem));
+        if (!alreadyExists) noIdMerged.push(remItem);
+    });
+
+    return [...Array.from(map.values()), ...noIdMerged];
 }
 
 function safeDecryptData(fileDataStr, masterPass) {
@@ -1697,28 +2079,32 @@ async function mergeAllFiles(clientData, masterPass = inMemoryMasterPassword, us
     
     for (let i = 0; i < files.length; i++) {
         const key = keys[i];
-        if (clientData[key]) {
-            let fileDataStr = '';
-            try { fileDataStr = await fs.readFile(path.join(userDir, files[i]), 'utf8'); } catch(e){}
-            let localData = safeDecryptData(fileDataStr, masterPass);
-            
-            if (key === 'pw') {
-                if (!localData) localData = { passwords: [], folders: [], trash: [] };
-                localData.passwords = mergeArrays(localData.passwords || [], clientData.pw.passwords || []);
-                localData.folders = mergeArrays(localData.folders || [], clientData.pw.folders || []);
-                localData.trash = mergeArrays(localData.trash || [], clientData.pw.trash || []);
-            } else {
-                if (!localData) localData = [];
-                localData = mergeArrays(localData, clientData[key] || []);
-            }
-            
-            const newSalt = crypto.randomBytes(16).toString('hex');
-            await fs.writeFile(path.join(userDir, files[i]), JSON.stringify({ 
-                salt: newSalt, 
-                data: encrypt(JSON.stringify(localData), masterPass, newSalt), 
-                kdf: 'scrypt' 
-            }));
+        
+        let fileDataStr = '';
+        try { fileDataStr = await fs.readFile(path.join(userDir, files[i]), 'utf8'); } catch(e){}
+        let localData = safeDecryptData(fileDataStr, masterPass);
+        
+        const safeClientData = clientData[key] || {};
+        
+        if (key === 'pw') {
+            if (!localData) localData = { passwords: [], folders: [], trash: [] };
+            localData.passwords = mergeArrays(localData.passwords || [], safeClientData.passwords || []);
+            localData.folders = mergeArrays(localData.folders || [], safeClientData.folders || []);
+            localData.trash = mergeArrays(localData.trash || [], safeClientData.trash || []);
+        } else {
+            if (!localData) localData = [];
+            const clientArr = Array.isArray(safeClientData) ? safeClientData : [];
+            localData = mergeArrays(localData, clientArr);
         }
+        
+        const filePath = path.join(userDir, files[i]);
+        const newSalt = crypto.randomBytes(16).toString('hex');
+        await fs.writeFile(filePath, JSON.stringify({ 
+            salt: newSalt, 
+            data: encrypt(JSON.stringify(localData), masterPass, newSalt), 
+            kdf: 'scrypt' 
+        }));
+        await setSecurePermissions(filePath);
     }
 }
 
@@ -1742,8 +2128,10 @@ function stopSyncServer() {
     }
     syncAttempts = 0;
     syncPort = 0;
-    activeSyncSocket = null;
-    updateSyncState('idle');
+    if (!activeSyncSocket || !activeSyncSocket.isAutoConnection) {
+        activeSyncSocket = null;
+        updateSyncState('idle');
+    }
 }
 
 let syncServerDirection = 'merge';
@@ -1751,6 +2139,7 @@ let activeSyncSocket = null;
 
 ipcMain.handle('sync-start-server', async (event, data) => {
     if (syncState !== 'idle') return { success: false, error: 'Already running' };
+    if (!inMemoryMasterPassword || !currentUserDir) return { success: false, error: 'Not logged in' };
 
     syncServerDirection = (data && data.direction) ? data.direction : 'merge';
     syncPin = crypto.randomInt(100000, 999999).toString();
@@ -1773,10 +2162,43 @@ ipcMain.handle('sync-start-server', async (event, data) => {
                 try {
                     const msg = JSON.parse(msgStr);
 
-                    if (msg.type === 'hello') {
+                    if (msg.type === 'auto_auth') {
+                        let pairs = [];
+                        try { pairs = JSON.parse(await fs.readFile(SYNC_PAIRS_FILE, 'utf8')); } catch {}
+                        const pair = pairs.find(p => p.deviceId === msg.device);
+                        
+                        if (pair && pair.autoSyncToken) {
+                            const expectedMac = crypto.createHmac('sha256', pair.autoSyncToken).update('auth').digest('hex');
+                            if (msg.mac === expectedMac) {
+                                socket.sessionPassword = crypto.createHash('sha256').update(pair.autoSyncToken + 'PassSaferAutoSync').digest('hex');
+                                socket.clientDeviceName = msg.device;
+
+                                if (activeSyncSocket && activeSyncSocket !== socket && !activeSyncSocket.destroyed) {
+                                    try { activeSyncSocket.destroy(); } catch(e) {}
+                                }
+                                activeSyncSocket = socket;
+                                activeSyncSocket.autoSyncToken = pair.autoSyncToken;
+
+                                updateSyncState('connected_wait_direction');
+
+                                socket.write(JSON.stringify({
+                                    type: 'auto_auth_reply',
+                                    success: true,
+                                    status: 'wait_direction'
+                                }) + '\n');
+                            } else {
+                                socket.write(JSON.stringify({ type: 'auto_auth_reply', success: false }) + '\n');
+                                socket.destroy();
+                            }
+                        } else {
+                            socket.write(JSON.stringify({ type: 'auto_auth_reply', success: false }) + '\n');
+                            socket.destroy();
+                        }
+                    } else if (msg.type === 'hello') {
                         updateSyncState('pairing');
                         const clientKey = Buffer.from(msg.publicKey, 'hex');
                         socket.sharedSecret = ecdh.computeSecret(clientKey);
+                        socket.clientDeviceName = msg.deviceName || null;
 
                         socket.write(JSON.stringify({
                             type: 'hello_reply',
@@ -1794,8 +2216,26 @@ ipcMain.handle('sync-start-server', async (event, data) => {
                         socket.sessionPassword = sessionKey.toString('hex');
                         sessionKey.fill(0);
 
+                        if (activeSyncSocket && activeSyncSocket !== socket && !activeSyncSocket.destroyed) {
+                            try { activeSyncSocket.destroy(); } catch(e) {}
+                        }
                         activeSyncSocket = socket;
+
+                        let clientDirectionFromServer = 'merge';
+                        if (syncServerDirection === 'push') clientDirectionFromServer = 'pull';
+                        else if (syncServerDirection === 'pull') clientDirectionFromServer = 'push';
+
                         updateSyncState('connected_wait_direction');
+                        
+                        const autoSyncToken = crypto.randomBytes(32).toString('hex');
+                        activeSyncSocket.autoSyncToken = autoSyncToken;
+                        
+                        socket.write(JSON.stringify({
+                            type: 'auth_reply',
+                            success: true,
+                            status: 'wait_direction',
+                            token: autoSyncToken
+                        }) + '\n');
                     } else if (msg.type === 'sync_request') {
                         if (!socket.sessionPassword) return;
                         const direction = msg.direction || 'merge';
@@ -1808,13 +2248,40 @@ ipcMain.handle('sync-start-server', async (event, data) => {
                             }
                         }
 
+                        let serverEncrypted;
                         if (direction === 'merge' || direction === 'pull') {
                             const localData = await getAllLocalData();
-                            const serverEncrypted = encryptExport(JSON.stringify(localData), socket.sessionPassword);
-                            socket.write(JSON.stringify({ type: 'sync_reply', success: true, data: serverEncrypted }) + '\n');
+                            serverEncrypted = encryptExport(JSON.stringify(localData), socket.sessionPassword);
                         } else {
-                            socket.write(JSON.stringify({ type: 'sync_reply', success: true, data: encryptExport('{}', socket.sessionPassword) }) + '\n');
+                            serverEncrypted = encryptExport('{}', socket.sessionPassword);
                         }
+
+                        const resolvedClientName = socket.clientDeviceName || socket.remoteAddress || 'Unknown Device';
+                        try {
+                            let pairs = [];
+                            try { pairs = JSON.parse(await fs.readFile(SYNC_PAIRS_FILE, 'utf8')); } catch {}
+                            const idx = pairs.findIndex(p => p.deviceId === resolvedClientName);
+                            const pairEntry = {
+                                deviceId: resolvedClientName,
+                                deviceName: resolvedClientName,
+                                lastSync: Date.now(),
+                                createdAt: idx >= 0 ? (pairs[idx].createdAt || Date.now()) : Date.now()
+                            };
+                            if (activeSyncSocket && activeSyncSocket.autoSyncToken) {
+                                pairEntry.autoSyncToken = activeSyncSocket.autoSyncToken;
+                            } else if (idx >= 0 && pairs[idx].autoSyncToken) {
+                                pairEntry.autoSyncToken = pairs[idx].autoSyncToken;
+                            }
+
+                            if (idx >= 0) pairs[idx] = pairEntry;
+                            else pairs.push(pairEntry);
+                            await fs.writeFile(SYNC_PAIRS_FILE, JSON.stringify(pairs, null, 2));
+                            if (mainWindow && !mainWindow.isDestroyed()) {
+                                mainWindow.webContents.send('sync-pairs-updated');
+                            }
+                        } catch(e) {}
+
+                        socket.write(JSON.stringify({ type: 'sync_reply', success: true, data: serverEncrypted }) + '\n');
                         updateSyncState('complete');
                         setTimeout(() => stopSyncServer(), 3000);
                     } else if (msg.type === 'sync') {
@@ -1916,16 +2383,38 @@ ipcMain.handle('sync-start-server', async (event, data) => {
     return { success: true, pin: syncPin, port: syncPort, deviceName: os.hostname(), ip: ipString, qrDataUrl, qrPayload };
 });
 
-ipcMain.handle('sync-send-direction', async (event, { direction }) => {
-    if (!activeSyncSocket) return { success: false, error: 'Keine aktive Verbindung' };
+ipcMain.handle('sync-execute', async (event, { direction }) => {
+    if (!activeSyncSocket || activeSyncSocket.destroyed) return { success: false, error: 'Keine aktive Verbindung' };
+    if (!inMemoryMasterPassword || !currentUserDir) return { success: false, error: 'Not logged in' };
     
-    syncServerDirection = direction || 'merge';
+    const dir = direction || 'merge';
+    
+    if (activeSyncSocket.isAutoConnection) {
+        updateSyncState('syncing');
+        activeSyncSocket.lastSyncDirection = dir;
+        
+        const localData = await getAllLocalData();
+        const payload = {
+            data: localData,
+            masterPassword: inMemoryMasterPassword,
+            username: currentUsername,
+            direction: dir
+        };
+        const encryptedData = encryptExport(JSON.stringify(payload), activeSyncSocket.sessionPassword);
+        activeSyncSocket.write(JSON.stringify({ type: 'sync_request_delegated', device: os.hostname(), direction: dir, data: encryptedData }) + '\n');
+        return { success: true };
+    }
+    
+    syncServerDirection = dir;
     let clientDirectionFromServer = 'merge';
     if (syncServerDirection === 'push') clientDirectionFromServer = 'pull';
     if (syncServerDirection === 'pull') clientDirectionFromServer = 'push';
     
     updateSyncState('syncing');
-    activeSyncSocket.write(JSON.stringify({ type: 'auth_reply', success: true, server_direction: clientDirectionFromServer }) + '\n');
+    activeSyncSocket.write(JSON.stringify({ 
+        type: 'sync_start', 
+        server_direction: clientDirectionFromServer 
+    }) + '\n');
     return { success: true };
 });
 

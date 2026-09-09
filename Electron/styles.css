@@ -223,6 +223,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     transform: translateY(-1px);
 }
 
+.button.secondary.active {
+    background-color: var(--color-icon-bg);
+}
+
 /* Custom Dropdown Styling */
 .custom-select-container {
     position: relative;
@@ -3508,7 +3512,8 @@ button[type="submit"]:hover {
 }
 
 /* Ensure secondary buttons get the outline hover style as per design */
-.button.secondary:hover {
+.button.secondary:hover,
+.button.secondary.active {
     background-color: transparent !important;
     border-color: #b3b3b3 !important;
     color: #b3b3b3 !important;

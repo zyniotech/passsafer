@@ -1140,21 +1140,24 @@ async function handleSavePassword() {
         return;
     }
 
+    const now = Date.now();
     const passwordData = {
+        id: currentEditIndex !== null ? (passwords[currentEditIndex].id || generateId()) : generateId(),
         app,
         link,
         username,
         password,
         notes,
         folderId: currentFolder,
-        files: currentFiles
+        files: currentFiles,
+        updatedAt: now
     };
 
     if (currentEditIndex !== null) {
-
-        passwords[currentEditIndex] = { ...passwords[currentEditIndex], ...passwordData };
+        passwordData.createdAt = passwords[currentEditIndex].createdAt || now;
+        passwords[currentEditIndex] = passwordData;
     } else {
-
+        passwordData.createdAt = now;
         passwords.push(passwordData);
     }
 
@@ -1203,13 +1206,15 @@ async function handleSaveFolder() {
     }
 
     if (currentEditFolder) {
-
         currentEditFolder.name = name;
+        currentEditFolder.updatedAt = Date.now();
     } else {
-
+        const now = Date.now();
         const newFolder = {
             id: generateId(),
-            name
+            name,
+            createdAt: now,
+            updatedAt: now
         };
         folders.push(newFolder);
     }
@@ -1545,10 +1550,12 @@ async function handleImport() {
             } else {
 
                 const newId = generateId();
+                const now = Date.now();
                 folders.push({
                     id: newId,
                     name: impFolder.name,
-                    created: Date.now()
+                    createdAt: now,
+                    updatedAt: now
                 });
                 folderIdMap.set(impFolder.id, newId);
             }
@@ -3422,6 +3429,7 @@ async function checkAndGenerateMonthlyReport(score, total, strong, weak, reused)
         });
 
         if (!reportExists) {
+            const now = Date.now();
             const newReport = {
                 id: generateId(),
                 date: today.toISOString(),
@@ -3429,7 +3437,9 @@ async function checkAndGenerateMonthlyReport(score, total, strong, weak, reused)
                 total,
                 strong,
                 weak,
-                reused
+                reused,
+                createdAt: now,
+                updatedAt: now
             };
 
             reports.unshift(newReport);
@@ -3466,6 +3476,7 @@ async function generateManualReport() {
     }
 
     const today = new Date();
+    const now = Date.now();
     const newReport = {
         id: generateId(),
         date: today.toISOString(),
@@ -3473,7 +3484,9 @@ async function generateManualReport() {
         total: totalPasswords,
         strong: strongCount,
         weak: weakCount,
-        reused: reusedCount
+        reused: reusedCount,
+        createdAt: now,
+        updatedAt: now
     };
 
     reports.unshift(newReport);
@@ -3719,6 +3732,7 @@ async function moveToTrash(index) {
     if (!pwd) return;
 
     pwd.deletedAt = new Date().toISOString();
+    pwd.updatedAt = Date.now();
     trash.push(pwd);
     passwords.splice(index, 1);
 
@@ -3942,6 +3956,7 @@ async function handleSaveId() {
         return;
     }
 
+    const now = Date.now();
     const idItem = {
         id: currentEditIdIndex !== null ? ids[currentEditIdIndex].id : generateId(),
         name,
@@ -3950,7 +3965,9 @@ async function handleSaveId() {
         issueDate,
         expiryDate,
         notes,
-        files: currentFiles
+        files: currentFiles,
+        createdAt: currentEditIdIndex !== null ? (ids[currentEditIdIndex].createdAt || now) : now,
+        updatedAt: now
     };
 
     if (currentEditIdIndex !== null) {
@@ -4200,12 +4217,15 @@ async function handleSaveDocument() {
         return;
     }
 
+    const now = Date.now();
     const docItem = {
         id: currentEditDocIndex !== null ? documents[currentEditDocIndex].id : generateId(),
         name,
         description,
         uploadedAt: currentEditDocIndex !== null ? documents[currentEditDocIndex].uploadedAt : new Date().toISOString(),
-        files: currentFiles
+        files: currentFiles,
+        createdAt: currentEditDocIndex !== null ? (documents[currentEditDocIndex].createdAt || now) : now,
+        updatedAt: now
     };
 
     if (currentEditDocIndex !== null) {
@@ -4484,6 +4504,7 @@ async function handleSaveCard() {
         return;
     }
 
+    const now = Date.now();
     const cardItem = {
         id: currentEditCardIndex !== null ? cards[currentEditCardIndex].id : generateId(),
         name,
@@ -4493,7 +4514,9 @@ async function handleSaveCard() {
         expiryMonth,
         expiryYear,
         cvv,
-        notes
+        notes,
+        createdAt: currentEditCardIndex !== null ? (cards[currentEditCardIndex].createdAt || now) : now,
+        updatedAt: now
     };
 
     if (currentEditCardIndex !== null) {
@@ -4578,12 +4601,14 @@ function setupSyncEventListeners() {
         });
     });
 
-    const confirmDirectionBtn = document.getElementById('sync-confirm-direction-btn');
-    if (confirmDirectionBtn) {
-        confirmDirectionBtn.addEventListener('click', async () => {
-            const result = await window.api.syncSendDirection(syncDirection);
-            if (!result.success) {
-                showToast(result.error || 'Fehler beim Senden der Richtung', 'error', true);
+    const syncExecuteBtn = document.getElementById('sync-execute-btn');
+    if (syncExecuteBtn) {
+        syncExecuteBtn.addEventListener('click', async () => {
+            updateSyncStatusDisplay('syncing');
+            const result = await window.api.syncExecute(syncDirection);
+            if (result && !result.success) {
+                showToast(result.error || 'Sync Execute failed', 'error');
+                updateSyncStatusDisplay('error');
             }
         });
     }
@@ -4595,9 +4620,19 @@ function setupSyncEventListeners() {
 
     const syncConnectBtn = document.getElementById('sync-connect-btn');
     if (syncConnectBtn) {
-        syncConnectBtn.addEventListener('click', () => {
+        syncConnectBtn.addEventListener('click', async () => {
+            updateSyncStatusDisplay('connecting');
+            const result = await window.api.syncConnect({ pin: '', direction: syncDirection });
+            
+            if (result && result.success && syncCurrentState !== 'error') {
+                document.getElementById('sync-action-buttons').classList.add('hidden');
+                return;
+            }
+            
+            updateSyncStatusDisplay('idle');
             document.getElementById('sync-pin-input').classList.remove('hidden');
             document.getElementById('sync-pin-display').classList.add('hidden');
+            document.getElementById('sync-action-buttons').classList.add('hidden');
             document.getElementById('sync-pin-field').value = '';
             document.getElementById('sync-pin-field').focus();
         });
@@ -4671,6 +4706,24 @@ function setupSyncEventListeners() {
             syncCurrentState = state;
             updateSyncStatusDisplay(state);
             
+            const directionBlock = document.getElementById('sync-direction-block');
+            const pinDisplay = document.getElementById('sync-pin-display');
+            const pinInput = document.getElementById('sync-pin-input');
+            const actionButtons = document.getElementById('sync-action-buttons');
+            
+            if (state === 'connected_wait_direction') {
+                if (pinDisplay) pinDisplay.classList.add('hidden');
+                if (pinInput) pinInput.classList.add('hidden');
+            } else if (state === 'connected_client') {
+                if (pinDisplay) pinDisplay.classList.add('hidden');
+                if (pinInput) pinInput.classList.add('hidden');
+                if (actionButtons) actionButtons.classList.remove('hidden');
+            } else if (state === 'idle' || state === 'complete' || state === 'error') {
+                if (pinDisplay) pinDisplay.classList.add('hidden');
+                if (pinInput) pinInput.classList.add('hidden');
+                if (actionButtons) actionButtons.classList.remove('hidden');
+            }
+            
             if (state === 'complete') {
                 showToast('msg_sync_success', 'success');
                 const loadResult = await window.api.loadPasswords({ password: currentPassword });
@@ -4687,24 +4740,35 @@ function setupSyncEventListeners() {
                 const idResult = await window.api.loadIds({ password: currentPassword });
                 if (idResult.success) {
                     ids = idResult.data || [];
-                    renderIdList();
+                    renderIdsList();
                 }
                 
                 const docResult = await window.api.loadDocuments({ password: currentPassword });
                 if (docResult.success) {
                     documents = docResult.data || [];
-                    renderDocList();
+                    renderDocumentsList();
                 }
                 
                 const cardResult = await window.api.loadCards({ password: currentPassword });
                 if (cardResult.success) {
                     cards = cardResult.data || [];
-                    renderCardList();
+                    renderCardsList();
                 }
                 
                 const reportsResult = await window.api.loadReports({ password: currentPassword });
-                if (reportsResult.success) reports = reportsResult.data || [];
+                if (reportsResult.success) {
+                    reports = reportsResult.data || [];
+                    renderReportsList();
+                }
+
+                loadSyncDevices();
             }
+        });
+    }
+
+    if (window.api.onSyncPairsUpdated) {
+        window.api.onSyncPairsUpdated(() => {
+            loadSyncDevices();
         });
     }
 }
@@ -4731,7 +4795,7 @@ async function handleSyncConnect() {
     const pinField = document.getElementById('sync-pin-field');
     const pin = pinField ? pinField.value.trim() : '';
 
-    if (pin.length !== 6 || !/^\d+$/.test(pin)) {
+    if (pin.length > 0 && (pin.length !== 6 || !/^\d+$/.test(pin))) {
         showToast('msg_sync_pin_digits', 'error');
         return;
     }
@@ -4749,45 +4813,14 @@ async function handleSyncConnect() {
             updateSyncStatusDisplay('complete');
             showToast('msg_sync_success', 'success');
 
-            const autoToggle = document.getElementById('sync-auto-toggle');
-            if (autoToggle && autoToggle.checked && result.deviceName) {
+            if (result.deviceName) {
                 await window.api.syncSavePair({
-                    deviceId: result.deviceId || result.deviceName,
+                    deviceId: result.deviceName,
                     deviceName: result.deviceName,
                     lastSync: Date.now(),
                     createdAt: Date.now()
                 });
                 loadSyncDevices();
-            }
-
-            if (syncDirection !== 'push') {
-                const loadResult = await window.api.loadPasswords({ password: currentPassword });
-                if (loadResult.success) {
-                    passwords = loadResult.data || [];
-                    folders = loadResult.folders || [];
-                    trash = loadResult.trash || [];
-                    renderPasswordList();
-                    loadFoldersToSidebar();
-                    loadTrash();
-                    updateWatchtower();
-                }
-                const idsResult = await window.api.loadIds({ password: currentPassword });
-                if (idsResult.success) {
-                    ids = idsResult.data || [];
-                    renderIdList();
-                }
-                const docsResult = await window.api.loadDocuments({ password: currentPassword });
-                if (docsResult.success) {
-                    documents = docsResult.data || [];
-                    renderDocList();
-                }
-                const cardsResult = await window.api.loadCards({ password: currentPassword });
-                if (cardsResult.success) {
-                    cards = cardsResult.data || [];
-                    renderCardList();
-                }
-                const reportsResult = await window.api.loadReports({ password: currentPassword });
-                if (reportsResult.success) reports = reportsResult.data || [];
             }
 
             const lastSyncEl = document.getElementById('sync-last-display');
@@ -4811,26 +4844,21 @@ function updateSyncStatusDisplay(state) {
     if (!statusEl) return;
 
     const stateMap = {
-        'idle': { key: 'sync_status_idle', fallback: 'Idle', color: 'var(--color-text-muted)' },
-        'waiting': { key: 'sync_status_waiting', fallback: 'Waiting for connection...', color: 'var(--color-accent)' },
-        'connecting': { key: 'sync_status_connecting', fallback: 'Connecting...', color: 'var(--color-accent)' },
-        'pairing': { key: 'sync_status_pairing', fallback: 'Pairing...', color: 'var(--color-accent)' },
-        'syncing': { key: 'sync_status_syncing', fallback: 'Syncing...', color: 'var(--color-accent)' },
-        'auto-syncing': { key: 'sync_status_auto_syncing', fallback: 'Auto-syncing...', color: 'var(--color-accent)' },
-        'connected_wait_direction': { key: 'sync_status_wait_direction', fallback: 'Connected. Wähle Sync-Richtung...', color: 'var(--color-accent)' },
-        'complete': { key: 'sync_status_complete', fallback: 'Success ✓', color: '#4caf50' },
-        'error': { key: 'sync_status_error', fallback: 'Error ✗', color: 'var(--color-danger)' }
+        'idle': { text: 'Idle', color: 'var(--color-text-muted)' },
+        'waiting': { text: 'Waiting for connection...', color: 'var(--color-accent)' },
+        'connecting': { text: 'Connecting...', color: 'var(--color-accent)' },
+        'pairing': { text: 'Pairing...', color: 'var(--color-accent)' },
+        'syncing': { text: 'Syncing...', color: 'var(--color-accent)' },
+        'auto-syncing': { text: 'Auto-syncing...', color: 'var(--color-accent)' },
+        'connected_wait_direction': { text: 'Connected', color: '#4caf50' },
+        'connected_client': { text: 'Connected', color: '#4caf50' },
+        'complete': { text: 'Success', color: '#4caf50' },
+        'error': { text: 'Failed', color: 'var(--color-danger)' }
     };
 
     const info = stateMap[state] || stateMap['idle'];
-    statusEl.textContent = t(info.key) || info.fallback;
+    statusEl.textContent = info.text;
     statusEl.style.color = info.color;
-
-    const directionBlock = document.getElementById('sync-direction-block');
-    if (directionBlock) {
-        if (state === 'connected_wait_direction') directionBlock.classList.remove('hidden');
-        else directionBlock.classList.add('hidden');
-    }
 }
 
 async function loadSyncDevices() {
@@ -4848,6 +4876,7 @@ async function loadSyncDevices() {
         result.pairs.forEach(pair => {
             const item = document.createElement('div');
             item.className = 'sync-device-item';
+            item.style.cssText = 'height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--color-border);';
 
             const lastSync = pair.lastSync ? new Date(pair.lastSync).toLocaleString() : '-';
             const daysLeft = pair.lastSync ? Math.max(0, 30 - Math.floor((Date.now() - pair.lastSync) / (24 * 60 * 60 * 1000))) : 0;
@@ -4856,14 +4885,23 @@ async function loadSyncDevices() {
             const disconnectText = t('settings_sync_disconnect') || 'Disconnect';
 
             item.innerHTML = `
-                <div class="sync-device-info">
-                    <div class="sync-device-name">💻 ${pair.deviceName || pair.deviceId}</div>
-                    <div class="sync-device-last-sync">${lastSyncPrefix} ${lastSync} (${daysLeftText})</div>
+                <div class="sync-device-info" style="display: flex; align-items: center; gap: 12px; flex: 1; overflow: hidden;">
+                    <div style="display: flex; flex-direction: column; justify-content: center;">
+                        <div class="sync-device-name" style="font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${pair.deviceName || pair.deviceId}</div>
+                    </div>
                 </div>
-                <button class="sync-device-remove" data-device-id="${pair.deviceId}">${disconnectText}</button>
+                <button class="sync-device-remove" data-device-id="${pair.deviceId}" style="background: transparent; border: 1px solid var(--color-border); color: var(--color-text); border-radius: 4px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">${disconnectText}</button>
             `;
 
-            item.querySelector('.sync-device-remove').addEventListener('click', async () => {
+            const btn = item.querySelector('.sync-device-remove');
+            btn.addEventListener('mouseover', () => {
+                btn.style.setProperty('border-color', '#b3b3b3D9', 'important');
+            });
+            btn.addEventListener('mouseout', () => {
+                btn.style.setProperty('border-color', 'var(--color-border)');
+            });
+
+            btn.addEventListener('click', async () => {
                 await window.api.syncRemovePair(pair.deviceId);
                 showToast('msg_sync_device_unlinked', 'info');
                 loadSyncDevices();
