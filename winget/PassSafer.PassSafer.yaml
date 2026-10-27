@@ -1,0 +1,25 @@
+PackageIdentifier: ZynioTech.PassSafer
+PackageVersion: 1.8.3
+PackageLocale: en-US
+Publisher: Zynio Tech
+PublisherUrl: https://passsafer.com
+PublisherSupportUrl: https://passsafer.com/#support
+PrivacyUrl: https://passsafer.com/privacy
+PackageName: PassSafer
+PackageUrl: https://passsafer.com
+License: Proprietary (Source-Available)
+LicenseUrl: https://passsafer.com/license
+ShortDescription: Offline-first password manager and encrypted file vault (AES-256-GCM + Scrypt) with local P2P Wi-Fi sync.
+Tags:
+  - password-manager
+  - security
+  - encryption
+  - offline
+  - vault
+Installers:
+  - Architecture: x64
+    InstallerType: nullsoft
+    InstallerUrl: https://github.com/zyniotech/passsafer/releases/download/v1.8.3/PassSafer.Setup.1.8.3.exe
+    InstallerSha256: REPLACE_WITH_RELEASE_EXE_SHA256_HASH
+ManifestType: singleton
+ManifestVersion: 1.6.0

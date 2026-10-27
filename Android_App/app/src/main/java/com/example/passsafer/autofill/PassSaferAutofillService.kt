@@ -8,7 +8,6 @@ import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
 import android.widget.RemoteViews
 import com.example.passsafer.MainActivity
-import com.example.passsafer.R
 import com.example.passsafer.data.model.Vault
 import com.example.passsafer.data.repository.VaultRepository
 import com.example.passsafer.data.session.SessionManager
@@ -31,6 +30,18 @@ class PassSaferAutofillService : AutofillService() {
     private val serviceScope = CoroutineScope(Dispatchers.IO)
     private val gson = Gson()
 
+    private fun normalizeHost(raw: String?): String {
+        if (raw.isNullOrBlank()) return ""
+        return raw.trim()
+            .lowercase()
+            .removePrefix("https://")
+            .removePrefix("http://")
+            .substringBefore("/")
+            .substringBefore("?")
+            .substringBefore(":")
+            .removePrefix("www.")
+    }
+
     override fun onFillRequest(
         request: FillRequest,
         cancellationSignal: CancellationSignal,
@@ -41,8 +52,12 @@ class PassSaferAutofillService : AutofillService() {
 
         var usernameId: AutofillId? = null
         var passwordId: AutofillId? = null
+        var webDomain: String? = null
 
         fun traverseNode(node: AssistStructure.ViewNode) {
+            if (webDomain.isNullOrBlank() && !node.webDomain.isNullOrBlank()) {
+                webDomain = node.webDomain
+            }
             val hints = node.autofillHints
             if (hints != null) {
                 if (hints.contains(android.view.View.AUTOFILL_HINT_USERNAME) || hints.contains(android.view.View.AUTOFILL_HINT_EMAIL_ADDRESS)) {
@@ -97,10 +112,26 @@ class PassSaferAutofillService : AutofillService() {
                     val json = vaultRepository.readVault("passwords.pw", masterPassword, salt)
                     if (json != null) {
                         val vault = gson.fromJson(json, Vault::class.java)
-                        val matchingEntries = vault.passwords.filter {
-                            it.app.contains(packageName, ignoreCase = true) || packageName.contains(it.app, ignoreCase = true)
+                        val cleanWebDomain = normalizeHost(webDomain)
+                        val pkgTokens = packageName.lowercase().split(".").filter {
+                            it.length >= 4 && it !in setOf("android", "google", "mobile", "client", "apps")
                         }
-                        
+
+                        val matchingEntries = vault.passwords.filter { entry ->
+                            if (entry.deletedAt != null) return@filter false
+                            val entryHost = normalizeHost(entry.domain ?: entry.url ?: entry.link)
+                            val entryApp = entry.app.trim().lowercase()
+
+                            if (cleanWebDomain.isNotEmpty()) {
+                                (entryHost.isNotEmpty() && (entryHost == cleanWebDomain || cleanWebDomain.endsWith(".$entryHost") || entryHost.endsWith(".$cleanWebDomain"))) ||
+                                (entryApp.length >= 4 && cleanWebDomain.split(".").firstOrNull() == entryApp)
+                            } else {
+                                (entryApp.isNotEmpty() && entryApp == packageName.lowercase()) ||
+                                (entryApp.length >= 4 && pkgTokens.contains(entryApp)) ||
+                                (entryHost.isNotEmpty() && pkgTokens.contains(entryHost.substringBefore(".")))
+                            }
+                        }
+
                         val responseBuilder = FillResponse.Builder()
                         if (matchingEntries.isEmpty()) {
                             callback.onSuccess(null)
@@ -143,8 +174,12 @@ class PassSaferAutofillService : AutofillService() {
 
         var usernameValue: String? = null
         var passwordValue: String? = null
+        var webDomain: String? = null
 
         fun traverseNodeForValues(node: AssistStructure.ViewNode) {
+            if (webDomain.isNullOrBlank() && !node.webDomain.isNullOrBlank()) {
+                webDomain = node.webDomain
+            }
             val hints = node.autofillHints
             val value = node.autofillValue
             if (value != null && value.isText) {
@@ -177,6 +212,8 @@ class PassSaferAutofillService : AutofillService() {
 
         val uName = usernameValue ?: ""
         val pwd = passwordValue ?: run { callback.onSuccess(); return }
+        val cleanDomain = normalizeHost(webDomain)
+        val now = System.currentTimeMillis()
 
         serviceScope.launch {
             try {
@@ -184,9 +221,13 @@ class PassSaferAutofillService : AutofillService() {
                 val json = vaultRepository.readVault("passwords.pw", masterPassword, salt)
                 val vault = if (json != null) gson.fromJson(json, com.example.passsafer.data.model.Vault::class.java) else com.example.passsafer.data.model.Vault()
                 val newEntry = com.example.passsafer.data.model.PasswordEntry(
-                    app = packageName,
+                    app = cleanDomain.ifEmpty { packageName },
+                    domain = cleanDomain.ifEmpty { null },
+                    link = if (cleanDomain.isNotEmpty()) "https://$cleanDomain" else "",
                     username = uName,
-                    password = pwd
+                    password = pwd,
+                    createdAt = now,
+                    updatedAt = now
                 )
                 val updated = vault.copy(passwords = vault.passwords + newEntry)
                 vaultRepository.saveVault("passwords.pw", gson.toJson(updated), masterPassword, salt)

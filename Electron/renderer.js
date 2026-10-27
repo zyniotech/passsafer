@@ -103,6 +103,17 @@ function showScreen(screenId) {
             sidebar.classList.remove('hidden');
         }
     }
+
+    if (screenId === 'license-screen') {
+        const backBtn = document.getElementById('license-back-btn');
+        if (backBtn) {
+            if (currentUser) {
+                backBtn.classList.remove('hidden');
+            } else {
+                backBtn.classList.add('hidden');
+            }
+        }
+    }
 }
 
 let successLottie = null;
@@ -291,6 +302,27 @@ function setupEventListeners() {
     addEnterKeyListener('register-pin', handleRegister);
     addEnterKeyListener('license-key-input', handleActivateLicense);
 
+    const licenseKeyInput = document.getElementById('license-key-input');
+    if (licenseKeyInput) {
+        licenseKeyInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace') {
+                const start = licenseKeyInput.selectionStart;
+                const end = licenseKeyInput.selectionEnd;
+                if (start === end && start > 0 && licenseKeyInput.value[start - 1] === '-') {
+                    e.preventDefault();
+                    const val = licenseKeyInput.value;
+                    licenseKeyInput.value = val.slice(0, start - 2) + val.slice(start);
+                    formatLicenseKey(licenseKeyInput, true);
+                }
+            }
+        });
+
+        licenseKeyInput.addEventListener('input', (e) => {
+            const isDelete = e.inputType && e.inputType.startsWith('delete');
+            formatLicenseKey(licenseKeyInput, isDelete);
+        });
+    }
+
     document.getElementById('add-password-btn').addEventListener('click', showAddPassword);
     document.getElementById('create-folder-btn').addEventListener('click', showCreateFolder);
     document.getElementById('create-folder-card-btn')?.addEventListener('click', showCreateFolder);
@@ -345,11 +377,32 @@ function setupEventListeners() {
     document.getElementById('check-updates-btn').addEventListener('click', handleManualUpdateCheck);
 
     document.getElementById('activate-license-btn').addEventListener('click', handleActivateLicense);
-    document.getElementById('get-trial-btn').addEventListener('click', () => {
-        window.api.openExternal('https://zynio-tech.web.app/register');
+    document.getElementById('get-trial-btn').addEventListener('click', async () => {
+        if (currentUser) {
+            showSettings();
+        } else {
+            const isFirstRun = await window.api.checkFirstRun();
+            if (isFirstRun) {
+                showScreen('register-screen');
+            } else {
+                showScreen('login-screen');
+            }
+        }
     });
     document.getElementById('buy-premium-btn').addEventListener('click', () => {
-        window.api.openExternal('https://zynio-tech.web.app/pricing');
+        window.api.openExternal('https://passsafer.com/pricing');
+    });
+    document.getElementById('license-back-btn')?.addEventListener('click', async () => {
+        if (currentUser) {
+            showSettings();
+        } else {
+            const isFirstRun = await window.api.checkFirstRun();
+            if (isFirstRun) {
+                showScreen('register-screen');
+            } else {
+                showScreen('login-screen');
+            }
+        }
     });
 
     document.getElementById('settings-activate-license-btn').addEventListener('click', () => {
@@ -358,6 +411,7 @@ function setupEventListeners() {
             window.api.loadLicense().then(res => {
                 if (res.success && res.license && res.license.licenseKey) {
                     input.value = res.license.licenseKey;
+                    formatLicenseKey(input, false);
                 }
             });
         }
@@ -438,6 +492,9 @@ function setupEventListeners() {
     setupNewEventListeners();
 }
 
+let isMandatoryUpdateActive = false;
+let autoInstallRequested = false;
+
 function setupAutoUpdate() {
     if (window.api && window.api.onUpdateAvailable) {
         let downloadTimeout = null;
@@ -464,18 +521,28 @@ function setupAutoUpdate() {
             const manualBtn = document.getElementById('update-manual-btn');
             const installBtn = document.getElementById('update-install-btn');
 
-            text.textContent = t('msg_update_stalled');
-
+            if (text) text.textContent = t('msg_update_stalled');
             if (downloadBtn) downloadBtn.classList.add('hidden');
             if (installBtn) installBtn.classList.add('hidden');
             if (manualBtn) {
                 manualBtn.classList.remove('hidden');
                 manualBtn.textContent = t('btn_manual_download');
             }
+
+            const mandatoryManualBtn = document.getElementById('mandatory-manual-btn');
+            if (mandatoryManualBtn) {
+                mandatoryManualBtn.classList.remove('hidden');
+                mandatoryManualBtn.textContent = t('btn_manual_download');
+            }
         }
 
         window.api.onUpdateAvailable((info) => {
             clearDownloadTimeout();
+            if (info && info.isMandatory) {
+                showMandatoryUpdateModal(info);
+                return;
+            }
+
             const banner = document.getElementById('update-banner');
             const text = document.getElementById('update-text');
             const downloadBtn = document.getElementById('update-download-btn');
@@ -487,7 +554,7 @@ function setupAutoUpdate() {
             if (downloadBtn) {
                 downloadBtn.classList.remove('hidden');
                 downloadBtn.disabled = false;
-                downloadBtn.textContent = 'Download';
+                downloadBtn.textContent = t('btn_update_install_restart');
             }
             if (installBtn) installBtn.classList.add('hidden');
             if (manualBtn) manualBtn.classList.add('hidden');
@@ -496,21 +563,35 @@ function setupAutoUpdate() {
         if (window.api.onUpdateProgress) {
             window.api.onUpdateProgress((info) => {
                 resetDownloadTimeout();
+                const percent = Math.round(info.percent || 0);
+
                 const text = document.getElementById('update-text');
                 const downloadBtn = document.getElementById('update-download-btn');
                 const manualBtn = document.getElementById('update-manual-btn');
-                const percent = Math.round(info.percent || 0);
-                text.textContent = t('msg_downloading', { percent });
+
+                if (text) text.textContent = t('msg_downloading', { percent });
                 if (downloadBtn) {
-                    downloadBtn.textContent = 'Downloading...';
+                    downloadBtn.textContent = t('msg_downloading', { percent });
                     downloadBtn.disabled = true;
                 }
                 if (manualBtn) manualBtn.classList.add('hidden');
+
+                const mProgress = document.getElementById('mandatory-update-progress-bar');
+                const mPercent = document.getElementById('mandatory-update-percent');
+                const mStatus = document.getElementById('mandatory-update-status');
+                if (mProgress) mProgress.style.width = `${percent}%`;
+                if (mPercent) mPercent.textContent = `${percent}%`;
+                if (mStatus) mStatus.textContent = t('msg_downloading', { percent });
             });
         }
 
         window.api.onUpdateDownloaded(() => {
             clearDownloadTimeout();
+            if (autoInstallRequested || isMandatoryUpdateActive) {
+                window.api.installUpdate();
+                return;
+            }
+
             const banner = document.getElementById('update-banner');
             const text = document.getElementById('update-text');
             const downloadBtn = document.getElementById('update-download-btn');
@@ -522,7 +603,7 @@ function setupAutoUpdate() {
             if (downloadBtn) downloadBtn.classList.add('hidden');
             if (installBtn) {
                 installBtn.classList.remove('hidden');
-                installBtn.textContent = t('msg_update_install');
+                installBtn.textContent = t('btn_update_install_restart');
             }
             if (manualBtn) manualBtn.classList.add('hidden');
             showToast(t('msg_update_toast_success'), 'success', true);
@@ -538,7 +619,8 @@ function setupAutoUpdate() {
         document.getElementById('update-download-btn').addEventListener('click', async (e) => {
             const btn = e.target;
             btn.disabled = true;
-            btn.textContent = 'Downloading...';
+            btn.textContent = t('msg_downloading', { percent: 0 });
+            autoInstallRequested = true;
             resetDownloadTimeout();
             await window.api.downloadUpdate();
         });
@@ -546,7 +628,7 @@ function setupAutoUpdate() {
         const manualBtn = document.getElementById('update-manual-btn');
         if (manualBtn) {
             manualBtn.addEventListener('click', () => {
-                window.api.openExternal('https://zynio-tech.web.app/download');
+                window.api.openExternal('https://passsafer.com/download');
             });
         }
 
@@ -558,6 +640,47 @@ function setupAutoUpdate() {
             clearDownloadTimeout();
             document.getElementById('update-banner').classList.add('hidden');
         });
+
+        const mandatoryBtn = document.getElementById('mandatory-update-btn');
+        if (mandatoryBtn) {
+            mandatoryBtn.addEventListener('click', async () => {
+                mandatoryBtn.disabled = true;
+                mandatoryBtn.textContent = t('msg_downloading', { percent: 0 });
+                const progressContainer = document.getElementById('mandatory-update-progress-container');
+                if (progressContainer) progressContainer.classList.remove('hidden');
+                autoInstallRequested = true;
+                resetDownloadTimeout();
+                await window.api.downloadUpdate();
+            });
+        }
+
+        const mandatoryManualBtn = document.getElementById('mandatory-manual-btn');
+        if (mandatoryManualBtn) {
+            mandatoryManualBtn.addEventListener('click', () => {
+                window.api.openExternal('https://passsafer.com/download');
+            });
+        }
+    }
+}
+
+function showMandatoryUpdateModal(info) {
+    isMandatoryUpdateActive = true;
+    const modal = document.getElementById('mandatory-update-modal');
+    const titleEl = document.getElementById('mandatory-update-title');
+    const descEl = document.getElementById('mandatory-update-desc');
+    const btnEl = document.getElementById('mandatory-update-btn');
+    const manualBtnEl = document.getElementById('mandatory-manual-btn');
+
+    if (titleEl) titleEl.textContent = t('msg_mandatory_update_title');
+    if (descEl) descEl.textContent = t('msg_mandatory_update_desc', { version: info.version });
+    if (btnEl) {
+        btnEl.textContent = t('btn_update_install_restart');
+        btnEl.disabled = false;
+    }
+    if (manualBtnEl) manualBtnEl.textContent = t('btn_manual_download');
+
+    if (modal) {
+        modal.classList.add('show');
     }
 }
 
@@ -800,7 +923,7 @@ function createPasswordCard(pwd, index) {
     if (faviconUrl) {
         iconHtml = `
             <div class="password-card-icon" data-icon-id="${cardIconId}">
-                <img src="${faviconUrl}" alt="${firstLetter}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=&quot;password-card-icon-letter&quot;>${firstLetter}</span>';">
+                <img src="${faviconUrl}" alt="${firstLetter}">
             </div>
         `;
     } else {
@@ -819,12 +942,22 @@ function createPasswordCard(pwd, index) {
         
     `;
 
+    const cardImg = card.querySelector(`[data-icon-id="${cardIconId}"] img`);
+    if (cardImg) {
+        attachFaviconFallback(cardImg, firstLetter);
+    }
+
     if (!faviconUrl && isLocal && window.api && window.api.fetchLocalFavicon) {
         window.api.fetchLocalFavicon(domain).then(localDataUrl => {
             if (localDataUrl) {
                 const container = card.querySelector(`[data-icon-id="${cardIconId}"]`);
                 if (container) {
-                    container.innerHTML = `<img src="${localDataUrl}" alt="${firstLetter}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=&quot;password-card-icon-letter&quot;>${firstLetter}</span>';">`;
+                    container.innerHTML = '';
+                    const localImg = document.createElement('img');
+                    localImg.src = localDataUrl;
+                    localImg.alt = firstLetter;
+                    attachFaviconFallback(localImg, firstLetter);
+                    container.appendChild(localImg);
                 }
             }
         }).catch(() => {});
@@ -1753,6 +1886,23 @@ function generateId() {
     return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function attachFaviconFallback(imgElement, fallbackLetter, customFontSize) {
+    if (!imgElement) return;
+    imgElement.addEventListener('error', () => {
+        const parent = imgElement.parentElement;
+        if (!parent) return;
+        const span = document.createElement('span');
+        span.className = 'password-card-icon-letter';
+        if (customFontSize) {
+            span.style.fontSize = customFontSize;
+            span.style.fontWeight = '700';
+        }
+        span.textContent = fallbackLetter;
+        imgElement.remove();
+        parent.appendChild(span);
+    }, { once: true });
+}
+
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -1761,7 +1911,7 @@ function escapeHtml(text) {
 
 function showSettings() {
     updateSettingsLicenseUI();
-    checkLicenseStatus(true).catch(err => console.error('Silent license sync failed:', err));
+    checkLicenseStatus(false).catch(err => console.error('Silent license sync failed:', err));
     initSyncSettings();
     showScreen('settings-screen');
     updateSidebarActive('settings');
@@ -1774,6 +1924,11 @@ async function handleManualUpdateCheck() {
 
         if (result.success) {
             if (result.updateAvailable && result.updateInfo) {
+                if (result.isMandatory) {
+                    showMandatoryUpdateModal({ version: result.updateInfo.version, newerCount: result.newerCount });
+                    return;
+                }
+
                 const msg = t('msg_new_version', { version: result.updateInfo.version }) || `Neue Version v${result.updateInfo.version} gefunden!`;
                 showToast(msg, 'success', true);
 
@@ -1787,7 +1942,7 @@ async function handleManualUpdateCheck() {
                 banner.classList.remove('hidden');
                 downloadBtn.classList.remove('hidden');
                 downloadBtn.disabled = false;
-                downloadBtn.textContent = 'Download';
+                downloadBtn.textContent = t('btn_update_install_restart');
                 installBtn.classList.add('hidden');
                 if (manualBtn) manualBtn.classList.add('hidden');
 
@@ -1986,7 +2141,8 @@ async function checkLicenseStatus(forceSync = false) {
         const now = Date.now();
         const lastSync = cached.lastSync || 0;
         const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-        const isOfflineLimitExceeded = (now - lastSync) > thirtyDaysMs;
+        const isLifetime = cached.plan && String(cached.plan).toLowerCase().includes('lifetime');
+        const isOfflineLimitExceeded = !isLifetime && (now - lastSync) > thirtyDaysMs;
 
         const isOnline = navigator.onLine;
 
@@ -2017,12 +2173,16 @@ async function checkLicenseStatus(forceSync = false) {
                             passwordGenerator: isPremiumOrLifetime,
                             securityAudit: isPremiumOrLifetime
                         };
+                        const maxDev = data.maxDevices || getMaxDevicesForPlan(data.plan, data.features?.maxDevices);
+                        const actDev = data.activeDevices || data.devices || 1;
                         const updatedLicense = {
                             licenseKey: cached.licenseKey,
                             plan: data.plan,
                             features: enforcedFeatures,
                             expiryDate: data.expiryDate,
-                            lastSync: Date.now()
+                            lastSync: Date.now(),
+                            activeDevices: actDev,
+                            maxDevices: maxDev
                         };
                         await window.api.saveLicense(updatedLicense);
                         licenseState = {
@@ -2030,7 +2190,9 @@ async function checkLicenseStatus(forceSync = false) {
                             plan: data.plan,
                             features: enforcedFeatures,
                             expiryDate: data.expiryDate,
-                            lastSync: Date.now()
+                            lastSync: Date.now(),
+                            activeDevices: actDev,
+                            maxDevices: maxDev
                         };
                         updateSettingsLicenseUI();
                         return true;
@@ -2070,7 +2232,9 @@ async function checkLicenseStatus(forceSync = false) {
                 securityAudit: isPremiumPlan
             },
             expiryDate: cached.expiryDate,
-            lastSync: cached.lastSync
+            lastSync: cached.lastSync,
+            activeDevices: cached.activeDevices || 1,
+            maxDevices: cached.maxDevices || getMaxDevicesForPlan(cached.plan, cached.features?.maxDevices)
         };
         updateSettingsLicenseUI();
         return true;
@@ -2080,41 +2244,88 @@ async function checkLicenseStatus(forceSync = false) {
     }
 }
 
+function getMaxDevicesForPlan(plan, fallback) {
+    if (typeof fallback === 'number' && fallback > 0) return fallback;
+    const p = String(plan || '').toLowerCase();
+    if (p.includes('family') || p.includes('plus')) return 30;
+    if (p.includes('pro') || p === 'premium') return 50;
+    if (p.includes('business') || p.includes('enterprise')) return 100;
+    if (p.includes('lifetime')) return 6;
+    if (p.includes('trial') || p.includes('free')) return 1;
+    return 6;
+}
+
 function updateSettingsLicenseUI() {
     const statusEl = document.getElementById('settings-license-status');
     const planEl = document.getElementById('settings-license-plan');
-    const expiryEl = document.getElementById('settings-license-expiry');
-    const syncEl = document.getElementById('settings-license-sync');
+    const devicesEl = document.getElementById('settings-license-devices');
 
     if (licenseState.valid) {
         if (statusEl) {
             statusEl.textContent = 'Active';
             statusEl.style.color = 'var(--color-success)';
         }
-        if (planEl) planEl.textContent = licenseState.plan.toUpperCase();
-        if (expiryEl) {
-            expiryEl.textContent = licenseState.expiryDate
-                ? new Date(licenseState.expiryDate).toLocaleDateString()
-                : 'Lifetime';
+        if (planEl) {
+            planEl.textContent = String(licenseState.plan || 'Lifetime').replace(/[-_]/g, ' ').toUpperCase();
         }
-        if (syncEl) {
-            syncEl.textContent = licenseState.lastSync
-                ? new Date(licenseState.lastSync).toLocaleString()
-                : 'N/A';
+        if (devicesEl) {
+            const max = licenseState.maxDevices || getMaxDevicesForPlan(licenseState.plan, licenseState.features?.maxDevices);
+            const active = licenseState.activeDevices || 1;
+            devicesEl.textContent = `${active} / ${max}`;
         }
     } else {
         if (statusEl) {
-            statusEl.textContent = licenseState.error === 'offline_sync_required' ? 'Sync Required (30 Days Offline)' : 'Inactive';
+            statusEl.textContent = licenseState.error === 'offline_sync_required' ? 'Sync Required' : 'Inactive';
             statusEl.style.color = 'var(--color-danger)';
         }
         if (planEl) planEl.textContent = '-';
-        if (expiryEl) expiryEl.textContent = '-';
-        if (syncEl) syncEl.textContent = '-';
+        if (devicesEl) devicesEl.textContent = '-';
     }
 }
 
+function formatLicenseKey(input, isDelete = false) {
+    if (!input) return;
+
+    const originalValue = input.value;
+    const start = input.selectionStart || 0;
+    const alnumBefore = originalValue.slice(0, start).replace(/[^a-zA-Z0-9]/g, '').length;
+
+    let raw = originalValue.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+    let parts = [];
+    for (let i = 0; i < raw.length; i += 4) {
+        parts.push(raw.slice(i, i + 4));
+    }
+    let formatted = parts.join('-');
+    if (!isDelete && raw.length > 0 && raw.length % 4 === 0 && raw.length < 20) {
+        formatted += '-';
+    }
+
+    input.value = formatted;
+
+    let targetCursor = formatted.length;
+    if (alnumBefore < raw.length || isDelete) {
+        let count = 0;
+        targetCursor = formatted.length;
+        for (let i = 0; i < formatted.length; i++) {
+            if (/[A-Z0-9]/.test(formatted[i])) {
+                count++;
+            }
+            if (count === alnumBefore) {
+                targetCursor = i + 1;
+                if (!isDelete && formatted[targetCursor] === '-') {
+                    targetCursor++;
+                }
+                break;
+            }
+        }
+        if (alnumBefore === 0) targetCursor = 0;
+    }
+    input.setSelectionRange(targetCursor, targetCursor);
+}
+
 async function handleActivateLicense() {
-    const licenseKey = document.getElementById('license-key-input').value.trim();
+    const rawKey = document.getElementById('license-key-input').value.trim();
+    const licenseKey = rawKey.replace(/-+$/, '');
     const errorEl = document.getElementById('license-error-msg');
 
     if (!licenseKey) {
@@ -2155,12 +2366,16 @@ async function handleActivateLicense() {
                 passwordGenerator: isPremiumOrLifetime,
                 securityAudit: isPremiumOrLifetime
             };
+            const maxDev = data.maxDevices || getMaxDevicesForPlan(data.plan, data.features?.maxDevices);
+            const actDev = data.activeDevices || data.devices || 1;
             const licenseData = {
                 licenseKey,
                 plan: data.plan,
                 features: enforcedFeatures,
                 expiryDate: data.expiryDate,
-                lastSync: Date.now()
+                lastSync: Date.now(),
+                activeDevices: actDev,
+                maxDevices: maxDev
             };
             const saveRes = await window.api.saveLicense(licenseData);
             if (saveRes.success) {
@@ -2169,16 +2384,23 @@ async function handleActivateLicense() {
                     plan: data.plan,
                     features: enforcedFeatures,
                     expiryDate: data.expiryDate,
-                    lastSync: Date.now()
+                    lastSync: Date.now(),
+                    activeDevices: actDev,
+                    maxDevices: maxDev
                 };
                 errorEl.classList.add('hidden');
                 showToast('msg_license_activated', 'success');
 
-                const isFirstRun = await window.api.checkFirstRun();
-                if (isFirstRun) {
-                    showScreen('register-screen');
+                if (currentUser) {
+                    updateSettingsLicenseUI();
+                    showSettings();
                 } else {
-                    showScreen('login-screen');
+                    const isFirstRun = await window.api.checkFirstRun();
+                    if (isFirstRun) {
+                        showScreen('register-screen');
+                    } else {
+                        showScreen('login-screen');
+                    }
                 }
             } else {
                 errorEl.textContent = 'Failed to save license locally.';
@@ -2728,7 +2950,7 @@ async function showDashboard() {
             if (faviconUrl) {
                 iconHtml = `
                     <div class="password-card-icon" data-icon-id="${recentIconId}">
-                        <img src="${faviconUrl}" alt="${firstLetter}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=&quot;password-card-icon-letter&quot;>${firstLetter}</span>';">
+                        <img src="${faviconUrl}" alt="${firstLetter}">
                     </div>
                 `;
             } else {
@@ -2749,12 +2971,22 @@ async function showDashboard() {
                 
             `;
 
+            const rImg = card.querySelector(`[data-icon-id="${recentIconId}"] img`);
+            if (rImg) {
+                attachFaviconFallback(rImg, firstLetter);
+            }
+
             if (!faviconUrl && isLocal && window.api && window.api.fetchLocalFavicon) {
                 window.api.fetchLocalFavicon(domain).then(localDataUrl => {
                     if (localDataUrl) {
                         const container = card.querySelector(`[data-icon-id="${recentIconId}"]`);
                         if (container) {
-                            container.innerHTML = `<img src="${localDataUrl}" alt="${firstLetter}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=&quot;password-card-icon-letter&quot;>${firstLetter}</span>';">`;
+                            container.innerHTML = '';
+                            const localImg = document.createElement('img');
+                            localImg.src = localDataUrl;
+                            localImg.alt = firstLetter;
+                            attachFaviconFallback(localImg, firstLetter);
+                            container.appendChild(localImg);
                         }
                     }
                 }).catch(() => {});
@@ -3361,7 +3593,7 @@ function renderDashboardSearchResults(rawQuery) {
                 let iconHtml = '';
                 if (item.isPassword) {
                     if (item.faviconUrl) {
-                        iconHtml = `<img src="${item.faviconUrl}" alt="${item.firstLetter}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=&quot;password-card-icon-letter&quot; style=&quot;font-size:12px; font-weight:700;&quot;>${item.firstLetter}</span>';">`;
+                        iconHtml = `<img src="${item.faviconUrl}" alt="${item.firstLetter}">`;
                     } else {
                         iconHtml = `<span class="password-card-icon-letter" style="font-size:12px; font-weight:700;">${item.firstLetter}</span>`;
                     }
@@ -3380,12 +3612,22 @@ function renderDashboardSearchResults(rawQuery) {
                     
                 `;
 
+                if (item.isPassword && item.faviconUrl) {
+                    const sImg = itemEl.querySelector('.search-item-icon img');
+                    if (sImg) attachFaviconFallback(sImg, item.firstLetter, '12px');
+                }
+
                 if (item.isPassword && !item.faviconUrl && item.isLocal && window.api && window.api.fetchLocalFavicon) {
                     window.api.fetchLocalFavicon(item.domain).then(localDataUrl => {
                         if (localDataUrl) {
                             const iconContainer = itemEl.querySelector(`[data-icon-id="${item.iconId}"]`);
                             if (iconContainer) {
-                                iconContainer.innerHTML = `<img src="${localDataUrl}" alt="${item.firstLetter}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=&quot;password-card-icon-letter&quot; style=&quot;font-size:12px; font-weight:700;&quot;>${item.firstLetter}</span>';">`;
+                                iconContainer.innerHTML = '';
+                                const localImg = document.createElement('img');
+                                localImg.src = localDataUrl;
+                                localImg.alt = item.firstLetter;
+                                attachFaviconFallback(localImg, item.firstLetter, '12px');
+                                iconContainer.appendChild(localImg);
                             }
                         }
                     }).catch(() => {});
@@ -4868,7 +5110,7 @@ async function loadSyncDevices() {
     try {
         const result = await window.api.syncGetPairs();
         if (!result.success || !result.pairs || result.pairs.length === 0) {
-            listEl.innerHTML = `<p style="color: var(--color-text-muted); font-size: 0.85rem; padding: 12px;">${t('settings_sync_no_devices')}</p>`;
+            listEl.innerHTML = `<p style="color: var(--color-text-muted); font-size: 0.85rem; margin: 4px 0 0 0; padding: 0;">${t('settings_sync_no_devices')}</p>`;
             return;
         }
 
@@ -4876,7 +5118,7 @@ async function loadSyncDevices() {
         result.pairs.forEach(pair => {
             const item = document.createElement('div');
             item.className = 'sync-device-item';
-            item.style.cssText = 'height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--color-border);';
+            item.style.cssText = 'height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: rgba(255,255,255,0.02); border-radius: 6px; margin-top: 8px; border: 1px solid var(--color-border);';
 
             const lastSync = pair.lastSync ? new Date(pair.lastSync).toLocaleString() : '-';
             const daysLeft = pair.lastSync ? Math.max(0, 30 - Math.floor((Date.now() - pair.lastSync) / (24 * 60 * 60 * 1000))) : 0;

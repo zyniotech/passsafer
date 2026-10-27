@@ -298,21 +298,25 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .select-items div {
     color: var(--color-text);
-    padding: 12px 16px;
+    padding: 10px 14px;
     cursor: pointer;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    transition: background-color 0.15s, color 0.15s;
+    box-sizing: border-box !important;
+    border: 1px solid transparent !important;
+    border-radius: 6px !important;
+    margin-bottom: 2px !important;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
 
 .select-items div:last-child {
-    border-bottom: none;
+    margin-bottom: 0 !important;
 }
 
 .select-items div:hover,
+.select-items div.same-as-selected,
 .same-as-selected {
     background-color: transparent !important;
-    outline: 1px solid var(--color-focus);
-    outline-offset: -1px;
+    border-color: #b3b3b3D9 !important;
+    outline: none !important;
     color: #ffffff !important;
 }
 
@@ -2628,8 +2632,7 @@ textarea {
 /* ---- Remove orange from other interactive elements ---- */
 .select-items div:hover {
     outline: none !important;
-    border: 1px solid #b3b3b3D9 !important;
-    border-radius: 4px;
+    border-color: #b3b3b3D9 !important;
     background-color: transparent !important;
 }
 .button.secondary:hover {
@@ -2867,7 +2870,6 @@ textarea {
 
 .nav-item {
     margin: 0 auto !important;
-    /* justify-content: center !important; */
     padding-left: 28px !important;
 }
 
@@ -3366,9 +3368,10 @@ textarea {
 }
 
 .select-items div {
+    box-sizing: border-box !important;
+    border: 1px solid transparent !important;
     border-radius: 6px !important;
     margin-bottom: 2px !important;
-    border-bottom: none !important;
 }
 
 .select-items div:last-child {
@@ -3378,7 +3381,9 @@ textarea {
 .select-items div:hover, .same-as-selected {
     border-radius: 6px !important;
     outline: none !important;
-    border: 1px solid #b3b3b3D9 !important;
+    border-color: #b3b3b3D9 !important;
+    background-color: transparent !important;
+    color: #ffffff !important;
 }
 
 

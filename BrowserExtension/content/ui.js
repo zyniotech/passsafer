@@ -1,104 +1,68 @@
-/**
- * PassSafer UI Modul — content/ui.js
- * ====================================
- * Rendert alle PassSafer-Oberflächen (Dropdown, Banner, Toast) innerhalb von
- * Shadow DOM, damit Styles nicht mit der Host-Seite kollidieren.
- *
- * Namespace: window.PassSafer.UI
- * Kein ES-Module-Syntax — wird als Content Script via manifest.json geladen.
- */
-
 'use strict';
 
 window.PassSafer = window.PassSafer || {};
 
 window.PassSafer.UI = (() => {
-
-  // ─── Konstanten ──────────────────────────────────────────────────────────────
-
   const COLORS = {
-    bg:          '#2d2d2d',
-    bgHover:     '#363636',
-    border:      '#404040',
-    accent:      '#ff8c00',
-    accentHover: '#ff9f26',
-    text:        '#e5e5e5',
-    textMuted:   '#888888',
-    success:     '#22c55e',
-    warning:     '#eab308',
-    danger:      '#e74c3c'
+    bg: '#1e1e1e',
+    bgHover: '#2a2a2a',
+    border: '#383838',
+    hoverOutline: '#b3b3b3D9',
+    btnBg: '#2d2d2d',
+    text: '#e5e5e5',
+    textMuted: '#9a9a9a',
+    success: '#2ecc71',
+    warning: '#f39c12',
+    danger: '#e74c3c',
   };
 
   const FONT_STACK =
     "'DM Sans', -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif";
 
-  // Icon-URLs über chrome.runtime.getURL (Web-Accessible-Resources)
   const ICON_16 = chrome.runtime.getURL('icons/icon16.png');
   const ICON_48 = chrome.runtime.getURL('icons/icon48.png');
 
-  // ─── State ───────────────────────────────────────────────────────────────────
-
-  /** @type {HTMLElement|null} Aktuell sichtbarer Dropdown-Host */
   let _activeDropdown = null;
-
-  /** @type {HTMLElement|null} Aktuell sichtbares Banner-Host */
   let _activeBanner = null;
-
-  /** Globale Listener, die beim Schliessen entfernt werden müssen */
   let _dropdownCleanups = [];
 
-  // ─── Hilfsfunktionen ────────────────────────────────────────────────────────
-
-  /**
-   * Escapet HTML-Sonderzeichen, um XSS zu verhindern.
-   * @param {string} str
-   * @returns {string}
-   */
   function _escapeHtml(str) {
     if (!str) return '';
-    return str
-      .replace(/&/g,  '&amp;')
-      .replace(/</g,  '&lt;')
-      .replace(/>/g,  '&gt;')
-      .replace(/"/g,  '&quot;')
-      .replace(/'/g,  '&#039;');
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
-  /**
-   * Generates a favicon URL for a given domain using Google's Favicon service.
-   * @param {string} domain 
-   * @returns {string|null}
-   */
   function getFaviconUrl(domain) {
     if (!domain) return null;
     try {
-        let domainStr = domain.toString();
-        let d = domainStr.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split('?')[0];
-        if (!d) return null;
-        
-        let targetUrl = domainStr.startsWith('http') ? domainStr : 'https://' + d;
-        if (!d.includes('.')) {
-            targetUrl = domainStr.startsWith('https') ? 'https://' + d : 'http://' + d;
-        }
+      const domainStr = domain.toString().trim();
+      const d = domainStr
+        .replace(/^https?:\/\//, '')
+        .replace(/^www\./, '')
+        .split('/')[0]
+        .split('?')[0];
+      if (!d || d === 'localhost') return null;
 
-        const url = new URL(chrome.runtime.getURL("/_favicon/"));
-        url.searchParams.set("pageUrl", targetUrl);
-        url.searchParams.set("size", "64");
-        return url.toString();
-    } catch (err) {
-        console.error('[getFaviconUrl] error:', err);
-        return null;
+      let targetUrl = domainStr.startsWith('http') ? domainStr : 'https://' + d;
+      if (!d.includes('.')) {
+        targetUrl = domainStr.startsWith('https') ? 'https://' + d : 'http://' + d;
+      }
+
+      const url = new URL(chrome.runtime.getURL('/_favicon/'));
+      url.searchParams.set('pageUrl', targetUrl);
+      url.searchParams.set('size', '64');
+      return url.toString();
+    } catch (_) {
+      return null;
     }
   }
 
-  // ─── Gemeinsame Styles ──────────────────────────────────────────────────────
-
-  /**
-   * Erzeugt das gemeinsame Dropdown-Stylesheet als <style>-Element.
-   */
   function _buildDropdownStyles() {
     return `
-      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap');
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
       @keyframes ps-fadeIn {
@@ -111,17 +75,17 @@ window.PassSafer.UI = (() => {
         background: ${COLORS.bg};
         border: 1px solid ${COLORS.border};
         border-radius: 10px;
-        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45),
-                    0 2px 8px rgba(0, 0, 0, 0.25);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55),
+                    0 2px 8px rgba(0, 0, 0, 0.35);
         overflow: hidden;
         max-height: 300px;
         overflow-y: auto;
-        animation: ps-fadeIn 150ms ease-out both;
+        animation: ps-fadeIn 140ms ease-out both;
         color: ${COLORS.text};
         -webkit-font-smoothing: antialiased;
+        padding: 4px;
       }
 
-      /* Benutzerdefinierte Scrollbar */
       .ps-dropdown::-webkit-scrollbar { width: 6px; }
       .ps-dropdown::-webkit-scrollbar-track { background: transparent; }
       .ps-dropdown::-webkit-scrollbar-thumb {
@@ -135,10 +99,17 @@ window.PassSafer.UI = (() => {
       .ps-dropdown-header {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: 8px;
-        padding: 10px 14px;
+        padding: 8px 10px;
         border-bottom: 1px solid ${COLORS.border};
+        margin-bottom: 4px;
         user-select: none;
+      }
+      .ps-dropdown-header-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
       .ps-dropdown-header img {
         width: 16px;
@@ -146,45 +117,55 @@ window.PassSafer.UI = (() => {
         flex-shrink: 0;
       }
       .ps-dropdown-header span {
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
-        letter-spacing: 0.4px;
+        letter-spacing: 0.5px;
         color: ${COLORS.textMuted};
         text-transform: uppercase;
+      }
+      .ps-dropdown-hint {
+        font-size: 10px;
+        color: ${COLORS.textMuted};
+        opacity: 0.75;
       }
 
       .ps-dropdown-item {
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 10px 14px;
+        padding: 8px 10px;
+        border-radius: 7px;
+        border: 1px solid transparent;
         cursor: pointer;
-        transition: background-color 120ms ease;
+        transition: background-color 120ms ease, border-color 120ms ease;
         user-select: none;
       }
-      .ps-dropdown-item:hover {
+      .ps-dropdown-item:hover,
+      .ps-dropdown-item.ps-active {
         background: ${COLORS.bgHover};
-      }
-      .ps-dropdown-item:active {
-        background: ${COLORS.border};
+        border-color: ${COLORS.hoverOutline} !important;
       }
 
       .ps-item-icon {
-        font-size: 18px;
+        font-size: 14px;
         flex-shrink: 0;
-        width: 28px;
-        height: 28px;
+        width: 30px;
+        height: 30px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 6px;
-        background: rgba(249, 115, 22, 0.1);
+        border-radius: 7px;
+        background: #2b2b2b;
+        border: 1px solid ${COLORS.border};
+        color: ${COLORS.text};
       }
 
       .ps-item-info {
         display: flex;
         flex-direction: column;
+        justify-content: center;
         min-width: 0;
+        flex: 1;
       }
       .ps-item-username {
         font-size: 13px;
@@ -197,7 +178,7 @@ window.PassSafer.UI = (() => {
       .ps-item-domain {
         font-size: 11px;
         color: ${COLORS.textMuted};
-        margin-top: 1px;
+        margin-top: 2px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -206,11 +187,13 @@ window.PassSafer.UI = (() => {
       .ps-dropdown-divider {
         height: 1px;
         background: ${COLORS.border};
-        margin: 2px 0;
+        margin: 4px 2px;
       }
 
       .ps-generate-item .ps-item-icon {
-        background: rgba(76, 217, 100, 0.1);
+        background: rgba(46, 204, 113, 0.12);
+        border-color: rgba(46, 204, 113, 0.3);
+        color: ${COLORS.success};
       }
       .ps-generate-item .ps-item-username {
         color: ${COLORS.success};
@@ -218,12 +201,8 @@ window.PassSafer.UI = (() => {
     `;
   }
 
-  /**
-   * Erzeugt das Banner-Stylesheet als String.
-   */
   function _buildBannerStyles() {
     return `
-      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap');
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
       @keyframes ps-slideIn {
@@ -243,18 +222,18 @@ window.PassSafer.UI = (() => {
       .ps-banner {
         font-family: ${FONT_STACK};
         width: 360px;
-        background: linear-gradient(135deg, ${COLORS.bg}, #121212);
+        background: ${COLORS.bg};
         border: 1px solid ${COLORS.border};
         border-radius: 12px;
         padding: 18px;
-        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5),
-                    0 4px 12px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.55),
+                    0 4px 12px rgba(0, 0, 0, 0.35);
         color: ${COLORS.text};
-        animation: ps-slideIn 400ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        animation: ps-slideIn 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
         -webkit-font-smoothing: antialiased;
       }
       .ps-banner.ps-slide-out {
-        animation: ps-slideOut 350ms ease-in both;
+        animation: ps-slideOut 300ms ease-in both;
       }
 
       .ps-banner-header {
@@ -264,8 +243,8 @@ window.PassSafer.UI = (() => {
         margin-bottom: 12px;
       }
       .ps-banner-header img {
-        width: 28px;
-        height: 28px;
+        width: 26px;
+        height: 26px;
         flex-shrink: 0;
       }
       .ps-banner-header span {
@@ -282,7 +261,7 @@ window.PassSafer.UI = (() => {
       }
 
       .ps-banner-field {
-        background: rgba(255, 255, 255, 0.05);
+        background: #262626;
         border: 1px solid ${COLORS.border};
         border-radius: 8px;
         padding: 9px 12px;
@@ -311,20 +290,21 @@ window.PassSafer.UI = (() => {
       }
 
       .ps-reveal-btn {
-        background: none;
-        border: none;
+        background: #303030;
+        border: 1px solid transparent;
         color: ${COLORS.textMuted};
         cursor: pointer;
-        font-size: 12px;
-        padding: 2px 6px;
-        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 5px;
         margin-left: 8px;
         flex-shrink: 0;
-        transition: color 120ms ease, background 120ms ease;
+        transition: color 120ms ease, border-color 120ms ease;
       }
       .ps-reveal-btn:hover {
         color: ${COLORS.text};
-        background: rgba(255, 255, 255, 0.08);
+        border-color: ${COLORS.hoverOutline} !important;
       }
 
       .ps-banner-actions {
@@ -337,42 +317,36 @@ window.PassSafer.UI = (() => {
       .ps-btn-primary {
         flex: 1;
         padding: 10px 18px;
-        background: linear-gradient(135deg, ${COLORS.accent}, #ea580c);
-        border: none;
+        background: ${COLORS.btnBg};
+        border: 1px solid ${COLORS.border};
         border-radius: 8px;
         color: #ffffff;
         font-size: 13px;
         font-weight: 700;
         cursor: pointer;
-        box-shadow: 0 3px 10px rgba(249, 115, 22, 0.3);
-        transition: transform 80ms ease, box-shadow 120ms ease, opacity 120ms ease;
+        transition: border-color 120ms ease;
         letter-spacing: 0.2px;
         font-family: ${FONT_STACK};
       }
       .ps-btn-primary:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 5px 14px rgba(249, 115, 22, 0.4);
-      }
-      .ps-btn-primary:active {
-        transform: translateY(0);
-        box-shadow: 0 2px 6px rgba(249, 115, 22, 0.25);
+        border-color: ${COLORS.hoverOutline} !important;
       }
 
       .ps-btn-dismiss {
         padding: 10px 14px;
         background: transparent;
-        border: none;
+        border: 1px solid transparent;
         color: ${COLORS.textMuted};
         font-size: 12px;
         font-weight: 600;
         cursor: pointer;
         border-radius: 8px;
-        transition: color 120ms ease, background 120ms ease;
+        transition: color 120ms ease, border-color 120ms ease;
         font-family: ${FONT_STACK};
       }
       .ps-btn-dismiss:hover {
         color: ${COLORS.text};
-        background: rgba(255, 255, 255, 0.06);
+        border-color: ${COLORS.hoverOutline} !important;
       }
 
       .ps-btn-never {
@@ -380,21 +354,22 @@ window.PassSafer.UI = (() => {
         text-align: center;
         margin-top: 10px;
         background: none;
-        border: none;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        padding: 4px;
         color: ${COLORS.textMuted};
         font-size: 11px;
         cursor: pointer;
-        opacity: 0.6;
-        transition: opacity 120ms ease;
+        opacity: 0.7;
+        transition: opacity 120ms ease, border-color 120ms ease;
         font-family: ${FONT_STACK};
         width: 100%;
       }
       .ps-btn-never:hover {
         opacity: 1;
-        text-decoration: underline;
+        border-color: ${COLORS.hoverOutline} !important;
       }
 
-      /* Erfolgs-Zustand nach dem Speichern */
       .ps-success-state {
         display: flex;
         flex-direction: column;
@@ -417,12 +392,8 @@ window.PassSafer.UI = (() => {
     `;
   }
 
-  /**
-   * Erzeugt das Toast-Stylesheet als String.
-   */
   function _buildToastStyles() {
     return `
-      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap');
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
       @keyframes ps-toastIn {
@@ -461,38 +432,35 @@ window.PassSafer.UI = (() => {
     `;
   }
 
-  // ─── Dropdown ───────────────────────────────────────────────────────────────
-
-  /**
-   * Positioniert den Dropdown-Host unter dem Anker-Element.
-   * @param {HTMLElement} host
-   * @param {HTMLElement} anchor
-   */
   function _positionDropdown(host, anchor) {
     const rect = anchor.getBoundingClientRect();
     const width = Math.max(rect.width, 280);
+    const maxLeft = Math.max(8, window.innerWidth - width - 8);
+    const left = Math.max(8, Math.min(rect.left, maxLeft));
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placeAbove = spaceBelow < 220 && rect.top > 240;
 
     host.style.position = 'fixed';
-    host.style.left     = `${rect.left}px`;
-    host.style.top      = `${rect.bottom + 4}px`;
-    host.style.width    = `${width}px`;
-    host.style.zIndex   = '2147483647';
+    host.style.left = `${left}px`;
+    if (placeAbove) {
+      host.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+      host.style.top = 'auto';
+    } else {
+      host.style.top = `${rect.bottom + 4}px`;
+      host.style.bottom = 'auto';
+    }
+    host.style.width = `${width}px`;
+    host.style.zIndex = '2147483647';
   }
 
-  /**
-   * Zeigt das Autofill-Dropdown unterhalb eines Eingabefeldes an.
-   *
-   * @param {HTMLElement}   anchorElement  Das Eingabefeld, an dem das Dropdown angedockt wird
-   * @param {Array<{username:string, password:string}>} credentials  Verfügbare Zugangsdaten
-   * @param {Object}        options
-   * @param {Function}      options.onSelect       Callback bei Auswahl eines Eintrags (cred)
-   * @param {Function}      [options.onGenerate]   Callback für «Passwort generieren»
-   * @param {boolean}       [options.showGenerator=false]
-   * @param {boolean}       [options.isSignupForm=false]
-   */
   function showDropdown(anchorElement, credentials, options = {}) {
-    // Vorheriges Dropdown schliessen
     closeDropdown();
+
+    const safeCredentials = Array.isArray(credentials) ? credentials : [];
+    if (safeCredentials.length === 0 && !options.showGenerator) {
+      return;
+    }
 
     const host = document.createElement('div');
     host.setAttribute('data-passsafer-dropdown', '');
@@ -500,69 +468,110 @@ window.PassSafer.UI = (() => {
 
     const shadow = host.attachShadow({ mode: 'closed' });
 
-    // Styles injizieren
     const styleEl = document.createElement('style');
     styleEl.textContent = _buildDropdownStyles();
     shadow.appendChild(styleEl);
 
-    // Positionierung
     _positionDropdown(host, anchorElement);
-
-    // ── Dropdown-Inhalt aufbauen ──
 
     const dropdown = document.createElement('div');
     dropdown.className = 'ps-dropdown';
 
-    // Header
     const header = document.createElement('div');
     header.className = 'ps-dropdown-header';
-    header.innerHTML = `<img src="${_escapeHtml(ICON_16)}" alt="" /><span>PassSafer</span>`;
+    header.innerHTML = `
+      <div class="ps-dropdown-header-left">
+        <img src="${_escapeHtml(ICON_16)}" alt="" />
+        <span>PassSafer</span>
+      </div>
+      <span class="ps-dropdown-hint">${safeCredentials.length > 0 ? `${safeCredentials.length} saved` : 'Generator'}</span>
+    `;
     dropdown.appendChild(header);
 
-    // Einträge
-    credentials.forEach((cred, idx) => {
+    const interactiveItems = [];
+    let activeIndex = -1;
+
+    function setActiveItem(newIndex) {
+      if (interactiveItems.length === 0) return;
+      interactiveItems.forEach((entry, idx) => {
+        if (idx === newIndex) {
+          entry.el.classList.add('ps-active');
+          entry.el.scrollIntoView({ block: 'nearest' });
+        } else {
+          entry.el.classList.remove('ps-active');
+        }
+      });
+      activeIndex = newIndex;
+    }
+
+    safeCredentials.forEach((cred, idx) => {
       const item = document.createElement('div');
       item.className = 'ps-dropdown-item';
       item.setAttribute('data-index', String(idx));
-      
+
       const domain = cred.domain || cred.url || cred.link || '';
       const faviconUrl = getFaviconUrl(domain);
-      const firstLetter = (cred.username || cred.app || '?').charAt(0).toUpperCase();
-      
+      const userLabel = cred.username || cred.user || '';
+      const appLabel = cred.app || '';
+      const primaryText = userLabel || appLabel || 'Saved Login';
+      const secondaryText =
+        userLabel && appLabel && userLabel.toLowerCase() !== appLabel.toLowerCase()
+          ? appLabel
+          : domain;
+      const firstLetter = (appLabel || userLabel || '?').charAt(0).toUpperCase();
+
       const iconHtml = faviconUrl
-        ? `<div class="ps-item-icon" style="background:transparent;padding:0;">
-             <img src="${faviconUrl}" alt="" width="20" height="20"
-               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+        ? `<div class="ps-item-icon" style="padding:0;">
+             <img src="${_escapeHtml(faviconUrl)}" alt="" width="18" height="18"
                style="border-radius:4px;object-fit:cover;display:block;">
-             <span class="ps-item-icon-letter" style="display:none;font-weight:700;color:var(--accent);">${firstLetter}</span>
+             <span class="ps-item-icon-letter" style="display:none;font-weight:700;">${_escapeHtml(firstLetter)}</span>
            </div>`
-        : `<div class="ps-item-icon" style="font-weight:700;color:var(--accent);">${firstLetter}</div>`;
-      
+        : `<div class="ps-item-icon" style="font-weight:700;">${_escapeHtml(firstLetter)}</div>`;
+
       item.innerHTML = `
         ${iconHtml}
-        <div class="ps-item-details" style="display:flex; flex-direction:column; justify-content:center; overflow:hidden;">
-          <span class="ps-item-username" style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${_escapeHtml(cred.app || cred.username || 'Saved Login')}</span>
+        <div class="ps-item-info">
+          <span class="ps-item-username">${_escapeHtml(primaryText)}</span>
+          ${secondaryText ? `<span class="ps-item-domain">${_escapeHtml(secondaryText)}</span>` : ''}
         </div>
       `;
 
-      // mousedown statt click — verhindert blur-Race-Condition auf dem Input
+      const imgEl = item.querySelector('img');
+      if (imgEl) {
+        imgEl.addEventListener('error', () => {
+          imgEl.style.display = 'none';
+          const fallbackSpan = item.querySelector('.ps-item-icon-letter');
+          if (fallbackSpan) fallbackSpan.style.display = 'flex';
+        });
+      }
+
+      const selectAction = () => {
+        if (typeof options.onSelect === 'function') {
+          options.onSelect({
+            username: cred.username || cred.user || '',
+            password: cred.password || cred.pass || '',
+            raw: cred,
+          });
+        }
+        closeDropdown();
+      };
+
       item.addEventListener('mousedown', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (typeof options.onSelect === 'function') {
-          options.onSelect(cred);
-        }
-        closeDropdown();
+        selectAction();
       });
 
+      interactiveItems.push({ el: item, action: selectAction });
       dropdown.appendChild(item);
     });
 
-    // Generator-Option (optional)
     if (options.showGenerator) {
-      const divider = document.createElement('div');
-      divider.className = 'ps-dropdown-divider';
-      dropdown.appendChild(divider);
+      if (safeCredentials.length > 0) {
+        const divider = document.createElement('div');
+        divider.className = 'ps-dropdown-divider';
+        dropdown.appendChild(divider);
+      }
 
       const genItem = document.createElement('div');
       genItem.className = 'ps-dropdown-item ps-generate-item';
@@ -574,42 +583,59 @@ window.PassSafer.UI = (() => {
         </div>
       `;
 
-      genItem.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      const generateAction = () => {
         if (typeof options.onGenerate === 'function') {
           options.onGenerate();
         }
         closeDropdown();
+      };
+
+      genItem.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        generateAction();
       });
 
+      interactiveItems.push({ el: genItem, action: generateAction });
       dropdown.appendChild(genItem);
     }
 
     shadow.appendChild(dropdown);
 
-    // ── Event-Listener registrieren ──
-
-    /** Escape-Taste schliesst Dropdown */
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
         closeDropdown();
+        return;
+      }
+      if (interactiveItems.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        const nextIdx = activeIndex < interactiveItems.length - 1 ? activeIndex + 1 : 0;
+        setActiveItem(nextIdx);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        const prevIdx = activeIndex > 0 ? activeIndex - 1 : interactiveItems.length - 1;
+        setActiveItem(prevIdx);
+      } else if (e.key === 'Enter' && activeIndex >= 0 && activeIndex < interactiveItems.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        interactiveItems[activeIndex].action();
       }
     };
 
-    /** Klick ausserhalb des Shadow DOM schliesst Dropdown */
     const onClickOutside = (e) => {
-      // Klick innerhalb des Hosts ignorieren
+      if (e.target === anchorElement) return;
       if (e.composedPath && e.composedPath().includes(host)) return;
       if (!e.composedPath && host.contains(e.target)) return;
       closeDropdown();
     };
 
-    /** Bei Scroll/Resize: Dropdown neu positionieren oder schliessen */
     const onScrollOrResize = () => {
-      // Prüfen ob das Anker-Element noch im Viewport ist
       const rect = anchorElement.getBoundingClientRect();
-      if (rect.bottom < 0 || rect.top > window.innerHeight) {
+      if (rect.bottom < 0 || rect.top > window.innerHeight || rect.width === 0) {
         closeDropdown();
       } else {
         _positionDropdown(host, anchorElement);
@@ -621,50 +647,32 @@ window.PassSafer.UI = (() => {
     window.addEventListener('scroll', onScrollOrResize, true);
     window.addEventListener('resize', onScrollOrResize, true);
 
-    // Cleanup-Funktionen speichern
     _dropdownCleanups = [
       () => document.removeEventListener('keydown', onKeyDown, true),
       () => document.removeEventListener('mousedown', onClickOutside, true),
       () => window.removeEventListener('scroll', onScrollOrResize, true),
-      () => window.removeEventListener('resize', onScrollOrResize, true)
+      () => window.removeEventListener('resize', onScrollOrResize, true),
     ];
 
     _activeDropdown = host;
   }
 
-  /**
-   * Schliesst das aktive Dropdown und räumt Listener auf.
-   */
   function closeDropdown() {
     if (_activeDropdown) {
       try {
         _activeDropdown.remove();
-      } catch (_) { /* bereits entfernt */ }
+      } catch (_) {}
       _activeDropdown = null;
     }
-    // Alle globalen Listener entfernen
     _dropdownCleanups.forEach((fn) => {
-      try { fn(); } catch (_) { /* ignorieren */ }
+      try {
+        fn();
+      } catch (_) {}
     });
     _dropdownCleanups = [];
   }
 
-  // ─── Save / Update Banner ──────────────────────────────────────────────────
-
-  /**
-   * Zeigt ein Speichern-/Aktualisieren-Banner oben rechts auf der Seite.
-   *
-   * @param {Object}   data
-   * @param {string}   data.domain
-   * @param {string}   data.username
-   * @param {string}   data.password
-   * @param {boolean}  data.isUpdate
-   * @param {Function} data.onSave
-   * @param {Function} data.onDismiss
-   * @param {Function} data.onNever
-   */
   function showSaveBanner(data) {
-    // Vorheriges Banner entfernen
     closeBanner();
 
     const host = document.createElement('div');
@@ -674,26 +682,21 @@ window.PassSafer.UI = (() => {
 
     const shadow = host.attachShadow({ mode: 'closed' });
 
-    // Styles
     const styleEl = document.createElement('style');
     styleEl.textContent = _buildBannerStyles();
     shadow.appendChild(styleEl);
 
-    // ── Banner-Inhalt ──
-
     const banner = document.createElement('div');
     banner.className = 'ps-banner';
 
-    const titleText = data.isUpdate
-      ? 'Update password?'
-      : 'Save in PassSafer?';
+    const titleText = data.isUpdate ? 'Update password?' : 'Save in PassSafer?';
+    const userDisplay = data.username || 'this account';
 
     const descText = data.isUpdate
-      ? `Update password for <strong>${_escapeHtml(data.username)}</strong> on <strong>${_escapeHtml(data.domain)}</strong>?`
-      : `Save credentials for <strong>${_escapeHtml(data.username)}</strong> on <strong>${_escapeHtml(data.domain)}</strong>?`;
+      ? `Update password for <strong>${_escapeHtml(userDisplay)}</strong> on <strong>${_escapeHtml(data.domain)}</strong>?`
+      : `Save credentials for <strong>${_escapeHtml(userDisplay)}</strong> on <strong>${_escapeHtml(data.domain)}</strong>?`;
 
-    // Passwort-Maske erzeugen
-    const maskedPw = '•'.repeat(Math.min(data.password.length, 24));
+    const maskedPw = '•'.repeat(Math.min((data.password || '').length, 24));
 
     banner.innerHTML = `
       <div class="ps-banner-header">
@@ -704,7 +707,7 @@ window.PassSafer.UI = (() => {
 
       <div class="ps-banner-field-label">Username</div>
       <div class="ps-banner-field">
-        <span class="ps-banner-field-value">${_escapeHtml(data.username)}</span>
+        <span class="ps-banner-field-value">${_escapeHtml(data.username || '—')}</span>
       </div>
 
       <div class="ps-banner-field-label">Password</div>
@@ -722,8 +725,6 @@ window.PassSafer.UI = (() => {
 
     shadow.appendChild(banner);
 
-    // ── Passwort Reveal ──
-
     let passwordRevealed = false;
     const revealBtn = shadow.querySelector('.ps-reveal-btn');
     const pwDisplay = shadow.querySelector('.ps-pw-display');
@@ -731,26 +732,21 @@ window.PassSafer.UI = (() => {
     if (revealBtn && pwDisplay) {
       revealBtn.addEventListener('click', () => {
         passwordRevealed = !passwordRevealed;
-        pwDisplay.textContent = passwordRevealed
-          ? data.password
-          : maskedPw;
+        pwDisplay.textContent = passwordRevealed ? data.password : maskedPw;
         revealBtn.textContent = passwordRevealed ? 'Hide' : 'Show';
       });
     }
 
-    // ── Hilfsfunktion: Banner herausschieben und entfernen ──
-
     const _slideBannerOut = () => {
       banner.classList.add('ps-slide-out');
       setTimeout(() => {
-        try { host.remove(); } catch (_) {}
+        try {
+          host.remove();
+        } catch (_) {}
         if (_activeBanner === host) _activeBanner = null;
-      }, 400);
+      }, 350);
     };
 
-    // ── Button-Events ──
-
-    // Speichern / Aktualisieren
     const btnSave = shadow.querySelector('.ps-btn-primary');
     if (btnSave) {
       btnSave.addEventListener('click', () => {
@@ -758,7 +754,6 @@ window.PassSafer.UI = (() => {
           data.onSave();
         }
 
-        // Erfolgs-Zustand anzeigen
         banner.innerHTML = `
           <div class="ps-success-state">
             <div class="ps-success-check"><svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M20 6L9 17l-5-5'/></svg></div>
@@ -766,11 +761,10 @@ window.PassSafer.UI = (() => {
           </div>
         `;
 
-        setTimeout(_slideBannerOut, 1500);
+        setTimeout(_slideBannerOut, 1400);
       });
     }
 
-    // Nicht jetzt
     const btnDismiss = shadow.querySelector('.ps-btn-dismiss');
     if (btnDismiss) {
       btnDismiss.addEventListener('click', () => {
@@ -781,7 +775,6 @@ window.PassSafer.UI = (() => {
       });
     }
 
-    // Nie für diese Website
     const btnNever = shadow.querySelector('.ps-btn-never');
     if (btnNever) {
       btnNever.addEventListener('click', () => {
@@ -795,27 +788,15 @@ window.PassSafer.UI = (() => {
     _activeBanner = host;
   }
 
-  /**
-   * Schliesst das aktive Banner und entfernt es aus dem DOM.
-   */
   function closeBanner() {
     if (_activeBanner) {
       try {
         _activeBanner.remove();
-      } catch (_) { /* bereits entfernt */ }
+      } catch (_) {}
       _activeBanner = null;
     }
   }
 
-  // ─── Toast ──────────────────────────────────────────────────────────────────
-
-  /**
-   * Zeigt eine temporäre Toast-Benachrichtigung unten in der Mitte an.
-   * Verschwindet automatisch nach 2,5 Sekunden.
-   *
-   * @param {string} message  Anzuzeigender Text
-   * @param {'success'|'warning'} [type='success']
-   */
   function showToast(message, type = 'success') {
     const host = document.createElement('div');
     host.setAttribute('data-passsafer-toast', '');
@@ -835,24 +816,19 @@ window.PassSafer.UI = (() => {
     toast.textContent = message;
     shadow.appendChild(toast);
 
-    // Automatisch nach 2,5 s ausblenden
     setTimeout(() => {
       toast.classList.add('ps-toast-out');
       setTimeout(() => {
-        try { host.remove(); } catch (_) {}
+        try {
+          host.remove();
+        } catch (_) {}
       }, 250);
     }, 2500);
   }
 
-  /**
-   * Returns true if a dropdown is currently visible.
-   * @returns {boolean}
-   */
   function isDropdownVisible() {
     return _activeDropdown !== null;
   }
-
-  // ─── Öffentliches API ───────────────────────────────────────────────────────
 
   return {
     showDropdown,
@@ -861,7 +837,6 @@ window.PassSafer.UI = (() => {
     showSaveBanner,
     closeBanner,
     showToast,
-    _escapeHtml
+    _escapeHtml,
   };
-
 })();

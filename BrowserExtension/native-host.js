@@ -2,8 +2,13 @@
 
 const net = require('net');
 const fs = require('fs');
+const { spawn } = require('child_process');
+const path = require('path');
+const os = require('os');
 
-const PIPE_NAME = '\\\\.\\pipe\\passsafer-ipc';
+const PIPE_NAME = process.platform === 'win32'
+    ? '\\\\.\\pipe\\passsafer-ipc'
+    : path.join(os.tmpdir(), 'passsafer-ipc.sock');
 
 function sendMessage(msg) {
     const jsonStr = JSON.stringify(msg);
@@ -38,24 +43,8 @@ process.stdin.on('readable', () => {
     }
 });
 
-const { spawn } = require('child_process');
-const path = require('path');
-const os = require('os');
-
 function autoLaunchApp() {
     try {
-
-        const devElectronDir = path.join(__dirname, '..', 'Electron');
-        if (fs.existsSync(devElectronDir)) {
-            const cmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-            spawn(cmd, ['start', '--', '--tray'], {
-                cwd: devElectronDir,
-                detached: true,
-                stdio: 'ignore'
-            }).unref();
-            return;
-        }
-
         const relativeInstalledPath = path.join(__dirname, '..', '..', 'PassSafer.exe');
         if (fs.existsSync(relativeInstalledPath)) {
             spawn(relativeInstalledPath, ['--tray'], {
@@ -90,9 +79,7 @@ function autoLaunchApp() {
                 }).unref();
                 return;
             }
-        }
-
-        else if (process.platform === 'darwin') {
+        } else if (process.platform === 'darwin') {
             const macPath = '/Applications/PassSafer.app/Contents/MacOS/PassSafer';
             if (fs.existsSync(macPath)) {
                 spawn(macPath, ['--tray'], {
@@ -132,7 +119,6 @@ function getIpcToken() {
 }
 
 function sendToElectron(msgObj) {
-
     const token = getIpcToken();
     if (token) {
         msgObj._token = token;
@@ -158,7 +144,6 @@ function sendToElectron(msgObj) {
         responseBuffer += data.toString();
 
         const lines = responseBuffer.split('\n');
-
         responseBuffer = lines.pop();
         for (const line of lines) {
             if (line.trim()) {
@@ -172,7 +157,6 @@ function sendToElectron(msgObj) {
         }
     });
     client.on('end', () => {
-
         if (responseBuffer.trim()) {
             try {
                 const respObj = JSON.parse(responseBuffer.trim());
@@ -184,8 +168,11 @@ function sendToElectron(msgObj) {
         responseBuffer = '';
     });
 
-    client.on('error', (err) => {
-        autoLaunchApp();
-        sendMessage({ action: msgObj.action, success: false, error: 'PassSafer Desktop App is not running. Starting in background...' });
+    client.on('error', () => {
+        if (msgObj && (msgObj.action === 'request-vault' || msgObj.action === 'save-credential')) {
+            autoLaunchApp();
+        }
+        sendMessage({ action: msgObj.action, success: false, error: 'PassSafer Desktop App is not running.' });
     });
 }
+

@@ -53,7 +53,6 @@
             console.log('[License] DOM loaded');
             console.log('[License] window.api type:', typeof window.api);
 
-            // Defensive check: show error if preload bridge is missing
             if (!window.api || typeof window.api.activateLicense !== 'function') {
                 document.body.innerHTML = '<div style="color:red;padding:40px;font-family:sans-serif;font-size:16px;"><b>Startup Error</b><br><br>window.api is not available (type: ' + typeof window.api + ').<br>The preload script may not be loaded correctly.</div>';
                 return;
@@ -70,7 +69,6 @@
                 statusEl.className = 'license-status ' + type;
             }
 
-            // Auto-format key as user types: PS-XXXX-XXXX-XXXX-XXXX
             input.addEventListener('input', function(e) {
                 let raw = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
                 let formatted = '';
@@ -81,7 +79,6 @@
                 e.target.value = formatted;
             });
 
-            // Activate button click
             activateBtn.addEventListener('click', async function() {
                 const key = input.value.trim();
                 console.log('[License] Activate clicked, key:', key);
@@ -102,7 +99,7 @@
 
                     if (result && result.valid) {
                         showStatus('✓ License activated successfully!', 'success');
-                        // Main process will close this window and open the app
+
                     } else {
                         showStatus((result && result.reason) || 'Invalid license key', 'error');
                     }
@@ -116,12 +113,10 @@
                 }
             });
 
-            // Enter key triggers activation
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') activateBtn.click();
             });
 
-            // Import .pass license file
             document.getElementById('import-btn').addEventListener('click', async function() {
                 try {
                     const result = await window.api.importLicenseFile();
@@ -135,10 +130,9 @@
                 }
             });
 
-            // Buy link
             document.getElementById('buy-link').addEventListener('click', function(e) {
                 e.preventDefault();
-                window.api.openExternal('https://zynio-tech.web.app/#pricing');
+                window.api.openExternal('https://passsafer.com/pricing');
             });
 
             console.log('[License] All event listeners registered successfully');

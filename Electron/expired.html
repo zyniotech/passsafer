@@ -82,7 +82,6 @@
     <script>
         const { api } = window;
 
-        // Load expired license info
         (async () => {
             try {
                 const info = await api.checkLicenseStatus();
@@ -103,12 +102,10 @@
             }
         })();
 
-        // Renew → Open website
         document.getElementById('renew-btn').addEventListener('click', () => {
-            api.openExternal('https://zynio-tech.web.app/#pricing');
+            api.openExternal('https://passsafer.com/pricing');
         });
 
-        // Enter new key → Switch to license activation window
         document.getElementById('new-key-btn').addEventListener('click', () => {
             api.showLicenseInput();
         });

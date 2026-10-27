@@ -3,6 +3,9 @@ package com.example.passsafer.data.repository
 import android.content.Context
 import com.example.passsafer.data.crypto.CryptoManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -13,12 +16,15 @@ class VaultRepository(
     private val cryptoManager: CryptoManager
 ) {
     private val mutex = Mutex()
+    private val _vaultVersion = MutableStateFlow(0L)
+    val vaultVersion: StateFlow<Long> = _vaultVersion.asStateFlow()
 
     suspend fun saveVault(filename: String, data: String, password: String, salt: String) = withContext(Dispatchers.IO) {
         mutex.withLock {
             val encrypted = cryptoManager.encrypt(data, password, salt)
             val file = File(context.filesDir, filename)
             file.writeText(encrypted)
+            _vaultVersion.value += 1L
         }
     }
 

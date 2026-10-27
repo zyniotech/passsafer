@@ -122,15 +122,38 @@ class AuthViewModel @Inject constructor(
     fun login(password: String, pin: String) {
         viewModelScope.launch {
             _error.value = null
+            val lockoutUntil = prefs.getLong("login_lockout_until", 0L)
+            val now = System.currentTimeMillis()
+            if (now < lockoutUntil) {
+                val remainingSec = ((lockoutUntil - now) / 1000L).coerceAtLeast(1L)
+                _error.value = "Too many failed attempts. Please wait ${remainingSec}s."
+                return@launch
+            }
+
             try {
                 val isPinValid = vaultRepository.verifyHash("pin.ph", pin)
                 val isPasswordValid = vaultRepository.verifyHash("master.mh", password)
 
                 if (isPinValid && isPasswordValid) {
+                    prefs.edit().putInt("login_fail_count", 0).putLong("login_lockout_until", 0L).apply()
                     sessionManager.setMasterPassword(password)
                     _isAuthenticated.value = true
                 } else {
-                    _error.value = "Invalid Master Password or PIN."
+                    val failCount = prefs.getInt("login_fail_count", 0) + 1
+                    val lockoutDuration = when {
+                        failCount >= 10 -> 300_000L
+                        failCount >= 5 -> 30_000L
+                        else -> 0L
+                    }
+                    prefs.edit()
+                        .putInt("login_fail_count", failCount)
+                        .putLong("login_lockout_until", if (lockoutDuration > 0L) now + lockoutDuration else 0L)
+                        .apply()
+                    _error.value = if (lockoutDuration > 0L) {
+                        "Invalid credentials. Locked for ${lockoutDuration / 1000L}s."
+                    } else {
+                        "Invalid Master Password or PIN."
+                    }
                 }
             } catch (e: Exception) {
                 _error.value = e.message ?: "Login failed."
@@ -151,6 +174,7 @@ class AuthViewModel @Inject constructor(
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setUserAuthenticationRequired(true)
+                .setInvalidatedByBiometricEnrollment(true)
                 .setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
                 .build()
 

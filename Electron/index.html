@@ -141,47 +141,34 @@
         </div>
     </div>
 
-    <!-- License Screen -->
     <div id="license-screen" class="screen hidden">
-        <div class="auth-container" style="max-width: 480px; width: 100%; margin: 0 auto; padding: 2.5rem 2rem;">
-            <!-- Header with icon -->
-            <div class="auth-header" style="margin-bottom: 2rem; text-align: center;">
-                <img src="../logos/locked.png" alt="PassSafer" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.9;">
-                <h1 class="app-title" style="font-size: 2rem; margin-bottom: 0.25rem;"><span style="color: var(--color-accent);">Pass</span>Safer</h1>
-                <p style="font-size: 0.9rem; color: var(--color-text-muted); font-weight: 400; margin: 0;" data-i18n="license_required_desc">Enter your license key to unlock the app</p>
+        <div class="auth-container">
+            <button id="license-back-btn" class="button secondary hidden" style="position: absolute; top: 24px; left: 24px; padding: 8px 16px; font-size: 13px;" data-i18n="btn_back">Back</button>
+            <div class="auth-header">
+                <h1 class="app-title">Pass<span class="accent">Safer</span></h1>
+                <h2 data-i18n="license_required_title">License</h2>
             </div>
-
             <div class="auth-form">
-                <!-- Info Box -->
-                <div style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(255, 140, 0, 0.08) 0%, rgba(255, 140, 0, 0.02) 100%); border: 1px solid rgba(255, 140, 0, 0.2); padding: 1rem 1.2rem; border-radius: 10px;">
-                    <p style="font-size: 0.88rem; font-weight: 700; color: var(--color-accent); margin: 0 0 6px 0;" data-i18n="license_required_title">License Required</p>
-                    <p style="font-size: 0.82rem; line-height: 1.55; color: var(--color-text-secondary); margin: 0;" data-i18n="license_info_text">
-                        Get a free 1-month trial for single-device use, or upgrade to Premium for 50 devices (100 for Lifetime) and the password generator.
+                <div style="background-color: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 16px; margin-bottom: 20px;">
+                    <p style="font-size: 13px; line-height: 1.5; color: var(--color-text-secondary); margin: 0;" data-i18n="license_info_text">
+                        PassSafer ist dauerhaft kostenlos (bis 100MB pro Datei). Upgrade auf Lifetime Pro ($45 einmalig) für PC-Sync, Watchtower & unbegrenzte Dateigröße.
                     </p>
                 </div>
-
-                <!-- License Key Input -->
-                <div class="form-group" style="margin-bottom: 1.25rem;">
-                    <label style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.4rem; display: block; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="license_key_label">License Key</label>
-                    <input type="text" id="license-key-input" placeholder="PSAF-XXXX-XXXX-XXXX-XXXX" autocomplete="off" style="text-align: center; letter-spacing: 2.5px; font-family: 'Consolas', 'Courier New', monospace; font-size: 1.1rem; padding: 0.85rem 0.75rem; border-radius: 8px; border: 2px solid var(--color-border); background: rgba(0,0,0,0.25); color: #fff; transition: border-color 0.3s ease; width: 100%; box-sizing: border-box;">
+                <div class="form-group">
+                    <label data-i18n="license_key_label">License Key</label>
+                    <input type="text" id="license-key-input" placeholder="PSAF-XXXX-XXXX-XXXX-XXXX" autocomplete="off" maxlength="24" spellcheck="false" style="text-align: center; letter-spacing: 2px; font-size: 15px; font-weight: 600; text-transform: uppercase;">
                 </div>
-
-                <!-- Error/Status Message -->
-                <p id="license-error-msg" style="color: var(--color-danger); font-size: 0.82rem; margin-top: -6px; margin-bottom: 12px; text-align: center; font-weight: 500;" class="hidden"></p>
-
-                <!-- Buttons -->
-                <div class="button-group" style="flex-direction: column; gap: 10px;">
-                    <button class="button primary" id="activate-license-btn" style="width: 100%; padding: 0.85rem; font-size: 1rem; font-weight: 700; border-radius: 8px;" data-i18n="btn_activate_license">Activate License</button>
-
-                    <div style="display: flex; align-items: center; gap: 10px; margin: 0.4rem 0;">
+                <p id="license-error-msg" style="color: var(--color-danger); font-size: 13px; margin-top: -10px; margin-bottom: 16px; text-align: center;" class="hidden"></p>
+                <div class="button-group" style="flex-direction: column; gap: 12px;">
+                    <button class="button primary" id="activate-license-btn" style="width: 100%;" data-i18n="btn_activate_license">Activate License</button>
+                    <div style="display: flex; align-items: center; gap: 12px; margin: 4px 0;">
                         <div style="flex: 1; height: 1px; background: var(--color-border);"></div>
-                        <span style="font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 1px;" data-i18n="label_or">or</span>
+                        <span style="font-size: 12px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="label_or">or</span>
                         <div style="flex: 1; height: 1px; background: var(--color-border);"></div>
                     </div>
-
-                    <div style="display: flex; gap: 10px; width: 100%;">
-                        <button class="button secondary" id="get-trial-btn" style="flex: 1; font-size: 0.82rem; font-weight: 600; padding: 0.7rem; border-radius: 6px;" data-i18n="btn_get_trial">Get Free Trial</button>
-                        <button class="button secondary" id="buy-premium-btn" style="flex: 1; font-size: 0.82rem; font-weight: 600; padding: 0.7rem; border-radius: 6px; border-color: rgba(255, 140, 0, 0.35); color: var(--color-accent);" data-i18n="btn_buy_premium">Buy Premium</button>
+                    <div style="display: flex; gap: 12px; width: 100%;">
+                        <button class="button secondary" id="get-trial-btn" style="flex: 1;" data-i18n="btn_get_trial">Continue Free</button>
+                        <button class="button secondary" id="buy-premium-btn" style="flex: 1;" data-i18n="btn_buy_premium">Upgraden</button>
                     </div>
                 </div>
             </div>
@@ -421,13 +408,9 @@
                         <span style="color: var(--color-text-secondary);" data-i18n="settings_license_plan_label">Plan:</span>
                         <strong id="settings-license-plan">-</strong>
                     </div>
-                    <div id="settings-license-expiry-row" style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
-                        <span style="color: var(--color-text-secondary);" data-i18n="settings_license_expires_label">Expires:</span>
-                        <strong id="settings-license-expiry">-</strong>
-                    </div>
-                    <div id="settings-license-sync-row" style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
-                        <span style="color: var(--color-text-secondary);" data-i18n="settings_license_sync_label">Last Synced:</span>
-                        <strong id="settings-license-sync">-</strong>
+                    <div id="settings-license-devices-row" style="font-size: 0.9rem; width: 100%; display: flex; justify-content: space-between;">
+                        <span style="color: var(--color-text-secondary);" data-i18n="settings_license_devices_label">Anzahl Geräte:</span>
+                        <strong id="settings-license-devices">-</strong>
                     </div>
                 </div>
                 <button class="settings-option" style="height: 56px; padding: 0 24px;" id="settings-activate-license-btn">
@@ -498,7 +481,7 @@
                     </label>
                 </div>
                 
-                <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 15px; background: var(--color-dark); border-radius: var(--border-radius); border: 1px solid var(--color-border);">
+                <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px 24px; background: var(--color-dark); border-radius: var(--border-radius); border: 1px solid var(--color-border); margin-bottom: 16px;">
                     <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
                         <img src="../icons_new/settings/connected_devices_withe1.svg" alt="Devices" style="width: 22px; height: 22px; filter: brightness(0) invert(1);">
                         <span style="font-weight: 600; font-size: 14px;">Connected Devices</span>
@@ -1161,6 +1144,29 @@
             <div class="modal-actions">
                 <button class="button primary" id="modal-confirm-btn">Confirm</button>
                 <button class="button secondary" id="modal-cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="mandatory-update-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 480px; text-align: center;">
+            <div style="width: 56px; height: 56px; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; background: rgba(231, 76, 60, 0.12); border: 1px solid #e74c3c; border-radius: 50%;">
+                <img src="../icons_new/sidebar/shield_withe.svg" alt="Security" style="width: 28px; height: 28px;">
+            </div>
+            <h3 class="modal-title" id="mandatory-update-title" style="margin-bottom: 12px; font-size: 1.3rem;"></h3>
+            <p class="modal-description" id="mandatory-update-desc" style="margin-bottom: 24px; font-size: 14px; line-height: 1.6; text-align: left;"></p>
+            <div id="mandatory-update-progress-container" class="hidden" style="margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px;">
+                    <span id="mandatory-update-status"></span>
+                    <span id="mandatory-update-percent">0%</span>
+                </div>
+                <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                    <div id="mandatory-update-progress-bar" style="width: 0%; height: 100%; background: #2ecc71; transition: width 0.2s ease;"></div>
+                </div>
+            </div>
+            <div class="modal-actions" style="display: flex; flex-direction: column; gap: 10px;">
+                <button class="button primary" id="mandatory-update-btn" style="width: 100%; font-weight: 600; padding: 12px;"></button>
+                <button class="button secondary hidden" id="mandatory-manual-btn" style="width: 100%;"></button>
             </div>
         </div>
     </div>

@@ -57,6 +57,11 @@ class LicenseManager @Inject constructor(
             return@withContext Pair(false, "Please enter a license key.")
         }
 
+        val regex = Regex("^PSAF-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")
+        if (!regex.matches(trimmedKey)) {
+            return@withContext Pair(false, "Invalid license key format.")
+        }
+
         val deviceId = getDeviceId()
         try {
             val url = URL(apiUrl)
@@ -90,16 +95,10 @@ class LicenseManager @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            return@withContext Pair(false, "Could not reach license server. Please check your internet connection.")
         }
 
-        val regex = Regex("^PSAF-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")
-        if (regex.matches(trimmedKey)) {
-            saveLicense(trimmedKey, "lifetime", true, null)
-            return@withContext Pair(true, null)
-        }
-
-        return@withContext Pair(false, "License activation failed. Check your internet connection or key format.")
+        return@withContext Pair(false, "License activation failed. Please verify your license key.")
     }
 
     private fun saveLicense(key: String, plan: String, valid: Boolean, expiry: Long?) {

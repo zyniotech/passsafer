@@ -40,12 +40,13 @@ class VaultViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            sessionManager.masterPassword.collect { pwd ->
-                if (pwd != null) {
-                    masterPassword = pwd
-                    loadVault()
+            combine(sessionManager.masterPassword, vaultRepository.vaultVersion) { pwd, _ -> pwd }
+                .collect { pwd ->
+                    if (pwd != null) {
+                        masterPassword = pwd
+                        loadVault()
+                    }
                 }
-            }
         }
     }
 
@@ -53,7 +54,7 @@ class VaultViewModel @Inject constructor(
         _searchQuery.value = query
     }
 
-    private fun loadVault() {
+    fun loadVault() {
         viewModelScope.launch {
             try {
                 val salt = vaultRepository.getSalt("master.mh") ?: return@launch
@@ -85,19 +86,24 @@ class VaultViewModel @Inject constructor(
     }
 
     fun addEntry(entry: PasswordEntry) {
-        vault = vault.copy(passwords = vault.passwords + entry)
+        val now = System.currentTimeMillis()
+        val newEntry = entry.copy(createdAt = now, updatedAt = now)
+        vault = vault.copy(passwords = vault.passwords + newEntry)
         saveVault()
     }
 
     fun updateEntry(entry: PasswordEntry) {
-        vault = vault.copy(passwords = vault.passwords.map { if (it.id == entry.id) entry else it })
+        val updatedEntry = entry.copy(updatedAt = System.currentTimeMillis())
+        vault = vault.copy(passwords = vault.passwords.map { if (it.id == updatedEntry.id) updatedEntry else it })
         saveVault()
     }
 
     fun deleteEntry(entry: PasswordEntry) {
+        val now = System.currentTimeMillis()
+        val trashedEntry = entry.copy(updatedAt = now, deletedAt = now)
         vault = vault.copy(
             passwords = vault.passwords.filter { it.id != entry.id },
-            trash = vault.trash + entry
+            trash = vault.trash + trashedEntry
         )
         saveVault()
     }

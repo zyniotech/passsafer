@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('api', {
 
     onNativeRequest: (callback) => ipcRenderer.on('native-request', (e, data) => callback(data)),
     sendNativeResponse: (data) => ipcRenderer.send('native-response', data),
+    getPendingExtensionCredentials: () => ipcRenderer.invoke('get-pending-extension-credentials'),
 
     passwordAudit: (data) => ipcRenderer.invoke('password-audit', data),
     checkPwned: (data) => ipcRenderer.invoke('check-pwned', data),

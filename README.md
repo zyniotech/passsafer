@@ -61,4 +61,4 @@ We are committed to providing exceptional support and comprehensive documentatio
 
 ## License
 
-This project operates under a custom **PassSafer Open Source & Commercial License**. For details on usage rights, hosting, and commercial distribution, please read the included [LICENSE](LICENSE) file.
+This project operates under a custom **PassSafer Transparent Source-Available & Commercial License**. For details on usage rights, hosting, and commercial distribution, please read the included [LICENSE](LICENSE) file.

@@ -1374,6 +1374,53 @@ ipcMain.handle('save-documents', async (event, { password, documents }) => {
     }
 });
 
+function fetchGitHubReleases() {
+    return new Promise((resolve) => {
+        const https = require('https');
+        const req = https.get('https://api.github.com/repos/zyniotech/passsafer/releases?per_page=30', {
+            headers: { 'User-Agent': 'PassSafer-Desktop' },
+            timeout: 8000
+        }, (res) => {
+            if (res.statusCode < 200 || res.statusCode >= 300) {
+                resolve([]);
+                return;
+            }
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const releases = JSON.parse(data);
+                    resolve(Array.isArray(releases) ? releases : []);
+                } catch {
+                    resolve([]);
+                }
+            });
+        });
+        req.on('error', () => resolve([]));
+        req.on('timeout', () => {
+            req.destroy();
+            resolve([]);
+        });
+    });
+}
+
+async function getNewerReleasesCount(currentVersion) {
+    try {
+        const releases = await fetchGitHubReleases();
+        let newerCount = 0;
+        for (const rel of releases) {
+            if (rel.draft) continue;
+            const tag = (rel.tag_name || '').replace(/^v/, '');
+            if (isNewerVersion(currentVersion, tag)) {
+                newerCount++;
+            }
+        }
+        return newerCount;
+    } catch {
+        return 0;
+    }
+}
+
 function checkForUpdates() {
     if (!app.isPackaged) {
         console.log('Auto-update: Skipped (dev mode)');
@@ -1383,15 +1430,19 @@ function checkForUpdates() {
     try {
         const { autoUpdater } = require('electron-updater');
 
-
         autoUpdater.autoDownload = false;
         autoUpdater.autoInstallOnAppQuit = true;
 
-        autoUpdater.on('update-available', (info) => {
+        autoUpdater.on('update-available', async (info) => {
             if (mainWindow && !mainWindow.isDestroyed()) {
+                const currentVersion = app.getVersion();
+                const newerCount = await getNewerReleasesCount(currentVersion);
+                const isMandatory = newerCount >= 5;
                 mainWindow.webContents.send('update-available', {
                     version: info.version,
-                    releaseNotes: info.releaseNotes
+                    releaseNotes: info.releaseNotes,
+                    isMandatory,
+                    newerCount
                 });
             }
         });
@@ -1436,9 +1487,12 @@ ipcMain.handle('download-update', async () => {
 ipcMain.handle('install-update', async () => {
     try {
         const { autoUpdater } = require('electron-updater');
-        autoUpdater.quitAndInstall();
+        app.isQuitting = true;
+        autoUpdater.quitAndInstall(false, true);
+        return { success: true };
     } catch (err) {
         console.error('Install update error:', err.message);
+        return { success: false, error: err.message };
     }
 });
 
@@ -1455,15 +1509,17 @@ ipcMain.handle('manual-check-updates', async () => {
         const currentVersion = app.getVersion();
         const latestVersion = result.updateInfo.version;
         const updateAvailable = isNewerVersion(currentVersion, latestVersion);
-        return { success: true, updateAvailable, updateInfo: result.updateInfo };
+        const newerCount = updateAvailable ? await getNewerReleasesCount(currentVersion) : 0;
+        const isMandatory = newerCount >= 5;
+        return { success: true, updateAvailable, updateInfo: result.updateInfo, isMandatory, newerCount };
     } catch (err) {
         return { success: false, error: err.message };
     }
 });
 
 function isNewerVersion(current, latest) {
-    const cParts = current.split('.').map(Number);
-    const lParts = latest.split('.').map(Number);
+    const cParts = String(current || '').replace(/^v/, '').split('.').map(x => parseInt(x, 10) || 0);
+    const lParts = String(latest || '').replace(/^v/, '').split('.').map(x => parseInt(x, 10) || 0);
     for (let i = 0; i < Math.max(cParts.length, lParts.length); i++) {
         const c = cParts[i] || 0;
         const l = lParts[i] || 0;
